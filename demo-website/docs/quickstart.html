@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>快速开始 - WASM-ThreatDetector</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/themes/prism-dark.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #2563eb;
+            --secondary-color: #1e40af;
+            --accent-color: #f59e0b;
+            --dark-bg: #1f2937;
+            --darker-bg: #111827;
+        }
+        
+        body {
+            background: var(--dark-bg);
+            color: #f9fafb;
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+        }
+        
+        .sidebar {
+            background: var(--darker-bg);
+            min-height: 100vh;
+            padding: 2rem 1rem;
+            position: fixed;
+            width: 250px;
+            overflow-y: auto;
+        }
+        
+        .content {
+            margin-left: 250px;
+            padding: 2rem;
+        }
+        
+        .navbar-dark {
+            background: rgba(0, 0, 0, 0.9) !important;
+            backdrop-filter: blur(10px);
+        }
+        
+        .code-block {
+            background: #1e1e1e;
+            border-radius: 8px;
+            padding: 1rem;
+            margin: 1rem 0;
+            overflow-x: auto;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .nav-link {
+            color: #9ca3af !important;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            margin: 0.2rem 0;
+        }
+        
+        .nav-link:hover,
+        .nav-link.active {
+            background: var(--primary-color);
+            color: white !important;
+        }
+        
+        .alert-custom {
+            background: rgba(37, 99, 235, 0.1);
+            border: 1px solid var(--primary-color);
+            border-radius: 8px;
+            color: #f9fafb;
+        }
+        
+        h1, h2, h3, h4, h5, h6 {
+            color: #f9fafb;
+            margin-top: 2rem;
+            margin-bottom: 1rem;
+        }
+        
+        h1:first-child, h2:first-child {
+            margin-top: 0;
+        }
+        
+        .step-card {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin: 1rem 0;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .step-number {
+            background: var(--primary-color);
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-bottom: 1rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- 侧边栏 -->
+    <div class="sidebar">
+        <h5><i class="fas fa-shield-alt text-primary"></i> WASM-ThreatDetector</h5>
+        <hr>
+        <nav class="nav nav-pills flex-column">
+            <a class="nav-link active" href="#installation">安装部署</a>
+            <a class="nav-link" href="#configuration">配置说明</a>
+            <a class="nav-link" href="#usage">使用指南</a>
+            <a class="nav-link" href="#rules">规则开发</a>
+            <a class="nav-link" href="#monitoring">监控集成</a>
+            <a class="nav-link" href="#troubleshooting">故障排除</a>
+            <a class="nav-link" href="../index.html">返回首页</a>
+        </nav>
+    </div>
+
+    <!-- 主内容 -->
+    <div class="content">
+        <nav class="navbar navbar-expand-lg navbar-dark mb-4">
+            <div class="container-fluid">
+                <span class="navbar-brand">快速开始文档</span>
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="https://github.com/your-username/WASM-ThreatDetector" target="_blank">
+                        <i class="fab fa-github"></i> GitHub
+                    </a>
+                </div>
+            </div>
+        </nav>
+
+        <div class="container-fluid">
+            <!-- 安装部署 -->
+            <section id="installation">
+                <h1><i class="fas fa-download"></i> 安装部署</h1>
+                
+                <div class="alert alert-custom">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>系统要求:</strong> Go 1.21+, Rust 1.70+, Docker 20.10+
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">1</div>
+                    <h4>克隆项目</h4>
+                    <div class="code-block">
+<pre><code class="language-bash"># 克隆仓库
+git clone https://github.com/your-username/WASM-ThreatDetector
+cd WASM-ThreatDetector
+
+# 检查依赖
+go version  # 需要 1.21+
+rustc --version  # 需要 1.70+
+docker --version  # 需要 20.10+</code></pre>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">2</div>
+                    <h4>构建项目</h4>
+                    <div class="code-block">
+<pre><code class="language-bash"># 自动构建
+./scripts/build.sh
+
+# 手动构建
+cd rules/suspicious-shell
+cargo build --target wasm32-wasi --release
+cd ../../host
+go mod tidy
+go build -o ../wasm-threat-detector ./cmd/main.go</code></pre>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <div class="step-number">3</div>
+                    <h4>启动服务</h4>
+                    <div class="code-block">
+<pre><code class="language-bash"># 直接启动
+./wasm-threat-detector
+
+# Docker 部署
+docker-compose up -d
+
+# Kubernetes 部署
+kubectl apply -f k8s/</code></pre>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 配置说明 -->
+            <section id="configuration">
+                <h1><i class="fas fa-cog"></i> 配置说明</h1>
+                
+                <h3>环境变量配置</h3>
+                <div class="code-block">
+<pre><code class="language-bash"># 基础配置
+export WASM_RULES_DIR=./rules
+export LOG_LEVEL=info
+export METRICS_PORT=8080
+export HEALTH_PORT=8080
+
+# 高级配置
+export WASM_ENGINE_TYPE=wasmtime  # wasmtime 或 simple
+export EVENT_BUFFER_SIZE=1000
+export THREAT_THRESHOLD=0.7</code></pre>
+                </div>
+
+                <h3>配置文件示例</h3>
+                <div class="code-block">
+<pre><code class="language-yaml"># config.yaml
+server:
+  host: "0.0.0.0"
+  port: 8080
+  metrics_path: "/metrics"
+  health_path: "/health"
+
+engine:
+  type: "wasmtime"
+  rules_dir: "./rules"
+  max_instances: 10
+
+logging:
+  level: "info"
+  format: "json"
+  output: "stdout"
+
+monitoring:
+  prometheus:
+    enabled: true
+    port: 9090
+  
+collectors:
+  process:
+    enabled: true
+    buffer_size: 1000
+  network:
+    enabled: true
+    interfaces: ["eth0", "wlan0"]</code></pre>
+                </div>
+            </section>
+
+            <!-- 使用指南 -->
+            <section id="usage">
+                <h1><i class="fas fa-play"></i> 使用指南</h1>
+                
+                <h3>基本命令</h3>
+                <div class="code-block">
+<pre><code class="language-bash"># 启动检测器
+./wasm-threat-detector --config config.yaml
+
+# 加载特定规则
+./wasm-threat-detector --rules ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm
+
+# 调试模式
+./wasm-threat-detector --debug --log-level debug</code></pre>
+                </div>
+
+                <h3>API接口</h3>
+                <div class="code-block">
+<pre><code class="language-bash"># 健康检查
+curl http://localhost:8080/health
+
+# 获取指标
+curl http://localhost:8080/metrics
+
+# 查看已加载规则
+curl http://localhost:8080/api/rules
+
+# 实时威胁事件流
+curl http://localhost:8080/api/events/stream</code></pre>
+                </div>
+
+                <h3>测试验证</h3>
+                <div class="code-block">
+<pre><code class="language-bash"># 快速测试
+./test-datasets/evaluation/quick_test.sh
+
+# 综合测试
+./test-datasets/evaluation/comprehensive_test.sh
+
+# 性能测试
+./test-datasets/evaluation/performance_test.sh
+
+# 模拟攻击
+./test-datasets/malicious-commands/reverse_shell.sh</code></pre>
+                </div>
+            </section>
+
+            <!-- 规则开发 -->
+            <section id="rules">
+                <h1><i class="fas fa-code"></i> 规则开发</h1>
+                
+                <h3>Rust规则开发</h3>
+                <div class="code-block">
+<pre><code class="language-rust">// src/lib.rs
+use wasm_bindgen::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Deserialize)]
+pub struct Event {
+    pub event_type: String,
+    pub process: Option<ProcessInfo>,
+    pub network: Option<NetworkInfo>,
+    pub timestamp: i64,
+}
+
+#[derive(Serialize)]
+pub struct DetectionResult {
+    pub threat: bool,
+    pub confidence: f32,
+    pub severity: String,
+    pub description: String,
+}
+
+#[wasm_bindgen]
+pub fn detect_threat(event_json: &str) -> String {
+    let event: Event = serde_json::from_str(event_json).unwrap_or_default();
+    
+    let result = match event.event_type.as_str() {
+        "process" => detect_process_threat(&event),
+        "network" => detect_network_threat(&event),
+        _ => DetectionResult {
+            threat: false,
+            confidence: 0.0,
+            severity: "info".to_string(),
+            description: "Unknown event type".to_string(),
+        }
+    };
+    
+    serde_json::to_string(&result).unwrap()
+}
+
+fn detect_process_threat(event: &Event) -> DetectionResult {
+    if let Some(process) = &event.process {
+        // 检测危险命令
+        let dangerous_commands = ["rm -rf", "dd if=", "mkfs", ":(){:|:&};:"];
+        
+        for cmd in dangerous_commands {
+            if process.command.contains(cmd) {
+                return DetectionResult {
+                    threat: true,
+                    confidence: 1.0,
+                    severity: "critical".to_string(),
+                    description: format!("Dangerous command detected: {}", cmd),
+                };
+            }
+        }
+    }
+    
+    DetectionResult {
+        threat: false,
+        confidence: 0.0,
+        severity: "info".to_string(),
+        description: "No threat detected".to_string(),
+    }
+}</code></pre>
+                </div>
+
+                <h3>构建规则</h3>
+                <div class="code-block">
+<pre><code class="language-bash"># 创建新规则项目
+cargo new --lib my-rule
+cd my-rule
+
+# 配置 Cargo.toml
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wasm-bindgen = "0.2"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# 添加 WASI 目标
+rustup target add wasm32-wasi
+
+# 构建规则
+cargo build --target wasm32-wasi --release</code></pre>
+                </div>
+            </section>
+
+            <!-- 监控集成 -->
+            <section id="monitoring">
+                <h1><i class="fas fa-chart-line"></i> 监控集成</h1>
+                
+                <h3>Prometheus指标</h3>
+                <div class="code-block">
+<pre><code class="language-yaml"># prometheus.yml
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'wasm-threat-detector'
+    static_configs:
+      - targets: ['localhost:8080']
+    metrics_path: '/metrics'
+    scrape_interval: 5s</code></pre>
+                </div>
+
+                <h3>Grafana仪表盘</h3>
+                <div class="code-block">
+<pre><code class="language-json">{
+  "dashboard": {
+    "title": "WASM威胁检测",
+    "panels": [
+      {
+        "title": "威胁检测趋势",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(wasm_threat_detector_total_threats[5m])",
+            "legendFormat": "检测率/秒"
+          }
+        ]
+      },
+      {
+        "title": "威胁严重程度分布",
+        "type": "piechart",
+        "targets": [
+          {
+            "expr": "wasm_threat_detector_threats_by_severity",
+            "legendFormat": "{{severity}}"
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+                </div>
+
+                <h3>告警规则</h3>
+                <div class="code-block">
+<pre><code class="language-yaml"># alerting.yml
+groups:
+  - name: wasm-threat-detector
+    rules:
+      - alert: HighThreatDetectionRate
+        expr: rate(wasm_threat_detector_total_threats[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "威胁检测率过高"
+          description: "5分钟内威胁检测率超过10次/秒"
+      
+      - alert: CriticalThreatDetected
+        expr: wasm_threat_detector_threats_by_severity{severity="critical"} > 0
+        for: 0s
+        labels:
+          severity: critical
+        annotations:
+          summary: "检测到严重威胁"
+          description: "发现严重级别安全威胁"</code></pre>
+                </div>
+            </section>
+
+            <!-- 故障排除 -->
+            <section id="troubleshooting">
+                <h1><i class="fas fa-wrench"></i> 故障排除</h1>
+                
+                <h3>常见问题</h3>
+                
+                <div class="step-card">
+                    <h4><i class="fas fa-exclamation-triangle text-warning"></i> WASM规则加载失败</h4>
+                    <p><strong>症状:</strong> 启动时提示 "failed to load wasm module"</p>
+                    <p><strong>解决:</strong></p>
+                    <div class="code-block">
+<pre><code class="language-bash"># 检查WASM文件是否存在
+ls -la rules/*/target/wasm32-wasi/release/*.wasm
+
+# 重新构建规则
+cd rules/suspicious-shell
+cargo clean
+cargo build --target wasm32-wasi --release
+
+# 验证WASM文件
+file target/wasm32-wasi/release/suspicious_shell.wasm</code></pre>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h4><i class="fas fa-exclamation-triangle text-warning"></i> 内存使用过高</h4>
+                    <p><strong>症状:</strong> 内存占用持续增长</p>
+                    <p><strong>解决:</strong></p>
+                    <div class="code-block">
+<pre><code class="language-bash"># 调整缓冲区大小
+export EVENT_BUFFER_SIZE=500
+
+# 限制WASM实例数
+export MAX_WASM_INSTANCES=5
+
+# 启用内存限制
+ulimit -m 1048576  # 1GB 限制</code></pre>
+                    </div>
+                </div>
+
+                <div class="step-card">
+                    <h4><i class="fas fa-exclamation-triangle text-warning"></i> 性能问题</h4>
+                    <p><strong>症状:</strong> 检测延迟过高</p>
+                    <p><strong>解决:</strong></p>
+                    <div class="code-block">
+<pre><code class="language-bash"># 使用简化引擎
+export WASM_ENGINE_TYPE=simple
+
+# 调整线程数
+export GOMAXPROCS=4
+
+# 优化规则
+# 减少正则表达式使用
+# 提前返回检测结果
+# 使用更高效的算法</code></pre>
+                    </div>
+                </div>
+
+                <h3>日志分析</h3>
+                <div class="code-block">
+<pre><code class="language-bash"># 启用调试日志
+./wasm-threat-detector --log-level debug
+
+# 查看特定组件日志
+grep "wasm_engine" /var/log/wasm-threat-detector.log
+
+# 分析性能日志
+grep "detection_time" /var/log/wasm-threat-detector.log | awk '{print $4}' | sort -n</code></pre>
+                </div>
+
+                <h3>性能分析</h3>
+                <div class="code-block">
+<pre><code class="language-bash"># Go性能分析
+go tool pprof http://localhost:8080/debug/pprof/profile
+
+# 内存分析
+go tool pprof http://localhost:8080/debug/pprof/heap
+
+# CPU分析
+go tool pprof http://localhost:8080/debug/pprof/cpu</code></pre>
+                </div>
+            </section>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/components/prism-core.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.24.1/plugins/autoloader/prism-autoloader.min.js"></script>
+    
+    <script>
+        // 平滑滚动导航
+        document.querySelectorAll('.nav-link[href^="#"]').forEach(link => {
+            link.addEventListener('click', function(e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    target.scrollIntoView({ behavior: 'smooth' });
+                    
+                    // 更新活动状态
+                    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                    this.classList.add('active');
+                }
+            });
+        });
+
+        // 滚动时更新导航状态
+        window.addEventListener('scroll', function() {
+            const sections = document.querySelectorAll('section[id]');
+            const navLinks = document.querySelectorAll('.nav-link[href^="#"]');
+            
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop - 100;
+                const sectionHeight = section.offsetHeight;
+                if (window.scrollY >= sectionTop && window.scrollY < sectionTop + sectionHeight) {
+                    current = section.getAttribute('id');
+                }
+            });
+            
+            navLinks.forEach(link => {
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) {
+                    link.classList.add('active');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

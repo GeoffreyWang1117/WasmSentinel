@@ -1,0 +1,50 @@
+# WASM-ThreatDetector 配置文件示例
+
+# 规则配置
+rules: "./rules"
+
+# 日志配置
+log-level: "info"
+log-file: "/var/log/wasm-threat-detector.log"
+
+# 输出配置
+webhook: "http://localhost:8081/alerts"
+metrics-port: 8080
+
+# 收集器配置
+collectors:
+  process:
+    enabled: true
+    scan_interval: 1s
+  network:
+    enabled: true
+    scan_interval: 10s
+  file:
+    enabled: false
+    watch_paths:
+      - "/etc"
+      - "/var/log"
+      - "/home"
+
+# 规则配置
+rule_config:
+  suspicious-shell:
+    enabled: true
+    threshold: 5
+  opa-policy:
+    enabled: false
+    
+# 过滤器配置  
+filters:
+  # 排除的进程
+  exclude_processes:
+    - "systemd"
+    - "kthread"
+    - "[ksoftirqd"
+  
+  # 排除的用户
+  exclude_users:
+    - "root"   # 可选排除 root
+    
+  # 最小威胁级别
+  min_threat_level: 3

@@ -1,0 +1,204 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  CARGO_TERM_COLOR: always
+  GO_VERSION: '1.21'
+  RUST_VERSION: 'stable'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.RUST_VERSION }}
+        target: wasm32-wasi
+        override: true
+        components: rustfmt, clippy
+    
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+    
+    - name: Cache Rust dependencies
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.cargo/registry
+          ~/.cargo/git
+          target
+        key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
+    
+    - name: Install dependencies
+      run: |
+        cd host
+        go mod download
+    
+    - name: Run Go tests
+      run: |
+        cd host
+        go test -v -race -coverprofile=coverage.out ./...
+        go tool cover -html=coverage.out -o coverage.html
+    
+    - name: Run Go linting
+      run: |
+        cd host
+        go vet ./...
+        go fmt ./...
+    
+    - name: Run Rust tests
+      run: |
+        cd rules/suspicious-shell
+        cargo test --verbose
+    
+    - name: Run Rust linting
+      run: |
+        cd rules/suspicious-shell
+        cargo fmt --check
+        cargo clippy -- -D warnings
+    
+    - name: Build project
+      run: ./scripts/build.sh
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: host/coverage.out
+        flags: go
+        name: go-coverage
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: binaries
+        path: |
+          wasm-threat-detector
+          rules/suspicious-shell/target/wasm32-wasi/release/*.wasm
+
+  security:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Run security audit (Go)
+      run: |
+        cd host
+        go list -json -deps ./... | docker run --rm -i sonatypecommunity/nancy:latest sleuth
+    
+    - name: Run security audit (Rust)
+      uses: actions-rs/audit-check@v1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+  build-docker:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+    
+    - name: Log in to Docker Hub
+      uses: docker/login-action@v2
+      with:
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+    
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: true
+        tags: |
+          wasm-threat-detector/wasm-threat-detector:latest
+          wasm-threat-detector/wasm-threat-detector:${{ github.sha }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+  release:
+    needs: [test, security]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+    
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: ${{ env.GO_VERSION }}
+    
+    - name: Set up Rust
+      uses: actions-rs/toolchain@v1
+      with:
+        toolchain: ${{ env.RUST_VERSION }}
+        target: wasm32-wasi
+        override: true
+    
+    - name: Build release binaries
+      run: |
+        ./scripts/build.sh
+        
+        # 创建发布包
+        mkdir -p release
+        cp wasm-threat-detector release/
+        cp -r rules release/
+        cp -r docs release/
+        cp -r examples release/
+        cp README.md LICENSE CONTRIBUTING.md release/
+        
+        # 创建压缩包
+        tar -czf wasm-threat-detector-linux-amd64.tar.gz -C release .
+    
+    - name: Generate changelog
+      run: |
+        echo "## Changes in this Release" > CHANGELOG.md
+        git log --pretty=format:"- %s" $(git describe --tags --abbrev=0 HEAD~1)..HEAD >> CHANGELOG.md
+    
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        body_path: CHANGELOG.md
+        draft: false
+        prerelease: false
+    
+    - name: Upload Release Asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ./wasm-threat-detector-linux-amd64.tar.gz
+        asset_name: wasm-threat-detector-linux-amd64.tar.gz
+        asset_content_type: application/gzip

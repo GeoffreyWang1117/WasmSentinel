@@ -1,0 +1,140 @@
+version: '3.8'
+
+services:
+  # 威胁检测器
+  wasm-threat-detector:
+    build: .
+    container_name: wasm-threat-detector
+    restart: unless-stopped
+    privileged: true  # 需要访问主机进程信息
+    pid: host        # 共享主机 PID 命名空间
+    network_mode: host  # 共享主机网络
+    volumes:
+      - /proc:/host/proc:ro  # 只读挂载主机 /proc
+      - ./logs:/var/log
+      - ./config:/etc/wasm-threat-detector:ro
+    environment:
+      - LOG_LEVEL=info
+      - METRICS_PORT=8080
+    command: >
+      --config /etc/wasm-threat-detector/config.yaml
+      --log-level info
+      --log-file /var/log/wasm-threat-detector.log
+      --metrics-port 8080
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    depends_on:
+      - prometheus
+      - alertmanager
+
+  # Prometheus 监控
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+
+  # Grafana 可视化
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+
+  # AlertManager 告警管理
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+
+  # Webhook 接收器（模拟）
+  webhook-receiver:
+    image: nginx:alpine
+    container_name: webhook-receiver
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    volumes:
+      - ./examples/webhook-receiver.html:/usr/share/nginx/html/index.html:ro
+
+  # 日志聚合
+  fluentd:
+    image: fluent/fluentd:v1.16-debian-1
+    container_name: fluentd
+    restart: unless-stopped
+    ports:
+      - "24224:24224"
+      - "24224:24224/udp"
+    volumes:
+      - ./monitoring/fluentd.conf:/fluentd/etc/fluent.conf:ro
+      - ./logs:/var/log:ro
+    depends_on:
+      - elasticsearch
+
+  # Elasticsearch 日志存储
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+    environment:
+      - discovery.type=single-node
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+      - xpack.security.enabled=false
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+
+  # Kibana 日志分析
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: kibana
+    restart: unless-stopped
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+
+volumes:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+  elasticsearch_data:
+
+networks:
+  default:
+    name: wasm-threat-detector-network
