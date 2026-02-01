@@ -1,0 +1,70 @@
+% Threat Model
+
+\section{Threat Model}
+\label{sec:threat-model}
+
+This section defines the adversary capabilities we consider, the security goals \textsc{WasmSentinel} aims to achieve, and the boundaries of our trusted computing base.
+
+\subsection{Adversary Model}
+
+We consider two classes of adversaries that differ in their relationship to the monitoring system.
+
+\textbf{External Attackers} are the traditional threat: adversaries who have gained initial access to a monitored system (e.g., through a vulnerable web application or stolen credentials) and are attempting to escalate privileges, establish persistence, or exfiltrate data.
+These attackers generate observable syscall patterns---opening sensitive files, spawning shells, making network connections---that \textsc{WasmSentinel} aims to detect.
+We assume attackers may attempt evasion through syscall obfuscation or mimicry, but do not have prior knowledge of the specific detection model deployed.
+
+\textbf{Malicious Rule Authors} represent a less-considered but increasingly relevant threat.
+As security teams adopt community-contributed detection rules, they must trust that these rules won't themselves become attack vectors.
+A malicious rule could attempt to escape its sandbox, exfiltrate event data, or simply crash the monitoring daemon.
+\textsc{WasmSentinel}'s Wasm sandboxing specifically addresses this threat---detection rules cannot access the filesystem, network, or any resource not explicitly granted by the host.
+
+\textbf{Scope Boundaries.}
+We assume the Linux kernel and eBPF verifier are trusted; an attacker who can compromise these can disable any monitoring.
+Similarly, we do not defend against attackers who already have root---they can simply kill the daemon.
+However, \textsc{WasmSentinel} provides value as defense-in-depth: it detects attacks \textit{during} privilege escalation, before root is obtained, enabling response before the attacker achieves persistence.
+
+\subsection{Security Goals}
+
+\textsc{WasmSentinel} aims to achieve four properties that together enable practical deployment of ML-based detection.
+
+\textbf{Detection integrity} means the system accurately identifies malicious activities.
+We prioritize high recall---catching attacks is more important than avoiding false positives, which can be filtered by operators.
+However, precision must remain reasonable to avoid alert fatigue.
+
+\textbf{Rule isolation} is the distinguishing goal.
+Detection rules execute in Wasm sandboxes and cannot access the host filesystem, network, or memory outside their linear memory region.
+This enables deployment of community-contributed rules without trusting their authors.
+
+\textbf{Data confidentiality} protects the security events themselves, which may contain sensitive information (file paths, command lines, network destinations).
+Wasm memory isolation ensures rules can only access events explicitly passed to them.
+
+\textbf{Availability} requires that the system remain responsive under attack.
+Malicious rules might attempt CPU exhaustion (infinite loops) or memory exhaustion (unbounded allocation).
+We enforce resource limits: 10M instruction fuel, 256MB memory cap, 100ms timeout.
+
+\subsection{Trusted Computing Base}
+
+Figure~\ref{fig:tcb} illustrates the trust boundary in \textsc{WasmSentinel}.
+The TCB includes three components: the Linux kernel with its eBPF verifier (standard assumption for eBPF tools), the Wasmtime runtime (developed by the Bytecode Alliance with ongoing security review), and our Go-based host program that orchestrates event collection and rule execution.
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    box/.style={rectangle, draw, minimum width=2.5cm, minimum height=0.8cm, align=center},
+    trusted/.style={box, fill=green!20},
+    untrusted/.style={box, fill=red!10}
+]
+    \node[trusted] (kernel) at (0,0) {Linux Kernel\\+ eBPF};
+    \node[trusted] (wasmtime) at (3,0) {Wasmtime\\Runtime};
+    \node[trusted] (host) at (6,0) {Host Program\\(Go)};
+    \node[untrusted] (rules) at (3,-1.5) {Detection Rules\\(Wasm)};
+    \node[above=0.3cm of kernel, font=\footnotesize\bfseries] {TCB (Trusted)};
+    \node[below=0.3cm of rules, font=\footnotesize\bfseries] {Untrusted};
+    \draw[dashed, thick] (-1.5,-0.7) -- (7.5,-0.7);
+\end{tikzpicture}
+\caption{Trusted computing base of \textsc{WasmSentinel}.}
+\label{fig:tcb}
+\end{figure}
+
+Critically, detection rules---including ML models---are \textit{untrusted}.
+This is the key design decision that enables deployment of community-contributed rules: the Wasm sandbox confines their execution regardless of whether the rule author is benign.

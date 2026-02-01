@@ -1,0 +1,85 @@
+{
+  "timestamp": "2026-02-01T01:42:08.738064",
+  "dataset": "ADFA-LD",
+  "train_samples": 4760,
+  "test_samples": 1191,
+  "models": {
+    "random_forest": {
+      "accuracy": 0.9722921914357683,
+      "precision": 0.9716312056737588,
+      "recall": 0.8253012048192772,
+      "f1": 0.8925081433224755,
+      "confusion_matrix": [
+        [
+          1021,
+          4
+        ],
+        [
+          29,
+          137
+        ]
+      ],
+      "training_time_sec": 0.17985129356384277,
+      "inference_time_us": 16.741908767661762,
+      "model_type": "Traditional ML"
+    },
+    "mlp_wasmsentinel": {
+      "accuracy": 0.9596977329974811,
+      "precision": 0.927536231884058,
+      "recall": 0.7710843373493976,
+      "f1": 0.8421052631578947,
+      "confusion_matrix": [
+        [
+          1015,
+          10
+        ],
+        [
+          38,
+          128
+        ]
+      ],
+      "training_time_sec": 12.758575916290283,
+      "inference_time_us": 0.19283679030103706,
+      "model_type": "Lightweight Neural Network",
+      "architecture": "[128, 64, 32, 16]"
+    },
+    "lstm": {
+      "accuracy": 0.9546599496221663,
+      "precision": 0.8294117647058824,
+      "recall": 0.8493975903614458,
+      "f1": 0.8392857142857143,
+      "confusion_matrix": [
+        [
+          996,
+          29
+        ],
+        [
+          25,
+          141
+        ]
+      ],
+      "training_time_sec": 27.578296422958374,
+      "inference_time_us": 1.4420820823944887,
+      "model_type": "Deep Learning (Sequential)"
+    },
+    "autoencoder": {
+      "accuracy": 0.8228379513014273,
+      "precision": 0.02127659574468085,
+      "recall": 0.006024096385542169,
+      "f1": 0.009389671361502348,
+      "confusion_matrix": [
+        [
+          979,
+          46
+        ],
+        [
+          165,
+          1
+        ]
+      ],
+      "training_time_sec": 5.338967323303223,
+      "inference_time_us": 0.16917509756400542,
+      "model_type": "Unsupervised (Reconstruction)"
+    }
+  }
+}

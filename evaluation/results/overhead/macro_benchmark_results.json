@@ -1,0 +1,27 @@
+{
+  "timestamp": "2026-01-05T10:29:40.077642",
+  "benchmarks": {
+    "macro": {
+      "container_startup": {
+        "metric": "container_startup_time",
+        "unit": "ms",
+        "iterations": 5,
+        "mean": 361.491060256958,
+        "stdev": 17.0572389632955,
+        "min": 334.70821380615234,
+        "max": 376.1858940124512
+      },
+      "file_io": {
+        "metric": "file_io",
+        "write_speed_mbps": 2287.949858581781,
+        "read_speed_mbps": 3307.0752403645247,
+        "test_size_mb": 1000
+      },
+      "cpu": {
+        "metric": "cpu_sha256",
+        "ops_per_sec": 1998677.1755601515,
+        "iterations": 100000
+      }
+    }
+  }
+}

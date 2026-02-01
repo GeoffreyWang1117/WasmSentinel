@@ -1,0 +1,21 @@
+{
+  "timestamp": "2026-01-05T10:33:48.323398",
+  "tool": "Falco (falcosecurity/falco-no-driver:latest)",
+  "tests": {
+    "startup": {
+      "mean_ms": 496.15864753723145,
+      "stdev_ms": 36.29454176042319,
+      "min_ms": 461.4391326904297,
+      "max_ms": 557.9566955566406,
+      "samples": 5
+    },
+    "memory": {
+      "error": "No memory samples collected"
+    },
+    "cpu_overhead": {
+      "baseline_rps": 111008.98,
+      "monitored_rps": 114015.9,
+      "overhead_percent": -2.708717799226692
+    }
+  }
+}

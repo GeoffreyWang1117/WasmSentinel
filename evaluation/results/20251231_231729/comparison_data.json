@@ -1,0 +1,116 @@
+{
+  "wasmsentinel": {
+    "name": "WasmSentinel",
+    "latency_p50_us": 1212.6399999999999,
+    "latency_p99_us": 1658.725,
+    "throughput_eps": 1616.9548262548867,
+    "cpu_percent": 11.465,
+    "memory_mb": 19.046875,
+    "f1_score": 0.9,
+    "source": "measured"
+  },
+  "baselines": {
+    "falco": {
+      "name": "Falco",
+      "latency_p50_us": 2500,
+      "latency_p99_us": 8000,
+      "throughput_eps": 50000,
+      "cpu_percent": 15.0,
+      "memory_mb": 120.0,
+      "f1_score": 0.92,
+      "source": "literature"
+    },
+    "tetragon": {
+      "name": "Tetragon",
+      "latency_p50_us": 500,
+      "latency_p99_us": 2000,
+      "throughput_eps": 100000,
+      "cpu_percent": 8.0,
+      "memory_mb": 80.0,
+      "f1_score": 0.88,
+      "source": "literature"
+    },
+    "native_ebpf": {
+      "name": "Native eBPF",
+      "latency_p50_us": 100,
+      "latency_p99_us": 500,
+      "throughput_eps": 500000,
+      "cpu_percent": 3.0,
+      "memory_mb": 20.0,
+      "f1_score": 0.75,
+      "source": "literature"
+    },
+    "auditd": {
+      "name": "Auditd",
+      "latency_p50_us": 5000,
+      "latency_p99_us": 15000,
+      "throughput_eps": 10000,
+      "cpu_percent": 5.0,
+      "memory_mb": 50.0,
+      "f1_score": 0.7,
+      "source": "literature"
+    }
+  },
+  "comparisons": {
+    "falco": {
+      "systems": [
+        "WasmSentinel",
+        "Falco"
+      ],
+      "latency_ratio": 4.822981506880285,
+      "throughput_ratio": 0.032339096525097734,
+      "memory_ratio": 6.3002461033634125,
+      "f1_diff": -0.020000000000000018,
+      "wasmsentinel_better": {
+        "latency": true,
+        "memory": true,
+        "accuracy": false
+      }
+    },
+    "tetragon": {
+      "systems": [
+        "WasmSentinel",
+        "Tetragon"
+      ],
+      "latency_ratio": 1.2057453767200712,
+      "throughput_ratio": 0.016169548262548867,
+      "memory_ratio": 4.200164068908942,
+      "f1_diff": 0.020000000000000018,
+      "wasmsentinel_better": {
+        "latency": true,
+        "memory": true,
+        "accuracy": true
+      }
+    },
+    "native_ebpf": {
+      "systems": [
+        "WasmSentinel",
+        "Native eBPF"
+      ],
+      "latency_ratio": 0.3014363441800178,
+      "throughput_ratio": 0.0032339096525097733,
+      "memory_ratio": 1.0500410172272354,
+      "f1_diff": 0.15000000000000002,
+      "wasmsentinel_better": {
+        "latency": false,
+        "memory": true,
+        "accuracy": true
+      }
+    },
+    "auditd": {
+      "systems": [
+        "WasmSentinel",
+        "Auditd"
+      ],
+      "latency_ratio": 9.043090325400534,
+      "throughput_ratio": 0.16169548262548866,
+      "memory_ratio": 2.6251025430680888,
+      "f1_diff": 0.20000000000000007,
+      "wasmsentinel_better": {
+        "latency": true,
+        "memory": true,
+        "accuracy": true
+      }
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "timestamp": "2026-01-05T10:29:31.262785",
+  "benchmarks": {
+    "micro": {
+      "getpid": {
+        "syscall": "getpid",
+        "iterations": 50000,
+        "mean_ns": 149.02,
+        "min_ns": 130,
+        "max_ns": 27121,
+        "stdev_ns": 179.68
+      },
+      "getuid": {
+        "syscall": "getuid",
+        "iterations": 50000,
+        "mean_ns": 126.86,
+        "min_ns": 120,
+        "max_ns": 7170,
+        "stdev_ns": 65.46
+      },
+      "stat": {
+        "syscall": "stat",
+        "iterations": 50000,
+        "mean_ns": 849.32,
+        "min_ns": 730,
+        "max_ns": 87741,
+        "stdev_ns": 513.06
+      },
+      "fstat": {
+        "syscall": "fstat",
+        "iterations": 50000,
+        "mean_ns": 341.02,
+        "min_ns": 290,
+        "max_ns": 288336,
+        "stdev_ns": 1381.41
+      },
+      "open_close": {
+        "syscall": "open_close",
+        "iterations": 50000,
+        "mean_ns": 2115.73,
+        "min_ns": 1870,
+        "max_ns": 1532512,
+        "stdev_ns": 6987.19
+      }
+    }
+  }
+}

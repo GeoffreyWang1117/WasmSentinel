@@ -1,0 +1,76 @@
+% Discussion
+
+\section{Discussion}
+\label{sec:discussion}
+
+\subsection{Limitations}
+
+\textbf{Detection Scope.}
+\textsc{WasmSentinel} currently focuses on syscall-based detection, which may miss attacks that operate entirely within user space (e.g., some in-memory attacks).
+Extending coverage to include memory access patterns, library calls, or hardware performance counters is future work.
+
+\textbf{Evasion Attacks.}
+Sophisticated adversaries may attempt to evade ML-based detection through:
+\begin{itemize}
+    \item \textit{Mimicry attacks}: Inserting benign syscalls to mask malicious patterns
+    \item \textit{Polymorphic behavior}: Varying attack execution to avoid learned patterns
+    \item \textit{Adversarial examples}: Crafted inputs that fool the neural network
+\end{itemize}
+
+While our hybrid architecture provides some resilience (STIDE and MLP may catch different evasion attempts), a determined adversary with knowledge of our detection algorithm could potentially evade detection.
+Defense-in-depth with multiple detection layers remains important.
+
+\textbf{Dataset Bias.}
+Our evaluation uses the ADFA-LD dataset, which, while well-established, dates from 2013 and may not fully represent modern attack techniques.
+Evaluation on more recent datasets (e.g., LID-DS, custom container workloads) is planned for future work.
+
+\textbf{Model Generalization.}
+The current model is trained on specific attack types.
+Generalization to entirely new attack categories (zero-day attacks) may be limited.
+Continuous model updates with new attack data are necessary for maintaining detection effectiveness.
+
+\subsection{Security Analysis}
+
+\textbf{Wasm Sandbox Escapes.}
+The security of \textsc{WasmSentinel} relies on Wasmtime's sandbox guarantees and its ongoing security review process.
+Wasmtime implements memory isolation through virtual memory mapping, control flow integrity via indirect call validation, and resource limiting through fuel-based execution metering.
+We are not aware of sandbox escape vulnerabilities in Wasmtime, though this remains an evolving area.
+
+\textbf{eBPF Verifier Trust.}
+We trust the Linux eBPF verifier to ensure safety of loaded eBPF programs.
+The verifier has had historical bugs~\cite{ebpf-bugs}, but it is part of the kernel TCB for any eBPF-based security tool.
+
+\textbf{Supply Chain Security.}
+\textsc{WasmSentinel}'s architecture naturally supports supply chain security: rules are content-addressed and can be signed, sandbox isolation limits damage from malicious rules, and resource limits prevent denial-of-service attacks.
+
+\subsection{Deployment Considerations}
+
+\textbf{Kernel Version Requirements.}
+\textsc{WasmSentinel} requires Linux 5.8+ for ring buffer support.
+Older kernels can use perf buffers with reduced performance.
+
+\textbf{Performance Tuning.}
+For high-throughput environments, we recommend increasing ring buffer size to prevent event loss, adjusting STIDE thresholds for workload-specific false positive rates, and pinning the detection thread to dedicated CPU cores.
+
+\textbf{Model Updates.}
+The modular design allows hot-swapping of detection models without restarting the daemon.
+We envision a workflow where:
+\begin{enumerate}
+    \item Security team trains updated models on new attack data
+    \item New Wasm module is signed and distributed
+    \item Running instances atomically swap to the new module
+\end{enumerate}
+
+\subsection{Future Work}
+
+\textbf{Multi-Dataset Evaluation.}
+We plan to evaluate on additional datasets including LID-DS, CICIDS2017, and custom container workload traces.
+
+\textbf{Advanced ML Models.}
+Future work includes exploring temporal convolutional networks (TCN) for sequence modeling, graph neural networks for process relationship analysis, and transformer-based models for attention over syscall sequences.
+
+\textbf{Federated Learning.}
+Enabling collaborative model updates across multiple deployments while preserving privacy of individual organizations' security telemetry.
+
+\textbf{Hardware Acceleration.}
+Investigating Wasm SIMD extensions and potential WebGPU integration for accelerated inference.

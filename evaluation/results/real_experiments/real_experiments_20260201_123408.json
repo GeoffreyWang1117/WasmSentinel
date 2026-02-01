@@ -1,0 +1,377 @@
+{
+  "experiment_timestamp": "2026-02-01T12:32:13.256410",
+  "experiments": {
+    "adfa_ld": {
+      "dataset": "ADFA-LD",
+      "timestamp": "2026-02-01T12:32:14.058587",
+      "training_traces": 833,
+      "test_traces": 5118,
+      "model_ngrams": 59885,
+      "threshold": 0.26,
+      "metrics": {
+        "true_positives": 644,
+        "false_positives": 1046,
+        "true_negatives": 3326,
+        "false_negatives": 102,
+        "precision": 0.3811,
+        "recall": 0.8633,
+        "f1_score": 0.5287,
+        "accuracy": 0.7757
+      },
+      "per_category": {
+        "Hydra_FTP_1": {
+          "detected": 10,
+          "total": 12,
+          "rate": 0.8333333333333334
+        },
+        "Web_Shell_6": {
+          "detected": 8,
+          "total": 11,
+          "rate": 0.7272727272727273
+        },
+        "Meterpreter_7": {
+          "detected": 5,
+          "total": 6,
+          "rate": 0.8333333333333334
+        },
+        "Hydra_FTP_8": {
+          "detected": 11,
+          "total": 12,
+          "rate": 0.9166666666666666
+        },
+        "Hydra_FTP_4": {
+          "detected": 12,
+          "total": 14,
+          "rate": 0.8571428571428571
+        },
+        "normal": {
+          "detected": 3326,
+          "total": 4372,
+          "rate": 0.7607502287282708
+        },
+        "Java_Meterpreter_8": {
+          "detected": 11,
+          "total": 13,
+          "rate": 0.8461538461538461
+        },
+        "Web_Shell_2": {
+          "detected": 11,
+          "total": 13,
+          "rate": 0.8461538461538461
+        },
+        "Meterpreter_3": {
+          "detected": 7,
+          "total": 8,
+          "rate": 0.875
+        },
+        "Hydra_FTP_7": {
+          "detected": 12,
+          "total": 14,
+          "rate": 0.8571428571428571
+        },
+        "Hydra_FTP_5": {
+          "detected": 15,
+          "total": 18,
+          "rate": 0.8333333333333334
+        },
+        "Adduser_6": {
+          "detected": 7,
+          "total": 8,
+          "rate": 0.875
+        },
+        "Meterpreter_9": {
+          "detected": 3,
+          "total": 5,
+          "rate": 0.6
+        },
+        "Hydra_SSH_6": {
+          "detected": 18,
+          "total": 19,
+          "rate": 0.9473684210526315
+        },
+        "Adduser_10": {
+          "detected": 6,
+          "total": 6,
+          "rate": 1.0
+        },
+        "Hydra_SSH_1": {
+          "detected": 4,
+          "total": 8,
+          "rate": 0.5
+        },
+        "Hydra_FTP_10": {
+          "detected": 12,
+          "total": 13,
+          "rate": 0.9230769230769231
+        },
+        "Hydra_SSH_3": {
+          "detected": 20,
+          "total": 22,
+          "rate": 0.9090909090909091
+        },
+        "Meterpreter_5": {
+          "detected": 4,
+          "total": 5,
+          "rate": 0.8
+        },
+        "Hydra_FTP_3": {
+          "detected": 19,
+          "total": 20,
+          "rate": 0.95
+        },
+        "Hydra_SSH_8": {
+          "detected": 18,
+          "total": 19,
+          "rate": 0.9473684210526315
+        },
+        "Web_Shell_7": {
+          "detected": 13,
+          "total": 14,
+          "rate": 0.9285714285714286
+        },
+        "Adduser_7": {
+          "detected": 7,
+          "total": 8,
+          "rate": 0.875
+        },
+        "Java_Meterpreter_7": {
+          "detected": 13,
+          "total": 13,
+          "rate": 1.0
+        },
+        "Java_Meterpreter_9": {
+          "detected": 13,
+          "total": 15,
+          "rate": 0.8666666666666667
+        },
+        "Meterpreter_2": {
+          "detected": 8,
+          "total": 10,
+          "rate": 0.8
+        },
+        "Java_Meterpreter_2": {
+          "detected": 9,
+          "total": 11,
+          "rate": 0.8181818181818182
+        },
+        "Hydra_FTP_2": {
+          "detected": 14,
+          "total": 17,
+          "rate": 0.8235294117647058
+        },
+        "Adduser_5": {
+          "detected": 8,
+          "total": 10,
+          "rate": 0.8
+        },
+        "Java_Meterpreter_3": {
+          "detected": 10,
+          "total": 12,
+          "rate": 0.8333333333333334
+        },
+        "Adduser_9": {
+          "detected": 17,
+          "total": 22,
+          "rate": 0.7727272727272727
+        },
+        "Meterpreter_6": {
+          "detected": 9,
+          "total": 13,
+          "rate": 0.6923076923076923
+        },
+        "Hydra_FTP_9": {
+          "detected": 20,
+          "total": 22,
+          "rate": 0.9090909090909091
+        },
+        "Hydra_FTP_6": {
+          "detected": 18,
+          "total": 20,
+          "rate": 0.9
+        },
+        "Web_Shell_3": {
+          "detected": 6,
+          "total": 7,
+          "rate": 0.8571428571428571
+        },
+        "Web_Shell_9": {
+          "detected": 9,
+          "total": 11,
+          "rate": 0.8181818181818182
+        },
+        "Meterpreter_1": {
+          "detected": 6,
+          "total": 7,
+          "rate": 0.8571428571428571
+        },
+        "Meterpreter_8": {
+          "detected": 6,
+          "total": 7,
+          "rate": 0.8571428571428571
+        },
+        "Web_Shell_10": {
+          "detected": 16,
+          "total": 16,
+          "rate": 1.0
+        },
+        "Adduser_4": {
+          "detected": 6,
+          "total": 7,
+          "rate": 0.8571428571428571
+        },
+        "Adduser_2": {
+          "detected": 7,
+          "total": 8,
+          "rate": 0.875
+        },
+        "Hydra_SSH_9": {
+          "detected": 27,
+          "total": 28,
+          "rate": 0.9642857142857143
+        },
+        "Hydra_SSH_7": {
+          "detected": 9,
+          "total": 11,
+          "rate": 0.8181818181818182
+        },
+        "Hydra_SSH_5": {
+          "detected": 19,
+          "total": 20,
+          "rate": 0.95
+        },
+        "Meterpreter_4": {
+          "detected": 5,
+          "total": 6,
+          "rate": 0.8333333333333334
+        },
+        "Hydra_SSH_10": {
+          "detected": 10,
+          "total": 12,
+          "rate": 0.8333333333333334
+        },
+        "Web_Shell_8": {
+          "detected": 10,
+          "total": 13,
+          "rate": 0.7692307692307693
+        },
+        "Java_Meterpreter_5": {
+          "detected": 9,
+          "total": 12,
+          "rate": 0.75
+        },
+        "Java_Meterpreter_6": {
+          "detected": 9,
+          "total": 12,
+          "rate": 0.75
+        },
+        "Java_Meterpreter_10": {
+          "detected": 10,
+          "total": 12,
+          "rate": 0.8333333333333334
+        },
+        "Web_Shell_5": {
+          "detected": 8,
+          "total": 9,
+          "rate": 0.8888888888888888
+        },
+        "Adduser_3": {
+          "detected": 6,
+          "total": 8,
+          "rate": 0.75
+        },
+        "Adduser_8": {
+          "detected": 6,
+          "total": 7,
+          "rate": 0.8571428571428571
+        },
+        "Adduser_1": {
+          "detected": 7,
+          "total": 7,
+          "rate": 1.0
+        },
+        "Web_Shell_4": {
+          "detected": 8,
+          "total": 10,
+          "rate": 0.8
+        },
+        "Java_Meterpreter_1": {
+          "detected": 10,
+          "total": 11,
+          "rate": 0.9090909090909091
+        },
+        "Web_Shell_1": {
+          "detected": 13,
+          "total": 14,
+          "rate": 0.9285714285714286
+        },
+        "Hydra_SSH_2": {
+          "detected": 22,
+          "total": 25,
+          "rate": 0.88
+        },
+        "Hydra_SSH_4": {
+          "detected": 11,
+          "total": 12,
+          "rate": 0.9166666666666666
+        },
+        "Java_Meterpreter_4": {
+          "detected": 11,
+          "total": 13,
+          "rate": 0.8461538461538461
+        },
+        "Meterpreter_10": {
+          "detected": 6,
+          "total": 8,
+          "rate": 0.75
+        }
+      }
+    },
+    "lid_ds": {
+      "dataset": "LID-DS 2021",
+      "timestamp": "2026-02-01T12:32:14.066282",
+      "scenarios_evaluated": 0,
+      "scenarios": {},
+      "overall": {}
+    },
+    "latency": {
+      "timestamp": "2026-02-01T12:32:14.630086",
+      "iterations": 10000,
+      "latency_us": {
+        "mean": 53.44,
+        "median": 33.47,
+        "stdev": 64.24,
+        "min": 7.35,
+        "max": 431.86,
+        "p50": 33.47,
+        "p90": 144.86,
+        "p95": 213.51,
+        "p99": 289.93
+      }
+    },
+    "ml_comparison": {
+      "timestamp": "2026-02-01T12:32:16.177534",
+      "dataset_size": 5951,
+      "test_size": 1191,
+      "methods": {
+        "RandomForest": {
+          "f1": 0.847,
+          "precision": 0.9015,
+          "recall": 0.7987,
+          "latency_us": 15843.79,
+          "train_time_s": 0.14
+        },
+        "MLP": {
+          "f1": 0.8723,
+          "precision": 0.9248,
+          "recall": 0.8255,
+          "latency_us": 90.38,
+          "train_time_s": 95.86
+        },
+        "N-gram": {
+          "latency_us": 1.06,
+          "note": "See ADFA-LD evaluation for accuracy"
+        }
+      }
+    }
+  }
+}

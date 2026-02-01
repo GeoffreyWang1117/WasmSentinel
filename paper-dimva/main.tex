@@ -1,0 +1,90 @@
+% WasmSentinel: High-Performance eBPF-Wasm Cooperative Threat Detection
+% Target: DIMVA 2026 Cycle 2
+% Format: Springer LNCS (max 18 pages + 5 refs + 2 appendix)
+
+\documentclass[runningheads]{llncs}
+
+% Packages
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{amsmath}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{hyperref}
+\usepackage{subcaption}
+\usepackage{pifont}  % For \ding checkmarks
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{shapes,arrows,positioning,fit,backgrounds,patterns}
+
+% Code listing style
+\lstdefinestyle{rust}{
+    language=C,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{orange},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    frame=single,
+    captionpos=b
+}
+
+\lstdefinestyle{go}{
+    language=C,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black},
+    morekeywords={func,go,defer,chan,select,interface,struct,map,make,package,import},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    frame=single,
+    captionpos=b
+}
+
+\begin{document}
+
+% Title - anonymous for double-blind review
+\title{WasmSentinel: High-Performance Runtime Threat Detection with Sandboxed Machine Learning}
+
+% Anonymous submission
+\author{Anonymous Authors}
+\institute{Anonymous Institution}
+
+\maketitle
+
+\begin{abstract}
+Runtime threat detection faces a fundamental tension: rule-based systems like Falco are fast but miss novel attacks, while machine learning offers better detection but with prohibitive overhead and no isolation for third-party code.
+We present \textsc{WasmSentinel}, a framework that executes detection logic---including ML inference---inside WebAssembly sandboxes, fed by zero-copy eBPF event streaming.
+
+Our key insight is that careful co-design of the detection algorithm and runtime environment can achieve ML-capable detection at microsecond latency.
+We demonstrate this with a lightweight n-gram anomaly detector achieving 86\% recall at 33$\mu$s median latency, and show that neural network classifiers (F1=0.87) can run in the same sandbox at 90$\mu$s---fast enough for real-time use.
+The architecture achieves 4.7$\times$ lower end-to-end latency than Falco with 6$\times$ less memory, while the 180KB sandboxed binary enables secure deployment of community-contributed detection rules.
+
+\keywords{Runtime Security \and eBPF \and WebAssembly \and Machine Learning \and Intrusion Detection}
+\end{abstract}
+
+% Include sections
+\input{sections/introduction}
+\input{sections/background}
+\input{sections/threat-model}
+\input{sections/design}
+\input{sections/implementation}
+\input{sections/evaluation}
+\input{sections/discussion}
+\input{sections/related-work}
+\input{sections/conclusion}
+
+% Bibliography
+\bibliographystyle{splncs04}
+\bibliography{bib/references}
+
+% Appendix (supplementary material)
+\input{sections/appendix}
+
+\end{document}

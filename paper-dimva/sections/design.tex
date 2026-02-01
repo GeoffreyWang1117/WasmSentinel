@@ -1,0 +1,238 @@
+% System Design
+
+\section{System Design}
+\label{sec:design}
+
+This section presents the design of \textsc{WasmSentinel}, focusing on its three key innovations: the WasmML detection engine, the hybrid detection architecture, and the zero-copy data channel.
+
+\subsection{Architecture Overview}
+\label{sec:design-overview}
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[scale=0.9, transform shape,
+    box/.style={rectangle, draw, minimum height=0.8cm, align=center, font=\footnotesize},
+    ebpf/.style={box, fill=blue!15, minimum width=1.6cm},
+    host/.style={box, fill=green!15, minimum width=1.8cm},
+    wasm/.style={box, fill=orange!15, minimum width=1.8cm},
+    arrow/.style={->, >=stealth, thick}
+]
+    % Kernel space
+    \node[ebpf] (syscall) at (0,0) {Syscall\\Tracing};
+    \node[ebpf] (sched) at (1.9,0) {Process\\Lifecycle};
+    \node[ebpf] (net) at (3.8,0) {Network\\Events};
+    \node[ebpf] (file) at (5.7,0) {File\\Access};
+    \node[ebpf] (ring) at (2.85,-1.2) {Ring Buffer};
+
+    % User space
+    \node[host] (reader) at (0,-3) {Event\\Reader};
+    \node[host] (batcher) at (2.3,-3) {Batch\\Aggregator};
+    \node[host] (engine) at (4.6,-3) {Wasm\\Engine};
+
+    % Wasm modules
+    \node[wasm] (stide) at (7.2,-2.5) {STIDE};
+    \node[wasm] (mlp) at (7.2,-3.5) {MLP};
+    \node[wasm] (hybrid) at (9.2,-3) {Hybrid\\Scheduler};
+
+    % Arrows
+    \draw[arrow] (syscall) -- (ring);
+    \draw[arrow] (sched) -- (ring);
+    \draw[arrow] (net) -- (ring);
+    \draw[arrow] (file) -- (ring);
+    \draw[arrow] (ring) -- (reader);
+    \draw[arrow] (reader) -- (batcher);
+    \draw[arrow] (batcher) -- (engine);
+    \draw[arrow] (engine) -- (stide);
+    \draw[arrow] (engine) -- (mlp);
+    \draw[arrow] (stide) -- (hybrid);
+    \draw[arrow] (mlp) -- (hybrid);
+
+    % Labels
+    \node[above=0.4cm of net, font=\small\bfseries] {Kernel Space};
+    \node[above=0.3cm of batcher, font=\small\bfseries] {User Space};
+    \node[above=0.3cm of hybrid, font=\small\bfseries] {Wasm Sandbox};
+
+    % Boundary lines
+    \draw[dashed, thick, gray] (-1.2,-0.6) -- (10,-0.6);
+    \draw[dashed, thick, gray] (6,-4.2) -- (6,-1.8);
+\end{tikzpicture}
+\caption{\textsc{WasmSentinel} architecture. eBPF collects kernel events and emits them to a ring buffer. The host dispatches events to Wasm-sandboxed detectors.}
+\label{fig:architecture}
+\end{figure*}
+
+Figure~\ref{fig:architecture} illustrates the overall architecture of \textsc{WasmSentinel}.
+The system comprises three layers:
+
+\textbf{Kernel Layer.}
+eBPF programs attach to kernel tracepoints to capture security-relevant events including syscall invocations, process lifecycle events, network connections, and file accesses.
+Events are emitted to a shared ring buffer for efficient transfer to user space.
+
+\textbf{Host Layer.}
+A Go-based host program reads events from the ring buffer, optionally batches them for efficiency, and dispatches them to the Wasm detection engine.
+The host also manages Wasm module lifecycle, resource limits, and alert handling.
+
+\textbf{Detection Layer.}
+Detection logic executes within Wasm sandboxes, providing strong isolation guarantees.
+Our hybrid architecture combines multiple detection strategies, each implemented as a Rust module compiled to Wasm.
+
+\subsection{WasmML: ML in Wasm Sandbox}
+\label{sec:design-wasmml}
+
+The core innovation of \textsc{WasmSentinel} is \textit{WasmML}---the ability to run machine learning inference inside a Wasm sandbox while maintaining microsecond-level latency.
+
+\subsubsection{Design Challenges}
+
+Running ML inference in Wasm is non-trivial.
+Standard frameworks like TensorFlow and PyTorch cannot run in Wasm---they depend on native libraries, GPU drivers, and dynamic loading, none of which are available.
+Wasm also lacks SIMD instructions in most runtimes (though support is emerging), and linear memory must be pre-allocated rather than grown dynamically.
+These constraints rule out simply porting existing ML code.
+
+\subsubsection{Our Approach: Pure-Rust MLP}
+
+Rather than porting heavyweight ML frameworks, we implement a lightweight MLP directly in Rust:
+
+\begin{lstlisting}[style=rust, caption={Core MLP inference loop in Rust.}]
+pub fn forward(&self, input: &[f32]) -> f32 {
+    let mut x = input.to_vec();
+    for (i, layer) in self.layers.iter().enumerate() {
+        x = layer.weights.iter()
+            .map(|row| {
+                row.iter().zip(x.iter())
+                   .map(|(w, x)| w * x)
+                   .sum::<f32>()
+            })
+            .zip(layer.biases.iter())
+            .map(|(sum, b)| {
+                if i < self.layers.len() - 1 {
+                    relu(sum + b)  // Hidden layers
+                } else {
+                    sigmoid(sum + b)  // Output
+                }
+            })
+            .collect();
+    }
+    x[0]
+}
+\end{lstlisting}
+
+This approach offers several advantages: zero external ML dependencies, predictable performance without garbage collection or JIT, a compact 180KB Wasm binary, and portable weights stored as JSON.
+
+\subsubsection{Model Architecture}
+
+Through systematic architecture search (Appendix~\ref{app:experiments}), we found that a 4-layer MLP achieves the best accuracy-latency trade-off:
+
+\begin{table}[t]
+\centering
+\caption{MLP architecture for \textsc{WasmSentinel}.}
+\label{tab:mlp-arch}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Layer} & \textbf{Input} & \textbf{Output} & \textbf{Activation} \\
+\midrule
+Input & 64 & 128 & ReLU \\
+Hidden 1 & 128 & 64 & ReLU \\
+Hidden 2 & 64 & 32 & ReLU \\
+Hidden 3 & 32 & 16 & ReLU \\
+Output & 16 & 1 & Sigmoid \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Raw feature extraction produces a 340-dimensional vector (Appendix~\ref{app:features}), which we compress to 64 dimensions via feature hashing before MLP input.
+The compressed vector preserves syscall categories, dangerous syscall indicators, privilege context, and n-gram statistics while reducing inference cost.
+
+Total model parameters: 19,201 (75KB as float32).
+
+\subsection{Hybrid Detection Architecture}
+\label{sec:design-hybrid}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    box/.style={rectangle, draw, minimum height=0.7cm, align=center, font=\footnotesize},
+    decision/.style={diamond, draw, aspect=2.5, font=\tiny, inner sep=1pt},
+    arrow/.style={->, >=stealth}
+]
+    \node[box, fill=blue!10] (event) at (0,0) {Event};
+    \node[box, fill=green!10] (stide) at (2,0) {STIDE};
+    \node[decision, fill=yellow!10] (check) at (4.2,0) {Anomaly?};
+    \node[box, fill=orange!10] (mlp) at (6.4,0.8) {MLP};
+    \node[box, fill=green!10] (normal) at (6.4,-0.8) {Normal};
+    \node[decision, fill=yellow!10] (mlpcheck) at (8.6,0.8) {Threat?};
+    \node[box, fill=red!10] (alert) at (10.5,0.8) {Alert};
+    \node[box, fill=green!10] (benign) at (10.5,0) {Benign};
+
+    \draw[arrow] (event) -- (stide);
+    \draw[arrow] (stide) -- (check);
+    \draw[arrow] (check) -- node[above, font=\tiny] {Yes} (mlp);
+    \draw[arrow] (check) -- node[right, font=\tiny] {No} (normal);
+    \draw[arrow] (mlp) -- (mlpcheck);
+    \draw[arrow] (mlpcheck) -- node[above, font=\tiny] {Yes} (alert);
+    \draw[arrow] (mlpcheck) -- node[right, font=\tiny] {No} (benign);
+\end{tikzpicture}
+\caption{Hybrid detection flow: STIDE filters normal events, suspicious events escalate to MLP.}
+\label{fig:hybrid-flow}
+\end{figure}
+
+Pure ML-based detection incurs inference cost for every event.
+To reduce overhead, we employ a \textit{hybrid detection architecture} that combines STIDE-based fast-path filtering with MLP-based deep analysis.
+
+\subsubsection{STIDE Fast Path}
+
+STIDE (Sequence Time-Delay Embedding)~\cite{stide} detects anomalies through n-gram analysis of syscall sequences.
+During training, STIDE builds a database of ``normal'' n-grams observed in benign behavior.
+At runtime, incoming syscall sequences are checked against this database; sequences containing novel n-grams are flagged as anomalous.
+
+Our implementation uses 6-grams (empirically optimal for syscalls), FNV-1a hashing for speed and collision resistance, and stores up to 100,000 unique n-grams.
+
+STIDE overhead is sub-microsecond per event (median 180ns over 100K events), dominated by hash computation.
+
+\subsubsection{Escalation Policy}
+
+The key insight behind hybrid detection is that most events are benign and can be classified quickly.
+STIDE first computes an anomaly score based on the ratio of novel n-grams in the recent syscall window.
+If this score falls below threshold $\theta_1$ (default: 0.3), the event is classified as benign without invoking ML---this handles 80--90\% of events in typical workloads.
+
+Events exceeding $\theta_1$ are escalated to the MLP, which extracts features and returns a threat probability.
+If this probability exceeds $\theta_2$ (default: 0.7), an alert is generated.
+The two thresholds provide tunable trade-offs: lowering $\theta_1$ increases recall but also MLP invocations; raising $\theta_2$ reduces false positives but may miss subtle attacks.
+
+\subsection{Zero-Copy Data Channel}
+\label{sec:design-zerocopy}
+
+Efficient data transfer from kernel to Wasm is critical for overall performance.
+Traditional approaches incur multiple memory copies and serialization overhead.
+
+\subsubsection{Traditional Approach}
+
+Typical pipelines serialize kernel events into JSON, copy to userspace heap, then re-copy into Wasm memory---incurring 4 copies plus parsing (5--50$\mu$s per event).
+
+\subsubsection{Our Approach: Direct Memory Mapping}
+
+\textsc{WasmSentinel} reduces this to a single copy by mapping the ring buffer directly into Wasm linear memory.
+The eBPF program writes events in a fixed binary format matching the Wasm-side struct layout.
+The host maps a read-only view of the ring buffer region into the Wasm module's linear memory, allowing the detection code to read event fields at known offsets without any parsing or copying.
+
+\begin{lstlisting}[style=rust, caption={Zero-copy event access in Wasm.}]
+// Event structure matches kernel layout
+#[repr(C)]
+struct RawEvent {
+    timestamp: u64,
+    pid: u32,
+    ppid: u32,
+    uid: u32,
+    event_type: u32,
+    syscall_nr: u32,
+    // ... additional fields
+}
+
+fn read_event(ptr: *const u8) -> &RawEvent {
+    unsafe { &*(ptr as *const RawEvent) }
+}
+\end{lstlisting}
+
+This approach reduces per-event overhead to under 500ns.
+
+\subsubsection{Safety Considerations}
+
+Direct memory mapping raises safety concerns that we address through read-only access (Wasm cannot modify the ring buffer), bounds checking against buffer boundaries, format validation via magic numbers and checksums, and double-fetch protection by copying events to stack before multi-field access.

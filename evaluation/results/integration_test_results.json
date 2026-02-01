@@ -1,0 +1,70 @@
+{
+  "python_mlp": {
+    "accuracy": 0.375,
+    "correct": 3,
+    "total": 8,
+    "results": [
+      {
+        "description": "Normal read/write sequence",
+        "score": 0.02180588745144272,
+        "predicted": 0,
+        "expected": 0,
+        "correct": true
+      },
+      {
+        "description": "Normal file operations",
+        "score": 0.016870850666856792,
+        "predicted": 0,
+        "expected": 0,
+        "correct": true
+      },
+      {
+        "description": "Normal network sequence",
+        "score": 0.015259831379940414,
+        "predicted": 0,
+        "expected": 0,
+        "correct": true
+      },
+      {
+        "description": "Fork-exec attack pattern",
+        "score": 0.24958723592053375,
+        "predicted": 0,
+        "expected": 1,
+        "correct": false
+      },
+      {
+        "description": "Repeated execve (suspicious)",
+        "score": 0.03538471209232856,
+        "predicted": 0,
+        "expected": 1,
+        "correct": false
+      },
+      {
+        "description": "Repeated prctl (privilege escalation attempt)",
+        "score": 0.07590684238516757,
+        "predicted": 0,
+        "expected": 1,
+        "correct": false
+      },
+      {
+        "description": "Reverse shell pattern",
+        "score": 0.13044140554551142,
+        "predicted": 0,
+        "expected": 1,
+        "correct": false
+      },
+      {
+        "description": "Repeated mmap + exec",
+        "score": 0.011669267416518688,
+        "predicted": 0,
+        "expected": 1,
+        "correct": false
+      }
+    ]
+  },
+  "performance": {
+    "iterations": 10000,
+    "latency_us": 79.7458834014833,
+    "throughput": 12539.832243947525
+  }
+}

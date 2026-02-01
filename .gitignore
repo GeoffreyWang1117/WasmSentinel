@@ -1,0 +1,42 @@
+# Build artifacts
+target/
+*.o
+*.so
+*.rlib
+*.rmeta
+*.d
+
+# Logs
+logs/
+*.log
+
+# LaTeX artifacts
+*.aux
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.synctex.gz
+*.toc
+texput.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+
+# Session state (temporary)
+SESSION_STATE.md
+
+# OS files
+.DS_Store
+Thumbs.db

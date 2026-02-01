@@ -1,0 +1,46 @@
+% Introduction - Polished narrative version
+
+\section{Introduction}
+\label{sec:introduction}
+
+Runtime threat detection is critical for modern security infrastructure, tasked with identifying malicious activities as they occur.
+The proliferation of sophisticated attacks---from container escapes to advanced persistent threats---demands detection systems that combine comprehensive visibility, intelligent analysis, and minimal performance impact.
+However, existing approaches face fundamental trade-offs that limit their effectiveness.
+
+\textbf{The Problem with Existing Approaches.}
+Consider the landscape of runtime security tools.
+Rule-based systems like Falco~\cite{falco} and Tetragon~\cite{tetragon} match events against predefined patterns---they're fast and deployable, but fundamentally limited to detecting attacks someone has already seen.
+Machine learning promises to detect novel attacks by learning behavioral patterns, but typical ML pipelines add hundreds of milliseconds of latency (Python interpreter, heavyweight frameworks, GPU dependencies), making them impractical for inline detection.
+Worse, both approaches lack isolation: a malicious detection rule can access the host filesystem, exfiltrate data, or crash the monitoring daemon.
+
+This creates a dilemma for security teams.
+They want the intelligence of ML, the speed of compiled code, and the safety to deploy community-contributed rules---but no existing system offers all three.
+
+\textbf{Our Insight.}
+We observe that the perceived incompatibility between ML detection and performance stems from implementation choices rather than fundamental limitations.
+By carefully designing the detection pipeline---from data collection through inference---we can achieve ML-grade detection with microsecond-level latency.
+The key enablers are WebAssembly's near-native execution speed with strong sandboxing guarantees, lightweight neural network architectures designed for the threat detection domain, and zero-copy data transfer between the kernel and Wasm runtime.
+
+\textbf{WasmSentinel.}
+We present \textsc{WasmSentinel}, a runtime threat detection framework built on two key technologies: eBPF for efficient kernel-level event capture, and WebAssembly for sandboxed execution of detection logic.
+The architecture is simple: eBPF programs stream syscall events through a ring buffer, and Wasm modules analyze them---whether using n-gram anomaly detection, neural networks, or any algorithm that compiles to Wasm.
+The critical property is that detection code runs in a sandbox: it cannot access the filesystem, network, or host memory, making it safe to deploy third-party rules.
+
+\textbf{What We Demonstrate.}
+Our contribution is architectural rather than algorithmic.
+We deliberately use well-understood detection techniques---STIDE for n-gram anomaly detection, a 4-layer MLP for classification---to show that the perceived trade-off between ML capability and performance is an artifact of implementation, not a fundamental limit.
+Specifically, we show that n-gram detection achieves 86\% recall at 33$\mu$s latency, and that MLP inference runs at 90$\mu$s with F1=0.87.
+Both execute in the same 180KB Wasm sandbox with identical isolation guarantees.
+
+\textbf{Contributions.}
+This paper makes three contributions.
+First, we demonstrate that ML inference in a Wasm sandbox is practical for real-time threat detection, achieving microsecond latency with a compact binary.
+Second, we design a zero-copy data channel from eBPF ring buffers to Wasm memory that eliminates serialization overhead.
+Third, we provide comprehensive measurements on ADFA-LD showing 4.7$\times$ lower end-to-end latency than Falco with 6$\times$ less memory.
+
+The remainder of this paper is organized as follows.
+Section~\ref{sec:background} provides necessary background.
+Section~\ref{sec:threat-model} defines our threat model.
+Sections~\ref{sec:design} and \ref{sec:implementation} present the system design and implementation.
+Section~\ref{sec:evaluation} reports experimental results.
+Section~\ref{sec:discussion} discusses limitations, Section~\ref{sec:related-work} surveys related work, and Section~\ref{sec:conclusion} concludes.

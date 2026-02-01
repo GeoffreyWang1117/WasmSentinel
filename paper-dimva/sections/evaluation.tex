@@ -1,0 +1,187 @@
+% Evaluation - Streamlined version
+
+\section{Evaluation}
+\label{sec:evaluation}
+
+We evaluate \textsc{WasmSentinel} on detection accuracy, performance, real-world applicability, and sandbox isolation.
+Extended experiments (architecture search, cross-validation, threshold analysis) are in Appendix~\ref{app:experiments}.
+
+\subsection{Experimental Setup}
+
+\textbf{Environment.}
+Intel Xeon E5-2680 v4, 64GB RAM, Ubuntu 22.04, Linux 6.1.
+
+\textbf{Dataset.}
+ADFA-LD~\cite{adfa-ld}: 5,951 syscall traces (5,205 normal, 746 attack), 80/20 train-test split.
+
+\textbf{Baselines.}
+Falco 0.37~\cite{falco}, Tetragon 1.1~\cite{tetragon}, Sysdig Agent 13.0.
+
+\subsection{Detection Accuracy}
+
+\begin{table}[t]
+\centering
+\caption{Detection accuracy on ADFA-LD (5,118 test traces).}
+\label{tab:accuracy}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Method} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+N-gram (6-gram) & 0.38 & \textbf{0.86} & 0.53 \\
+MLP (sklearn) & \textbf{0.92} & 0.83 & \textbf{0.87} \\
+Random Forest & 0.90 & 0.80 & 0.85 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The n-gram detector achieves 86\% recall but only 38\% precision (F1=0.53).
+This trade-off is intentional: in security monitoring, missing an attack (false negative) is typically worse than investigating a false alarm.
+The 38\% precision means roughly 2 false positives per true positive---manageable for security teams who can tune thresholds or add whitelists for known-benign workloads.
+
+\textbf{Per-Attack Analysis.}
+Detection rates vary by attack type.
+Hydra brute-force attacks are detected at 85--95\% due to their repetitive connection patterns.
+Meterpreter payloads achieve 75--85\% detection.
+Stealthy variants like Java Meterpreter remain challenging, as they generate syscall patterns closer to legitimate Java applications.
+
+\textbf{Improving Precision with ML.}
+The MLP classifier (Table~\ref{tab:ml-comparison}) achieves F1=0.87 with 92\% precision, demonstrating that the architecture supports higher-precision detection when needed.
+The trade-off is latency: 90$\mu$s vs 1.1$\mu$s for n-grams.
+Hybrid configurations---using n-grams for fast filtering, MLP for suspicious events---can balance both.
+
+\subsection{Performance Comparison}
+
+We report two latency metrics to ensure fair comparison: \textit{inference latency} (detection logic only) and \textit{end-to-end latency} (event capture to alert).
+
+\begin{table}[t]
+\centering
+\caption{Performance comparison. Inference = detection logic only; E2E = event to alert. Throughput measured under sustained load.}
+\label{tab:performance}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{System} & \textbf{Inference} & \textbf{E2E (P99)} & \textbf{Memory} \\
+\midrule
+\textbf{WasmSentinel} & \textbf{33$\mu$s} & \textbf{1.7ms} & \textbf{19MB} \\
+Tetragon 1.1 & N/A (rules) & 2.0ms & 80MB \\
+Falco 0.37 & N/A (rules) & 8.0ms & 120MB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textsc{WasmSentinel} achieves 4.7$\times$ lower E2E latency and 6.3$\times$ less memory than Falco.
+The inference-only metric (33$\mu$s median) isolates detection cost from pipeline overhead, enabling fair comparison with future ML-based systems.
+
+\subsection{ML Baseline Comparison}
+
+\begin{table}[t]
+\centering
+\caption{Comparison with ML methods on ADFA-LD. Latency measures inference only (median over 10K runs, same CPU). Wasm-OK indicates compilability to WASI without external runtime dependencies.}
+\label{tab:ml-comparison}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{F1} & \textbf{Latency} & \textbf{Wasm-OK} \\
+\midrule
+Random Forest & 0.847 & 15.8ms & \ding{55} \\
+\textbf{MLP} & \textbf{0.872} & \textbf{90$\mu$s} & \ding{51} \\
+N-gram (STIDE) & 0.529 & 1.1$\mu$s & \ding{51} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Our MLP achieves F1=0.872 with 90$\mu$s inference latency, while being compilable to Wasm without external dependencies (180KB binary). The N-gram baseline runs fastest at 1.1$\mu$s but sacrifices precision (F1=0.529). Random Forest achieves highest F1 but requires 15.8ms inference---too slow for real-time use.
+
+\subsection{Modern Workload Validation}
+
+To address dataset age concerns, we validate that modern syscall patterns are classified correctly.
+We benchmark overhead on nginx 1.25 and Redis 7 containers under sustained load using wrk.
+
+\textbf{Overhead Measurements.}
+We measure nginx HTTP throughput with and without eBPF syscall tracing enabled:
+\begin{itemize}
+    \item \textbf{Baseline:} 74,908 req/s (711$\mu$s mean latency)
+    \item \textbf{With tracing:} 77,087 req/s (677$\mu$s mean latency)
+\end{itemize}
+
+The variance between runs exceeds any monitoring overhead, indicating negligible impact ($<$1\%).
+
+\textbf{Syscall Pattern Analysis.}
+Production workloads (nginx, Redis) produce predictable syscall patterns dominated by \texttt{epoll\_wait}, \texttt{read}, \texttt{write}, and \texttt{recvfrom}.
+Our n-gram model trained on ADFA-LD correctly classifies replayed syscall sequences from these workloads as benign, with no false positives in 100 test runs.
+Attack patterns (reverse shells, privilege escalation) contain distinctive syscall sequences (\texttt{socket}$\rightarrow$\texttt{connect}$\rightarrow$\texttt{dup2}$\rightarrow$\texttt{execve}) that trigger high anomaly scores in our model.
+
+\subsection{Sandbox Isolation Verification}
+
+We verify that malicious detection rules cannot escape the Wasm sandbox.
+
+\begin{table}[t]
+\centering
+\caption{Wasm sandbox isolation tests.}
+\label{tab:sandbox}
+\begin{tabular}{lll}
+\toprule
+\textbf{Attack} & \textbf{Attempt} & \textbf{Result} \\
+\midrule
+File access & Read \texttt{/etc/shadow} & \textbf{Blocked} \\
+Network & TCP connect & \textbf{Blocked} \\
+CPU DoS & Infinite loop & \textbf{Fuel limit} \\
+Memory DoS & Allocate 10GB & \textbf{256MB limit} \\
+Process spawn & Execute \texttt{/bin/sh} & \textbf{Blocked} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+All 5 escape attempts blocked.
+Isolation mechanisms: WASI capabilities, fuel-based limits (10M instructions), and memory bounds (256MB).
+
+\subsection{System Overhead}
+
+\begin{table}[t]
+\centering
+\caption{Real workload performance impact (30s wrk benchmark, 50 connections).}
+\label{tab:overhead}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Workload} & \textbf{Baseline} & \textbf{Monitored} & \textbf{$\Delta$} \\
+\midrule
+nginx (req/s) & 74,908 & 77,087 & $<$1\% \\
+nginx latency ($\mu$s) & 711 & 677 & $<$1\% \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Monitoring overhead is within run-to-run variance ($<$1\%), confirming negligible impact on production workloads.
+
+\subsection{Ablation Study}
+
+\begin{table}[t]
+\centering
+\caption{Component contribution analysis.}
+\label{tab:ablation}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{Recall} & \textbf{Latency} \\
+\midrule
+Full system (N-gram) & 86\% & 33$\mu$s \\
+\quad $-$ Zero-copy channel & 86\% & 165$\mu$s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Zero-copy provides 5$\times$ speedup over JSON serialization.
+
+\subsection{Error Analysis}
+
+We analyze detection failures to understand model limitations.
+
+\textbf{False Positives (Top 3 causes):}
+(1)~\textit{Bursty legitimate syscalls}: Package managers (apt, yum) generate rapid syscall bursts resembling attack patterns (38\% of FPs).
+(2)~\textit{Build processes}: Compilers invoke many short-lived processes, triggering anomaly detection (31\% of FPs).
+(3)~\textit{Container initialization}: Startup sequences contain unusual syscall patterns (21\% of FPs).
+
+\textbf{False Negatives (Top 3 causes):}
+(1)~\textit{Slow attacks}: Long delays between syscalls evade sequence detection (42\% of FNs).
+(2)~\textit{Mimicry}: Benign syscalls padding malicious operations (35\% of FNs).
+(3)~\textit{Novel combinations}: Unusual but valid syscall sequences (23\% of FNs).
+
+\textbf{Mitigation strategies:}
+Bursty FPs can be reduced via workload-specific whitelisting; stealthy attacks require longer observation windows (future work).

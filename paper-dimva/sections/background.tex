@@ -1,0 +1,41 @@
+% Background
+
+\section{Background}
+\label{sec:background}
+
+\subsection{eBPF for Security Monitoring}
+\label{sec:bg-ebpf}
+
+eBPF (extended Berkeley Packet Filter) enables user-defined programs to run safely within the Linux kernel~\cite{ebpf-intro}.
+Originally designed for packet filtering, eBPF has evolved into a general-purpose kernel extension mechanism.
+Programs are verified before loading to ensure memory safety and termination, then JIT-compiled to native code.
+
+For security monitoring, eBPF can attach to tracepoints (predefined kernel instrumentation points), kprobes (dynamic function entry/exit), and LSM hooks (security module callbacks).
+This provides comprehensive visibility: every syscall, process creation, network connection, and file access can be observed with minimal overhead.
+
+Captured events must be transferred to userspace for analysis.
+eBPF offers two mechanisms: \textit{perf buffers} provide per-CPU queues with copy semantics, while \textit{ring buffers} (Linux 5.8+) enable memory-mapped access with better cache behavior.
+\textsc{WasmSentinel} uses ring buffers to enable our zero-copy data channel.
+
+\subsection{WebAssembly Sandboxing}
+\label{sec:bg-wasm}
+
+WebAssembly (Wasm) is a portable binary format originally designed for web browsers but increasingly used for server-side sandboxing~\cite{wasm-spec}.
+Its security model provides strong isolation by design: each module operates on private linear memory inaccessible to the host, control flow is constrained by a validated call table, and all I/O requires explicit host function imports---there is no implicit access to files, network, or system calls.
+
+Modern Wasm runtimes like Wasmtime~\cite{wasmtime} achieve near-native performance (5--20\% overhead) through ahead-of-time compilation.
+WASI (WebAssembly System Interface)~\cite{wasi} standardizes capability-based access to OS resources, allowing fine-grained control over what each module can access.
+
+The combination of strong isolation, predictable performance, and small binary size makes Wasm well-suited for executing untrusted detection logic.
+
+\subsection{Syscall-Based Threat Detection}
+\label{sec:bg-ml}
+
+System call sequences have long been recognized as effective indicators of malicious behavior~\cite{stide}.
+The intuition is simple: legitimate programs exhibit consistent syscall patterns, while attacks---exploits, reverse shells, data exfiltration---generate anomalous sequences.
+
+STIDE (Sequence Time-Delay Embedding) pioneered n-gram analysis: build a database of ``normal'' syscall n-grams during training, then flag sequences containing novel n-grams as anomalous.
+This approach is fast but has limited precision---unusual but benign workloads trigger false positives.
+Neural network classifiers can learn more nuanced patterns but typically require heavyweight frameworks (TensorFlow, PyTorch) with millisecond-scale latency and no isolation guarantees.
+
+\textsc{WasmSentinel} bridges this gap: we implement lightweight ML models directly in Rust, compile to Wasm, and achieve microsecond inference within a sandbox.

@@ -1,0 +1,19 @@
+% Conclusion
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+Runtime threat detection has long faced an uncomfortable choice: rule-based systems are fast but blind to novel attacks, while ML approaches offer better detection but with prohibitive overhead and no isolation for third-party code.
+\textsc{WasmSentinel} demonstrates that this trade-off is not fundamental.
+
+By combining eBPF for efficient kernel event capture with WebAssembly for sandboxed detection logic, we achieve microsecond-level ML inference (33$\mu$s for n-grams, 90$\mu$s for MLP) within a 180KB binary that cannot access host resources.
+The architecture is 4.7$\times$ faster than Falco with 6$\times$ less memory, while enabling safe deployment of community-contributed detection rules.
+
+Our evaluation on ADFA-LD shows 86\% recall with the n-gram detector, and F1=0.87 with the MLP classifier.
+The precision of n-gram detection (38\%) reflects the inherent trade-off in anomaly detection; operators who need higher precision can deploy the MLP or combine both in a hybrid configuration.
+
+The broader lesson is architectural: careful co-design of the detection algorithm and runtime environment enables capabilities that seem incompatible when considered in isolation.
+We hope \textsc{WasmSentinel} demonstrates the viability of sandboxed ML for security, opening the door to community-driven threat intelligence with strong isolation guarantees.
+
+\textbf{Availability.}
+\textsc{WasmSentinel} is open-source software available at [URL redacted for review].

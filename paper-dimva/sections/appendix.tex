@@ -1,0 +1,151 @@
+% Appendix - Reorganized for DIMVA
+
+\appendix
+
+\section{Implementation Details}
+\label{app:implementation}
+
+\textsc{WasmSentinel} comprises approximately 8,500 lines of code across three components.
+
+\textbf{eBPF Collector (C, 450 LOC).}
+Kernel-side event collection attaches to syscall tracepoints (\texttt{sys\_enter\_*}, \texttt{sys\_exit\_*}) and process lifecycle events.
+Events are written to a 16MB BPF ring buffer using the following 320-byte structure:
+
+\begin{lstlisting}[style=rust, basicstyle=\ttfamily\scriptsize]
+struct event {
+    u64 timestamp; u32 pid, ppid, uid, gid;
+    u32 event_type, syscall_nr; s64 ret;
+    char comm[16]; char filename[256];
+};
+\end{lstlisting}
+
+\textbf{Host Program (Go, 2,100 LOC).}
+Uses \texttt{cilium/ebpf} for ring buffer reading and embedded Wasmtime for module execution.
+Each detection module runs with 64MB memory limit, 100ms timeout, and isolated fuel counter.
+
+\textbf{Detection Module (Rust, 1,850 LOC).}
+Exports: \texttt{init}, \texttt{detect}, \texttt{train}, \texttt{get\_stats}.
+Compiled to 180KB Wasm binary with LTO optimization.
+
+\section{Hyperparameters}
+\label{app:hyperparams}
+
+\begin{table}[h]
+\centering
+\small
+\caption{Training configuration.}
+\begin{tabular}{lc|lc}
+\toprule
+\textbf{Parameter} & \textbf{Value} & \textbf{Parameter} & \textbf{Value} \\
+\midrule
+Learning rate & 0.01 & Batch size & 64 \\
+Epochs & 200 & Hidden layers & [128,64,32,16] \\
+Optimizer & SGD+momentum & Weight decay & $10^{-4}$ \\
+Loss & Weighted BCE & Early stopping & 20 epochs \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Class Balancing.}
+Weighted BCE with $w_{\text{attack}}=3.87$, $w_{\text{normal}}=0.57$ (inverse class frequency).
+
+\section{Additional Experiments}
+\label{app:experiments}
+
+This section presents supplementary experiments referenced in the main text.
+
+\subsection{Architecture Search (8 configurations)}
+
+We evaluated 8 MLP architectures to identify the optimal accuracy-latency trade-off.
+
+\begin{table}[h]
+\centering
+\small
+\caption{MLP architecture comparison.}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Architecture} & \textbf{Params} & \textbf{F1} & \textbf{Latency} \\
+\midrule
+{[}16{]} & 1,057 & 0.51 & 8.5$\mu$s \\
+{[}32{]} & 2,113 & 0.53 & 9.4$\mu$s \\
+{[}64, 32{]} & 6,273 & 0.66 & 11.5$\mu$s \\
+{[}64, 32, 16{]} & 6,785 & 0.71 & 13.4$\mu$s \\
+{[}128, 64, 32, 16{]} & 19,201 & \textbf{0.72} & 19.1$\mu$s \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Cross-Validation (5-fold)}
+
+We performed 5-fold cross-validation to assess model stability.
+
+\begin{table}[h]
+\centering
+\small
+\caption{5-fold cross-validation on ADFA-LD.}
+\begin{tabular}{lcc}
+\toprule
+\textbf{Metric} & \textbf{Mean} & \textbf{Std Dev} \\
+\midrule
+Accuracy & 0.857 & $\pm$0.012 \\
+Precision & 0.465 & $\pm$0.022 \\
+Recall & 0.894 & $\pm$0.014 \\
+F1 Score & 0.612 & $\pm$0.021 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Threshold Sensitivity}
+
+Classification threshold affects the precision-recall trade-off.
+
+\begin{table}[h]
+\centering
+\small
+\caption{Classification threshold analysis.}
+\begin{tabular}{cccc}
+\toprule
+\textbf{Threshold} & \textbf{Precision} & \textbf{Recall} & \textbf{F1} \\
+\midrule
+0.5 & 0.45 & 0.94 & 0.61 \\
+0.7 & 0.55 & 0.81 & 0.66 \\
+0.9 & 0.67 & 0.40 & 0.50 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Reproducibility}
+\label{app:reproducibility}
+
+\textbf{Evaluation Hardware.}
+AMD Ryzen 9 5950X (16 cores @ 3.4GHz), 128GB DDR4, Pop!\_OS 24.04, Linux 6.17.
+
+\textbf{Minimum Requirements.}
+\textsc{WasmSentinel} is lightweight by design: 2 CPU cores, 2GB RAM, Linux 5.8+ kernel with eBPF support.
+Performance scales with available cores; latency results may vary on lower-end hardware.
+
+\textbf{Software.}
+Go 1.21+, Rust 1.74+, Wasmtime 15.0+, libbpf 1.2+.
+
+\textbf{Datasets.}
+ADFA-LD~\cite{adfa-ld} and LID-DS~\cite{lidds} are publicly available.
+
+\textbf{Build Commands.}
+\begin{verbatim}
+cargo build --target wasm32-wasip1 --release
+go build -o wasmsentinel ./cmd/sentinel
+\end{verbatim}
+
+\textbf{Runtime Requirements.}
+Linux kernel 5.8+ (ring buffer), root privileges (eBPF), no GPU required.
+
+\section{Feature Extraction}
+\label{app:features}
+
+The raw 340-dimensional feature vector comprises syscall frequency histogram (dims 0--99), n-gram hash distribution (100--199), statistical features including length, entropy, and transitions (200--239), and sequence burst patterns (240--339).
+
+\textbf{Feature Compression.}
+We apply feature hashing to compress the 340-dim vector to 64 dimensions for MLP input, reducing inference latency while preserving detection-relevant information.
+
+\textbf{Dangerous syscall indicators:}
+ptrace, execve from /tmp, setuid/setgid, module\_init, mount with unusual flags.

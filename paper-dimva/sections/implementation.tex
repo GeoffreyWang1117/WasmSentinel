@@ -1,0 +1,29 @@
+% Implementation - Compressed version
+
+\section{Implementation}
+\label{sec:implementation}
+
+\textsc{WasmSentinel} is implemented in 8,500 lines of code across three components.
+Full implementation details are provided in Appendix~\ref{app:implementation}.
+
+\textbf{eBPF Event Collection (C).}
+We attach to syscall tracepoints and process lifecycle events using libbpf.
+Events flow through a BPF ring buffer (Linux 5.8+), enabling zero-copy transfer to userspace.
+
+\textbf{Host Program (Go).}
+The coordinator reads events using \texttt{cilium/ebpf}, batches them adaptively based on arrival rate, and dispatches to Wasm modules via embedded Wasmtime.
+Each module runs with resource limits: 64MB memory, 100ms timeout, isolated fuel counter.
+
+\textbf{Detection Module (Rust $\rightarrow$ Wasm).}
+The hybrid detector implements STIDE n-gram analysis and a 4-layer MLP in pure Rust without external ML dependencies.
+Key exports: \texttt{init()}, \texttt{detect()}, \texttt{get\_stats()}.
+The compiled module is 180KB---orders of magnitude smaller than typical ML deployments.
+
+\textbf{Model Training (Python).}
+We use a pure-NumPy implementation (no TensorFlow/PyTorch) with weighted cross-entropy to handle class imbalance.
+Training on ADFA-LD completes in under 60 seconds on CPU.
+Weights export to JSON (558KB) for loading into Wasm.
+
+\textbf{Deployment.}
+Single binary with embedded eBPF bytecode and Wasm modules.
+Requirements: Linux 5.8+, root privileges, no GPU.
