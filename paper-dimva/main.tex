@@ -59,7 +59,7 @@
 \maketitle
 
 \begin{abstract}
-Runtime threat detection faces a fundamental tension: rule-based systems like Falco are fast but miss novel attacks, while machine learning offers better detection but with prohibitive overhead and no isolation for third-party code.
+Runtime threat detection faces a fundamental tension: rule-based systems such as Falco offer low latency but fail to detect novel attacks, while machine learning provides superior detection capability but incurs prohibitive overhead and offers no isolation for third-party code.
 We present \textsc{WasmSentinel}, a framework that executes detection logic---including ML inference---inside WebAssembly sandboxes, fed by zero-copy eBPF event streaming.
 
 Our key insight is that careful co-design of the detection algorithm and runtime environment can achieve ML-capable detection at microsecond latency.

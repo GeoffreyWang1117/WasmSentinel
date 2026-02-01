@@ -83,7 +83,7 @@ The core innovation of \textsc{WasmSentinel} is \textit{WasmML}---the ability to
 \subsubsection{Design Challenges}
 
 Running ML inference in Wasm is non-trivial.
-Standard frameworks like TensorFlow and PyTorch cannot run in Wasm---they depend on native libraries, GPU drivers, and dynamic loading, none of which are available.
+Standard frameworks such as TensorFlow and PyTorch cannot execute in Wasm, as they depend on native libraries, GPU drivers, and dynamic loading---none of which are available in the Wasm environment.
 Wasm also lacks SIMD instructions in most runtimes (though support is emerging), and linear memory must be pre-allocated rather than grown dynamically.
 These constraints rule out simply porting existing ML code.
 

@@ -9,9 +9,9 @@ However, existing approaches face fundamental trade-offs that limit their effect
 
 \textbf{The Problem with Existing Approaches.}
 Consider the landscape of runtime security tools.
-Rule-based systems like Falco~\cite{falco} and Tetragon~\cite{tetragon} match events against predefined patterns---they're fast and deployable, but fundamentally limited to detecting attacks someone has already seen.
+Rule-based systems like Falco~\cite{falco} and Tetragon~\cite{tetragon} match events against predefined patterns---they are fast and readily deployable, but fundamentally limited to detecting attacks that have been previously observed.
 Machine learning promises to detect novel attacks by learning behavioral patterns, but typical ML pipelines add hundreds of milliseconds of latency (Python interpreter, heavyweight frameworks, GPU dependencies), making them impractical for inline detection.
-Worse, both approaches lack isolation: a malicious detection rule can access the host filesystem, exfiltrate data, or crash the monitoring daemon.
+Moreover, both approaches lack isolation: a malicious detection rule can access the host filesystem, exfiltrate data, or crash the monitoring daemon.
 
 This creates a dilemma for security teams.
 They want the intelligence of ML, the speed of compiled code, and the safety to deploy community-contributed rules---but no existing system offers all three.

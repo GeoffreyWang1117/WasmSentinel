@@ -3,7 +3,7 @@
 \section{Conclusion}
 \label{sec:conclusion}
 
-Runtime threat detection has long faced an uncomfortable choice: rule-based systems are fast but blind to novel attacks, while ML approaches offer better detection but with prohibitive overhead and no isolation for third-party code.
+Runtime threat detection has long faced an uncomfortable choice: rule-based systems offer low latency but remain blind to novel attacks, while ML approaches provide superior detection but incur prohibitive overhead and offer no isolation for third-party code.
 \textsc{WasmSentinel} demonstrates that this trade-off is not fundamental.
 
 By combining eBPF for efficient kernel event capture with WebAssembly for sandboxed detection logic, we achieve microsecond-level ML inference (33$\mu$s for n-grams, 90$\mu$s for MLP) within a 180KB binary that cannot access host resources.

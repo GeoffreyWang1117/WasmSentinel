@@ -14,8 +14,8 @@ These attackers generate observable syscall patterns---opening sensitive files, 
 We assume attackers may attempt evasion through syscall obfuscation or mimicry, but do not have prior knowledge of the specific detection model deployed.
 
 \textbf{Malicious Rule Authors} represent a less-considered but increasingly relevant threat.
-As security teams adopt community-contributed detection rules, they must trust that these rules won't themselves become attack vectors.
-A malicious rule could attempt to escape its sandbox, exfiltrate event data, or simply crash the monitoring daemon.
+As security teams adopt community-contributed detection rules, they must trust that these rules will not themselves become attack vectors.
+A malicious rule might attempt to escape its sandbox, exfiltrate event data, or crash the monitoring daemon.
 \textsc{WasmSentinel}'s Wasm sandboxing specifically addresses this threat---detection rules cannot access the filesystem, network, or any resource not explicitly granted by the host.
 
 \textbf{Scope Boundaries.}

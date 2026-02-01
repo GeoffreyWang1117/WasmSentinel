@@ -35,7 +35,7 @@ System call sequences have long been recognized as effective indicators of malic
 The intuition is simple: legitimate programs exhibit consistent syscall patterns, while attacks---exploits, reverse shells, data exfiltration---generate anomalous sequences.
 
 STIDE (Sequence Time-Delay Embedding) pioneered n-gram analysis: build a database of ``normal'' syscall n-grams during training, then flag sequences containing novel n-grams as anomalous.
-This approach is fast but has limited precision---unusual but benign workloads trigger false positives.
+This approach is computationally efficient but has limited precision, as unusual but benign workloads can trigger false positives.
 Neural network classifiers can learn more nuanced patterns but typically require heavyweight frameworks (TensorFlow, PyTorch) with millisecond-scale latency and no isolation guarantees.
 
 \textsc{WasmSentinel} bridges this gap: we implement lightweight ML models directly in Rust, compile to Wasm, and achieve microsecond inference within a sandbox.
