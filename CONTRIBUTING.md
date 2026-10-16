@@ -147,7 +147,7 @@ go version
 
 # Rust 1.70+
 rustc --version
-rustup target add wasm32-wasi
+rustup target add wasm32-wasip1
 
 # 开发工具
 go install golang.org/x/tools/cmd/goimports@latest

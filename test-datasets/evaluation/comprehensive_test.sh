@@ -14,7 +14,7 @@ if [ ! -f "./wasm-threat-detector" ]; then
     exit 1
 fi
 
-if [ ! -f "./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm" ]; then
+if [ ! -f "./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm" ]; then
     echo "❌ Wasm 规则未找到，请先运行: ./scripts/build.sh"
     exit 1
 fi
@@ -27,13 +27,13 @@ LOG_FILE="$LOG_DIR/test_$(date +%Y%m%d_%H%M%S).log"
 
 echo "📋 测试配置:"
 echo "  - 日志文件: $LOG_FILE"
-echo "  - 规则文件: ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm"
+echo "  - 规则文件: ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm"
 echo ""
 
 # 启动威胁检测器
 echo "🚀 启动威胁检测器..."
 ./wasm-threat-detector \
-    --rules ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm \
+    --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm \
     --log-level debug \
     --log-file "$LOG_FILE" \
     --metrics-port 8080 &

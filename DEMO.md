@@ -16,48 +16,48 @@
 
 ## 💻 本地演示
 
-### 快速演示 (推荐)
+### 快速演示 (推荐) ⭐
+
 一键启动完整演示环境：
 
 ```bash
 # 克隆项目
-git clone https://github.com/your-username/WASM-ThreatDetector
-cd WASM-ThreatDetector
+git clone https://github.com/your-username/WasmSentinel
+cd WasmSentinel
 
-# 运行完整演示
-./scripts/demo-complete.sh
-```
+# 一键启动演示（自动构建镜像）
+./scripts/start-demo.sh
 
-演示将自动：
-1. ✅ 检查依赖环境
-2. 🔧 构建项目组件
-3. 🚀 启动威胁检测器
-4. 🌐 启动演示网站
-5. 🔥 执行模拟攻击
-6. 📊 展示检测结果
-7. 🧪 运行自动化测试
-
-### Docker 演示环境
-使用 Docker Compose 启动完整的演示环境：
-
-```bash
-# 启动演示环境
-docker-compose -f docker-compose.demo.yml up -d
-
-# 查看服务状态
-docker-compose -f docker-compose.demo.yml ps
-
-# 查看日志
-docker-compose -f docker-compose.demo.yml logs -f wasm-threat-detector
+# 停止演示
+./scripts/stop-demo.sh
 ```
 
 ### 访问地址
-- 🛡️ **威胁检测器**: http://localhost:8080
-  - 健康检查: http://localhost:8080/health
-  - 指标数据: http://localhost:8080/metrics
-- 🌐 **演示网站**: http://localhost:3000
-- 📊 **Prometheus**: http://localhost:9090
-- 📈 **Grafana**: http://localhost:3001 (admin/demo123)
+| 服务 | 地址 | 说明 |
+|------|------|------|
+| 🌐 **演示界面** | http://localhost:3000 | 主要展示入口 |
+| 📊 **Prometheus** | http://localhost:9091 | 监控指标 |
+
+### 演示界面功能
+- **实时威胁仪表板**: 查看检测统计和日志流
+- **模拟攻击按钮**: 演示威胁检测能力
+- **系统架构图**: 展示技术实现
+- **技术特性卡片**: 说明项目亮点
+
+### Docker 手动启动
+```bash
+# 构建镜像
+docker build -t wasm-sentinel:latest .
+
+# 启动演示环境
+docker compose -f docker-compose.showcase.yml up -d
+
+# 查看状态
+docker compose -f docker-compose.showcase.yml ps
+
+# 查看日志
+docker compose -f docker-compose.showcase.yml logs -f
+```
 
 ## 🧪 测试演示
 
@@ -138,10 +138,10 @@ pub fn detect_threat(event_json: &str) -> String {
 EOF
 
 # 构建规则
-cargo build --target wasm32-wasi --release
+cargo build --target wasm32-wasip1 --release
 
 # 加载规则
-./wasm-threat-detector --rules ./rules/my-custom-rule/target/wasm32-wasi/release/my_custom_rule.wasm
+./wasm-threat-detector --rules ./rules/my-custom-rule/target/wasm32-wasip1/release/my_custom_rule.wasm
 ```
 
 ### 集成外部系统

@@ -1,5 +1,10 @@
 # WasmSentinel
 
+> 📋 **改进方案**: 本仓有一份经过实查的改进方案 —— [`IMPROVEMENT_PLAN.md`](IMPROVEMENT_PLAN.md)（2026-10-13）。
+> 🗺️ **开发计划（2026-10-16，取代 CCS2026_ROADMAP/RESEARCH/SESSION_STATE）**: [`DEVELOPMENT_PLAN.md`](DEVELOPMENT_PLAN.md) —— 含证据链审计、AsiaCCS 2027 C2 时间线与 Go/No-Go 门禁。
+> 跨项目索引（仓库外，本机）: `~/Engineering/ENGINEERING_IMPROVEMENT_INDEX_2026-10-13.md`
+
+
 A lightweight real-time threat detection tool based on WebAssembly
 
 [![Build Status](https://github.com/GeoffreyWang1117/WasmSentinel/workflows/CI/badge.svg)](https://github.com/GeoffreyWang1117/WasmSentinel/actions)
@@ -74,13 +79,13 @@ go build -o wasm-sentinel ./cmd/main.go
 
 ```bash
 cd rules/suspicious-shell
-cargo build --target wasm32-wasi --release
+cargo build --target wasm32-wasip1 --release
 ```
 
 ### Run Detector
 
 ```bash
-./wasm-sentinel --rules ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm
+./wasm-sentinel --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm
 ```
 
 ### Docker Deployment

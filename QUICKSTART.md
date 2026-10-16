@@ -40,7 +40,7 @@ sudo apt install golang-go
 # 安装 Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
-rustup target add wasm32-wasi
+rustup target add wasm32-wasip1
 ```
 
 #### CentOS/RHEL
@@ -51,14 +51,14 @@ sudo yum install golang
 # 安装 Rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source ~/.cargo/env
-rustup target add wasm32-wasi
+rustup target add wasm32-wasip1
 ```
 
 #### macOS
 ```bash
 # 使用 Homebrew
 brew install go rust
-rustup target add wasm32-wasi
+rustup target add wasm32-wasip1
 ```
 
 ### 手动构建
@@ -66,7 +66,7 @@ rustup target add wasm32-wasi
 ```bash
 # 1. 构建 Wasm 规则
 cd rules/suspicious-shell
-cargo build --target wasm32-wasi --release
+cargo build --target wasm32-wasip1 --release
 cd ../..
 
 # 2. 构建主程序
@@ -82,7 +82,7 @@ cd ..
 
 ```bash
 # 基本启动
-./wasm-threat-detector --rules ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm
+./wasm-threat-detector --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm
 
 # 详细日志
 ./wasm-threat-detector \
@@ -230,10 +230,10 @@ sudo setcap cap_sys_ptrace,cap_dac_read_search+ep ./wasm-threat-detector
 #### 2. Wasm 模块加载失败
 ```bash
 # 检查 Wasm 文件
-file rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm
+file rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm
 
 # 重新构建规则
-cd rules/suspicious-shell && cargo clean && cargo build --target wasm32-wasi --release
+cd rules/suspicious-shell && cargo clean && cargo build --target wasm32-wasip1 --release
 ```
 
 #### 3. 网络连接问题

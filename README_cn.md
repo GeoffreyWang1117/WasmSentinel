@@ -74,13 +74,13 @@ go build -o wasm-sentinel ./cmd/main.go
 
 ```bash
 cd rules/suspicious-shell
-cargo build --target wasm32-wasi --release
+cargo build --target wasm32-wasip1 --release
 ```
 
 ### 运行检测器
 
 ```bash
-./wasm-sentinel --rules ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm
+./wasm-sentinel --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm
 ```
 
 ### Docker 部署

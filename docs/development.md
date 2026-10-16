@@ -69,7 +69,7 @@ fn detect_custom_threat(event: &Value) -> i32 {
 #### 4. 构建规则
 
 ```bash
-cargo build --target wasm32-wasi --release
+cargo build --target wasm32-wasip1 --release
 ```
 
 ### Go 规则开发 (TinyGo)
@@ -247,11 +247,11 @@ mod tests {
 
 ```bash
 # 构建规则
-cargo build --target wasm32-wasi --release
+cargo build --target wasm32-wasip1 --release
 
 # 测试规则
 ./wasm-threat-detector \
-  --rules ./target/wasm32-wasi/release/my_rule.wasm \
+  --rules ./target/wasm32-wasip1/release/my_rule.wasm \
   --log-level debug
 ```
 

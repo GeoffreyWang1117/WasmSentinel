@@ -20,7 +20,7 @@ LOG_FILE="/tmp/perf_test_$(date +%Y%m%d_%H%M%S).log"
 
 echo "🚀 启动检测器..."
 ./wasm-threat-detector \
-    --rules ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm \
+    --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm \
     --log-level info \
     --log-file "$LOG_FILE" \
     --metrics-port 8080 &

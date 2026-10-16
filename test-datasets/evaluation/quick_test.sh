@@ -32,10 +32,10 @@ else
     echo "✅ 主程序已存在"
 fi
 
-if [ ! -f "./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm" ]; then
+if [ ! -f "./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm" ]; then
     echo "❌ WASM 规则未构建，开始构建..."
     cd ./rules/suspicious-shell
-    cargo build --target wasm32-wasi --release
+    cargo build --target wasm32-wasip1 --release
     cd "$PROJECT_DIR"
 else
     echo "✅ WASM 规则已存在"

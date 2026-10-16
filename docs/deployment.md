@@ -11,7 +11,7 @@ FROM golang:1.21-alpine AS builder
 RUN apk add --no-cache curl build-base
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
-RUN rustup target add wasm32-wasi
+RUN rustup target add wasm32-wasip1
 
 WORKDIR /app
 COPY . .
