@@ -1,16 +1,28 @@
-# Build artifacts
+# ---- Build artifacts ----
 target/
 *.o
+# bpf2go output, embedded by go:embed; regenerate with `cd host/internal/ebpf && go generate ./...`
+!host/internal/ebpf/sentinel_bpfel.o
 *.so
 *.rlib
 *.rmeta
 *.d
+# host binary: build with scripts/build.sh; distributed via GitHub Releases
+/wasm-threat-detector
+/wasm-sentinel
+# Wasm rule modules are build products (scripts/build.sh writes them to rules/wasm/)
+*.wasm
+coverage.out
+coverage.html
 
-# Logs
+# ---- Datasets (fetch with scripts/fetch_datasets.sh) ----
+evaluation/datasets/raw/
+
+# ---- Logs ----
 logs/
 *.log
 
-# LaTeX artifacts
+# ---- LaTeX ----
 *.aux
 *.bbl
 *.blg
@@ -21,22 +33,24 @@ logs/
 *.toc
 texput.log
 
-# IDE
+# ---- IDE ----
 .idea/
 .vscode/
 *.swp
 *.swo
 
-# Python
+# ---- Python ----
 __pycache__/
 *.pyc
 *.pyo
 .pytest_cache/
 *.egg-info/
+.conda/
+.venv/
 
-# Session state (temporary)
-SESSION_STATE.md
+# ---- Agent / tooling state ----
+.claude/
 
-# OS files
+# ---- OS ----
 .DS_Store
 Thumbs.db
