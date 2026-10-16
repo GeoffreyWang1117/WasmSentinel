@@ -1,0 +1,98 @@
+% Background
+
+\section{Background}
+\label{sec:background}
+
+This section provides background on the key technologies that enable \textsc{WasmSentinel}: eBPF for kernel-level event collection, WebAssembly for secure rule execution, and machine learning for intelligent threat detection.
+
+\subsection{Extended Berkeley Packet Filter (eBPF)}
+\label{sec:bg-ebpf}
+
+eBPF is a revolutionary technology that enables safe execution of user-defined programs within the Linux kernel~\cite{ebpf-intro}.
+Originally designed for packet filtering, eBPF has evolved into a general-purpose in-kernel virtual machine with applications spanning networking, observability, and security.
+
+\textbf{Security Applications.}
+For runtime threat detection, eBPF provides unparalleled visibility into system behavior through:
+\begin{itemize}
+    \item \textit{Tracepoints}: Attach to predefined kernel instrumentation points (e.g., \texttt{sys\_enter\_execve})
+    \item \textit{Kprobes}: Dynamic instrumentation of arbitrary kernel functions
+    \item \textit{LSM hooks}: Integration with Linux Security Modules for access control decisions
+\end{itemize}
+
+\textbf{Data Transfer Mechanisms.}
+eBPF programs communicate with userspace through several map types:
+\begin{itemize}
+    \item \textit{Perf buffer}: Per-CPU ring buffer with copy semantics
+    \item \textit{Ring buffer}: Single shared buffer with memory-mapped access (Linux 5.8+)
+    \item \textit{Hash/Array maps}: Key-value storage for state management
+\end{itemize}
+
+The ring buffer is particularly relevant for high-performance systems as it enables zero-copy data transfer through direct memory mapping, eliminating the per-event copy overhead inherent in perf buffers.
+
+\subsection{WebAssembly (Wasm)}
+\label{sec:bg-wasm}
+
+WebAssembly is a portable binary instruction format designed for safe, efficient execution across platforms~\cite{wasm-spec}.
+While originally developed for web browsers, Wasm has gained significant traction as a universal runtime for server-side and edge computing.
+
+\textbf{Security Properties.}
+Wasm provides strong sandboxing guarantees through:
+\begin{itemize}
+    \item \textit{Memory isolation}: Each Wasm module has its own linear memory, inaccessible to other modules
+    \item \textit{Control flow integrity}: Indirect calls are validated against a type table
+    \item \textit{Capability-based I/O}: Host functions are explicitly imported, following the principle of least privilege
+    \item \textit{Deterministic execution}: No undefined behavior; all operations have specified semantics
+\end{itemize}
+
+\textbf{Performance Characteristics.}
+Modern Wasm runtimes like Wasmtime~\cite{wasmtime} and Wasmer achieve near-native performance through ahead-of-time (AOT) compilation.
+Key performance factors include:
+\begin{itemize}
+    \item Compilation time: 100--500ms for typical modules
+    \item Execution overhead: 5--20\% compared to native code
+    \item Memory overhead: Linear memory plus runtime metadata
+\end{itemize}
+
+\textbf{WASI: WebAssembly System Interface.}
+WASI defines a standardized API for Wasm modules to interact with the operating system~\cite{wasi}.
+For security applications, WASI enables controlled access to:
+\begin{itemize}
+    \item File system (with capability restrictions)
+    \item Network sockets (preview feature)
+    \item Environment variables and arguments
+    \item Random number generation
+\end{itemize}
+
+\subsection{ML-Based Threat Detection}
+\label{sec:bg-ml}
+
+Machine learning has emerged as a powerful tool for identifying previously unseen attacks that evade signature-based detection.
+Key approaches include:
+
+\textbf{Sequence-Based Detection.}
+System call sequences provide a rich signal for detecting anomalous behavior.
+Notable techniques include:
+\begin{itemize}
+    \item \textit{STIDE}~\cite{stide}: Sliding window n-gram analysis that builds a database of normal sequences and flags novel patterns
+    \item \textit{HMM-based}: Hidden Markov Models that capture temporal dependencies between syscalls
+    \item \textit{LSTM/RNN}: Recurrent neural networks that learn complex sequential patterns
+\end{itemize}
+
+\textbf{Feature-Based Classification.}
+An alternative approach extracts statistical features from system activity and applies classification algorithms:
+\begin{itemize}
+    \item \textit{Syscall frequency vectors}: Counts of each syscall type over a time window
+    \item \textit{Resource utilization patterns}: CPU, memory, network statistics
+    \item \textit{Process relationship features}: Parent-child hierarchies, privilege levels
+\end{itemize}
+
+\textbf{Deployment Challenges.}
+Despite their effectiveness, ML-based detection systems face significant practical challenges:
+\begin{itemize}
+    \item \textit{Latency}: Full ML pipelines can add 10--1000ms per event
+    \item \textit{Resource consumption}: GPU inference or large models require substantial resources
+    \item \textit{Deployment complexity}: Python/TensorFlow environments are difficult to maintain in production
+    \item \textit{Isolation}: ML libraries may contain vulnerabilities exploitable by adversarial inputs
+\end{itemize}
+
+\textsc{WasmSentinel} addresses these challenges through careful co-design of the detection algorithm and runtime environment, as detailed in Section~\ref{sec:design}.

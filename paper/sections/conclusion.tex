@@ -1,0 +1,20 @@
+% Conclusion
+
+\section{Conclusion}
+\label{sec:conclusion}
+
+We presented \textsc{WasmSentinel}, a high-performance runtime threat detection framework that executes machine learning models within WebAssembly sandboxes.
+By carefully co-designing the detection algorithm and runtime environment, we achieve the seemingly incompatible goals of intelligent ML-based detection, microsecond-level latency, and strong security isolation.
+
+Our key contributions include WasmML---the first system to run ML inference in a Wasm sandbox for threat detection---achieving 16.5$\mu$s mean latency with a 180KB portable binary.
+The hybrid detection architecture combines STIDE-based fast-path filtering with MLP-based deep analysis, achieving F1=0.72 on the ADFA-LD benchmark.
+Our zero-copy eBPF-Wasm data channel eliminates serialization overhead, providing 5$\times$ speedup over conventional approaches.
+
+Evaluation demonstrates that \textsc{WasmSentinel} outperforms state-of-the-art systems by 121--485$\times$ in inference latency while achieving comparable or better detection accuracy.
+The lightweight design (19MB memory footprint) enables deployment in resource-constrained environments including edge devices and serverless functions.
+
+\textsc{WasmSentinel} demonstrates that the perceived trade-off between detection capability and performance is not fundamental, but rather a consequence of implementation choices.
+By rethinking the detection pipeline from kernel to inference, we enable a new class of lightweight, intelligent, and secure runtime protection systems.
+
+\textbf{Availability.}
+\textsc{WasmSentinel} is open-source software available at [URL redacted for review].

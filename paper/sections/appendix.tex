@@ -1,0 +1,125 @@
+% Appendix
+
+\section{Feature Extraction Details}
+\label{app:features}
+
+The 64-dimensional feature vector used by the MLP classifier is constructed as follows:
+
+\begin{table}[h]
+\centering
+\caption{Feature vector composition.}
+\label{tab:features}
+\begin{tabular}{clc}
+\toprule
+\textbf{Index} & \textbf{Feature} & \textbf{Dims} \\
+\midrule
+0 & Normalized syscall number & 1 \\
+1--10 & Syscall category (one-hot) & 10 \\
+11--20 & Dangerous syscall indicators & 10 \\
+21 & Is root user (uid=0) & 1 \\
+22 & Privilege escalation flag & 1 \\
+23--32 & N-gram frequency statistics & 10 \\
+33--42 & Sliding window syscall counts & 10 \\
+43--52 & Parent process features & 10 \\
+53--62 & Temporal features & 10 \\
+63 & STIDE anomaly score & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Syscall categories} group related syscalls:
+\begin{itemize}
+    \item Process: execve, fork, clone, exit
+    \item File: open, read, write, close, unlink
+    \item Network: socket, connect, accept, sendto, recvfrom
+    \item Memory: mmap, mprotect, brk
+    \item IPC: pipe, shmget, msgget
+    \item System: ioctl, ptrace, mount
+\end{itemize}
+
+\textbf{Dangerous syscall indicators} flag potentially suspicious syscalls:
+\begin{itemize}
+    \item ptrace (debugging/injection)
+    \item execve from unusual paths (/tmp, /dev/shm)
+    \item setuid/setgid (privilege changes)
+    \item module\_init (kernel module loading)
+    \item mount with unusual options
+\end{itemize}
+
+\section{Training Hyperparameters}
+\label{app:hyperparams}
+
+\begin{table}[h]
+\centering
+\caption{Default training hyperparameters.}
+\label{tab:hyperparams-app}
+\begin{tabular}{lc}
+\toprule
+\textbf{Parameter} & \textbf{Value} \\
+\midrule
+Learning rate & 0.01 \\
+Epochs & 200 \\
+Batch size & 64 \\
+Hidden layers & [128, 64, 32, 16] \\
+Activation (hidden) & ReLU \\
+Activation (output) & Sigmoid \\
+Loss function & Weighted BCE \\
+Optimizer & SGD with momentum (0.9) \\
+Weight decay & $10^{-4}$ \\
+Gradient clipping & 1.0 \\
+Early stopping patience & 20 epochs \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{ADFA-LD Attack Categories}
+\label{app:adfa}
+
+The ADFA-LD dataset contains the following attack types:
+
+\begin{table}[h]
+\centering
+\caption{ADFA-LD attack categories.}
+\label{tab:adfa-attacks}
+\begin{tabular}{lcp{4cm}}
+\toprule
+\textbf{Category} & \textbf{Traces} & \textbf{Description} \\
+\midrule
+Hydra FTP & 162 & Brute force FTP login \\
+Hydra SSH & 148 & Brute force SSH login \\
+Adduser & 91 & Unauthorized user creation \\
+Java Meterpreter & 125 & Remote shell via Meterpreter \\
+Linux Meterpreter & 98 & Native Meterpreter payload \\
+Web shell & 122 & PHP/Python web backdoors \\
+\midrule
+Total attacks & 746 & \\
+Normal & 5,205 & Standard system operation \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Detailed Latency Breakdown}
+\label{app:latency}
+
+\begin{table}[h]
+\centering
+\caption{Per-component latency breakdown.}
+\label{tab:latency-breakdown}
+\begin{tabular}{lc}
+\toprule
+\textbf{Component} & \textbf{Latency} \\
+\midrule
+Event read from ring buffer & 0.2$\mu$s \\
+Feature extraction & 3.1$\mu$s \\
+STIDE n-gram check & 0.2$\mu$s \\
+MLP forward pass & 12.8$\mu$s \\
+Result formatting & 0.2$\mu$s \\
+\midrule
+\textbf{Total (with MLP)} & \textbf{16.5$\mu$s} \\
+\textbf{Total (STIDE only)} & \textbf{3.5$\mu$s} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The MLP forward pass dominates latency (78\%).
+Events filtered by STIDE avoid this cost, achieving 3.5$\mu$s latency.

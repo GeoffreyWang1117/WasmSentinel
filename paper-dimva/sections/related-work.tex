@@ -1,75 +1,22 @@
-% Related Work
-
 \section{Related Work}
 \label{sec:related-work}
 
-\subsection{eBPF-Based Security Systems}
+\textbf{eBPF-based Monitoring.}
+The rise of cloud-native computing has driven the adoption of eBPF for observability and security.
+Pixie~\cite{pixie} uses eBPF for auto-telemetry, collecting rich application-level data with minimal overhead.
+Falco~\cite{falco} and Tetragon~\cite{tetragon} leverage eBPF to monitor system calls and enforce security policies.
+However, these systems primarily rely on manually defined rules or basic n-gram anomalies.
+\textsc{WasmSentinel} extends this by enabling sandboxed ML inference directly on the eBPF event stream, bridging the gap between high-performance monitoring and advanced detection logic.
 
-The emergence of eBPF has enabled a new generation of runtime security tools that combine kernel-level visibility with userspace flexibility.
-Falco~\cite{falco} pioneered this approach, using eBPF to capture kernel events and a rule engine to detect known attack patterns.
-Tetragon~\cite{tetragon} from Cilium extends this model with deeper Kubernetes integration and policy enforcement.
-Tracee~\cite{tracee} from Aqua Security adds signature-based detection with Go-based evaluation.
+\textbf{Deep Learning for Intrusion Detection.}
+Deep learning has shown great promise in detecting sophisticated attacks.
+DeepLog~\cite{deeplog} utilizes LSTMs to model system logs as a natural language, detecting anomalies by predicting the next log entry.
+Similarly, various architectures including Transformers~\cite{transformer-sec} and Graph Neural Networks (GNNs)~\cite{gnn-sec} have been applied to syscall sequences.
+While accurate, these models often incur prohibitive inference overhead.
+\textsc{WasmSentinel} demonstrates that a carefully optimized MLP, when combined with a hybrid architecture and Wasm-based execution, can achieve competitive accuracy with microsecond-level latency.
 
-These systems share a common limitation: detection logic executes in the trusted host process.
-A malicious or buggy rule can access the filesystem, crash the daemon, or exfiltrate event data.
-\textsc{WasmSentinel} addresses this gap by sandboxing detection rules in Wasm, enabling deployment of community-contributed logic without trusting its authors.
-Additionally, rule-based systems are fundamentally limited to known patterns; our architecture demonstrates that ML-based detection can run within the same sandboxed framework.
-
-\subsection{WebAssembly for Security}
-
-\textbf{ERIM}~\cite{erim} (USENIX Security 2019) combines Intel MPK with Wasm for efficient in-process isolation.
-Our work focuses on a different use case---isolating detection rules rather than application compartments.
-
-\textbf{WasmBoxC}~\cite{wasmboxc} (USENIX Security 2022) compiles C code to Wasm for sandboxing legacy code.
-We leverage similar Wasm isolation guarantees but for ML inference rather than legacy code compartmentalization.
-
-\textbf{Sledge}~\cite{sledge} (ASPLOS 2020) develops a high-performance serverless runtime based on Wasm.
-Their focus on cold start optimization and multi-tenant isolation informs our design, though our application domain differs significantly.
-
-\textbf{Lucet}~\cite{lucet} (now Wasmtime) demonstrated near-native Wasm performance through AOT compilation.
-We build on this foundation for low-latency ML inference.
-
-\subsection{ML-Based Intrusion Detection}
-
-Syscall-based anomaly detection dates to the 1990s with STIDE~\cite{stide}, which introduced n-gram analysis of syscall sequences.
-The approach is elegant---build a database of ``normal'' patterns, flag deviations---but limited in precision, as unusual but benign workloads trigger false positives.
-
-Subsequent work explored more sophisticated models.
-Creech and Hu~\cite{creech} applied deep belief networks to ADFA-LD, achieving high accuracy but with seconds of inference time.
-Kim et al.~\cite{kim-lstm} used LSTMs for sequential modeling, capturing temporal dependencies that n-grams miss.
-Graph-based approaches like StreamSpot~\cite{streamspot} and Unicorn~\cite{unicorn} model process relationships for APT detection.
-
-These systems demonstrate that ML can improve detection accuracy, but they share a deployment challenge: heavyweight frameworks, GPU dependencies, and no isolation.
-\textsc{WasmSentinel} shows that lightweight models (MLP with 90$\mu$s inference) can run in a sandbox, making ML-based detection practical for production deployment.
-
-\subsection{Container and Cloud Security}
-
-\textbf{Sysdig}~\cite{sysdig} provides comprehensive container monitoring through kernel-level instrumentation.
-While feature-rich, its heavyweight agent and commercial licensing model contrast with \textsc{WasmSentinel}'s lightweight, open design.
-
-\textbf{AppArmor and SELinux} provide mandatory access control but require complex policy configuration.
-\textsc{WasmSentinel} offers detection rather than enforcement, complementing these systems.
-
-\textbf{gVisor}~\cite{gvisor} and \textbf{Kata Containers}~\cite{kata} provide stronger isolation through kernel virtualization.
-These incur significant performance overhead compared to our approach of monitoring native container execution.
-
-\subsection{Comparison Summary}
-
-\begin{table}[t]
-\centering
-\caption{Comparison with related systems.}
-\label{tab:related-comparison}
-\begin{tabular}{lcccc}
-\toprule
-\textbf{System} & \textbf{ML} & \textbf{Isolation} & \textbf{Latency} & \textbf{Portable} \\
-\midrule
-Falco & \ding{55} & Low & Medium & \ding{51} \\
-Tetragon & \ding{55} & Low & Medium & \ding{51} \\
-Sysdig & \ding{55} & None & High & \ding{55} \\
-ERIM & \ding{55} & High & Low & \ding{55} \\
-\textbf{WasmSentinel} & \ding{51} & High & \textbf{Low} & \ding{51} \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\textsc{WasmSentinel} uniquely combines ML-based detection, strong rule isolation, low latency, and deployment portability.
+\textbf{WebAssembly for Security and Sandboxing.}
+WebAssembly's strong isolation and near-native performance have made it an attractive target for security-sensitive extensions.
+CT-Wasm~\cite{ct-wasm} proposes a type-driven approach to ensure constant-time execution in Wasm, mitigating side-channel attacks.
+Other works have used Wasm to sandbox untrusted drivers or browser extensions.
+In \textsc{WasmSentinel}, we leverage Wasm not only for isolation but as a portable, high-performance runtime for heterogeneous detection logic, enabling secure deployment of community-contributed ML models.

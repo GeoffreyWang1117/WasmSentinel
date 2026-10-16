@@ -1,0 +1,69 @@
+% Introduction
+
+\section{Introduction}
+\label{sec:introduction}
+
+Runtime threat detection is a critical component of modern security infrastructure, tasked with identifying malicious activities as they occur within computing systems.
+The proliferation of sophisticated attacks---from container escapes to advanced persistent threats (APTs)---demands detection systems that combine comprehensive visibility, intelligent analysis, and minimal performance impact.
+However, existing approaches face fundamental trade-offs that limit their effectiveness.
+
+\textbf{The Detection Trilemma.}
+Current runtime security systems must choose among three competing properties:
+(1) \textit{Detection Capability}: the ability to identify complex, previously unseen attacks through pattern analysis or machine learning;
+(2) \textit{Performance}: minimal latency and resource overhead to avoid impacting production workloads;
+and (3) \textit{Security Isolation}: the ability to safely execute third-party detection rules without risking host compromise.
+As shown in Table~\ref{tab:trilemma}, no existing system achieves all three properties simultaneously.
+
+\begin{table}[t]
+\centering
+\caption{The Detection Trilemma: Existing systems sacrifice at least one property.}
+\label{tab:trilemma}
+\begin{tabular}{lccc}
+\toprule
+\textbf{System} & \textbf{Detection} & \textbf{Performance} & \textbf{Isolation} \\
+\midrule
+Falco (rules) & Low & Medium & Low \\
+ML in userspace & High & Low & Medium \\
+Kernel modules & Medium & High & None \\
+\textsc{WasmSentinel} & \textbf{High} & \textbf{High} & \textbf{High} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Rule-based systems like Falco~\cite{falco} and Tetragon~\cite{tetragon} achieve reasonable performance by matching events against predefined patterns, but their detection capability is limited to known attack signatures.
+Machine learning approaches offer superior detection of novel attacks but typically incur prohibitive overhead---Python-based ML pipelines can add hundreds of milliseconds of latency per event.
+Kernel-level solutions provide excellent performance but lack isolation, creating risks when executing community-contributed detection logic.
+
+\textbf{Our Insight.}
+We observe that the perceived incompatibility between ML detection and performance stems from implementation choices rather than fundamental limitations.
+By carefully designing the detection pipeline---from data collection through inference---we can achieve ML-grade detection capability with microsecond-level latency.
+The key enablers are:
+(1) \textit{WebAssembly's near-native execution speed} with strong sandboxing guarantees;
+(2) \textit{lightweight neural network architectures} specifically designed for the threat detection domain;
+and (3) \textit{zero-copy data transfer} between the kernel and Wasm runtime.
+
+\textbf{WasmSentinel Overview.}
+We present \textsc{WasmSentinel}, a high-performance runtime threat detection framework that executes machine learning models within WebAssembly sandboxes.
+\textsc{WasmSentinel} introduces a novel \textit{hybrid detection architecture} that combines the efficiency of STIDE-based sequence analysis~\cite{stide} with the accuracy of neural network inference.
+The fast path uses n-gram hashing for immediate anomaly detection, while suspicious events are escalated to a lightweight MLP for deep analysis---all within a single Wasm module.
+
+\textbf{Contributions.}
+This paper makes the following contributions:
+
+\begin{itemize}
+    \item \textbf{WasmML:} We present the first system to run ML inference inside a Wasm sandbox for runtime threat detection, achieving 16.5$\mu$s mean inference latency with a 180KB portable binary. (Section~\ref{sec:design-wasmml})
+
+    \item \textbf{Hybrid Detection Architecture:} We design a two-tier detection strategy combining STIDE n-gram analysis with lightweight MLP, achieving F1=0.72 on the ADFA-LD benchmark while maintaining sub-millisecond latency. (Section~\ref{sec:design-hybrid})
+
+    \item \textbf{Zero-Copy Data Channel:} We implement an efficient eBPF-to-Wasm data path that eliminates JSON serialization, reducing per-event overhead by 10$\times$ compared to conventional approaches. (Section~\ref{sec:design-zerocopy})
+
+    \item \textbf{Comprehensive Evaluation:} We demonstrate that \textsc{WasmSentinel} outperforms Falco by 485$\times$, Tetragon by 121$\times$, and Sysdig by 303$\times$ in inference latency while achieving comparable or better detection accuracy. (Section~\ref{sec:evaluation})
+\end{itemize}
+
+\textbf{Paper Organization.}
+Section~\ref{sec:background} provides background on eBPF, WebAssembly, and ML-based detection.
+Section~\ref{sec:threat-model} defines our threat model.
+Section~\ref{sec:design} presents the system design, and Section~\ref{sec:implementation} describes implementation details.
+Section~\ref{sec:evaluation} reports our experimental evaluation.
+Section~\ref{sec:discussion} discusses limitations and future work.
+Section~\ref{sec:related-work} surveys related work, and Section~\ref{sec:conclusion} concludes.

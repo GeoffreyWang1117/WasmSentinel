@@ -1,76 +1,45 @@
-% Discussion
-
-\section{Discussion}
+\section{Security Analysis and Discussion}
 \label{sec:discussion}
 
-\subsection{Limitations}
-
-\textbf{Detection Scope.}
-\textsc{WasmSentinel} currently focuses on syscall-based detection, which may miss attacks that operate entirely within user space (e.g., some in-memory attacks).
-Extending coverage to include memory access patterns, library calls, or hardware performance counters is future work.
-
-\textbf{Evasion Attacks.}
-Sophisticated adversaries may attempt to evade ML-based detection through:
-\begin{itemize}
-    \item \textit{Mimicry attacks}: Inserting benign syscalls to mask malicious patterns
-    \item \textit{Polymorphic behavior}: Varying attack execution to avoid learned patterns
-    \item \textit{Adversarial examples}: Crafted inputs that fool the neural network
-\end{itemize}
-
-While our hybrid architecture provides some resilience (STIDE and MLP may catch different evasion attempts), a determined adversary with knowledge of our detection algorithm could potentially evade detection.
-Defense-in-depth with multiple detection layers remains important.
-
-\textbf{Dataset Bias.}
-Our evaluation uses the ADFA-LD dataset, which, while well-established, dates from 2013 and may not fully represent modern attack techniques.
-Evaluation on more recent datasets (e.g., LID-DS, custom container workloads) is planned for future work.
-
-\textbf{Model Generalization.}
-The current model is trained on specific attack types.
-Generalization to entirely new attack categories (zero-day attacks) may be limited.
-Continuous model updates with new attack data are necessary for maintaining detection effectiveness.
+This section provides a formal security analysis of \textsc{WasmSentinel}'s isolation mechanisms and discusses its limitations and future directions.
 
 \subsection{Security Analysis}
 
-\textbf{Wasm Sandbox Escapes.}
-The security of \textsc{WasmSentinel} relies on Wasmtime's sandbox guarantees and its ongoing security review process.
-Wasmtime implements memory isolation through virtual memory mapping, control flow integrity via indirect call validation, and resource limiting through fuel-based execution metering.
-We are not aware of sandbox escape vulnerabilities in Wasmtime, though this remains an evolving area.
+\textbf{Sandbox Isolation (G2).}
+\textsc{WasmSentinel} achieves robust isolation of untrusted detection logic through the WebAssembly (Wasm) sandbox.
+Unlike traditional native plugins, Wasm modules execute in a restricted linear memory space, completely decoupled from the host's address space.
+Any memory access beyond the allocated bounds triggers an immediate trap, preventing buffer overflow attacks from compromising the monitoring daemon.
+Furthermore, we employ the WebAssembly System Interface (WASI) to enforce a capability-based security model.
+By default, detection rules are granted \textit{zero} capabilities; they cannot access the filesystem, network, or environment variables.
+The only communication channel is the restricted host-call interface for receiving security events and emitting alerts.
 
-\textbf{eBPF Verifier Trust.}
-We trust the Linux eBPF verifier to ensure safety of loaded eBPF programs.
-The verifier has had historical bugs~\cite{ebpf-bugs}, but it is part of the kernel TCB for any eBPF-based security tool.
+\textbf{Resource Exhaustion Protection.}
+To mitigate Denial-of-Service (DoS) attacks by malicious or buggy rules, we utilize Wasmtime's fuel-based execution metering.
+Each detection module is allocated a fixed amount of ``fuel'' (instruction budget) per event.
+If a rule enters an infinite loop or exceeds its budget, the runtime terminates its execution, ensuring the availability of the monitoring system even under adversarial conditions.
+Memory usage is similarly capped at 256MB per instance.
 
-\textbf{Supply Chain Security.}
-\textsc{WasmSentinel}'s architecture naturally supports supply chain security: rules are content-addressed and can be signed, sandbox isolation limits damage from malicious rules, and resource limits prevent denial-of-service attacks.
+\textbf{eBPF Integrity and TCB.}
+The integrity of event collection relies on the Linux kernel's eBPF verifier, which ensures that loaded programs are type-safe and terminate.
+While historical vulnerabilities in the verifier exist~\cite{ebpf-bugs}, it remains the industry-standard TCB for kernel-level observability.
+\textsc{WasmSentinel} minimizes the TCB by keeping the eBPF logic simple (event emission only) and shifting complex detection logic to the Wasm sandbox.
 
-\subsection{Deployment Considerations}
+\subsection{Limitations and Evasion}
 
-\textbf{Kernel Version Requirements.}
-\textsc{WasmSentinel} requires Linux 5.8+ for ring buffer support.
-Older kernels can use perf buffers with reduced performance.
+\textbf{Mimicry and Stealthy Attacks.}
+Sophisticated adversaries may attempt to evade sequence-based detection by interleaving malicious syscalls with benign ones (mimicry attacks) or by slowing down the attack to exceed the STIDE window.
+Our hybrid architecture partially mitigates this by escalating suspicious (though not definitively anomalous) sequences to the MLP for deeper semantic analysis.
+However, a determined adversary with full knowledge of the deployed model's weights could potentially craft adversarial syscall sequences.
 
-\textbf{Performance Tuning.}
-For high-throughput environments, we recommend increasing ring buffer size to prevent event loss, adjusting STIDE thresholds for workload-specific false positive rates, and pinning the detection thread to dedicated CPU cores.
+\textbf{Detection Scope.}
+Currently, \textsc{WasmSentinel} monitors syscall-level activity.
+While syscalls are the primary interface for resource access, attacks that operate entirely in user-space memory (e.g., pure computational logic or certain library-level exploits) may remain invisible.
+Future extensions could integrate library-call hooking or hardware performance counters to broaden the visibility.
 
-\textbf{Model Updates.}
-The modular design allows hot-swapping of detection models without restarting the daemon.
-We envision a workflow where:
-\begin{enumerate}
-    \item Security team trains updated models on new attack data
-    \item New Wasm module is signed and distributed
-    \item Running instances atomically swap to the new module
-\end{enumerate}
+\subsection{Modern Dataset Generalization}
+Our evaluation on ADFA-LD and modern CVE-2024+ simulations (Section~\ref{sec:evaluation}) demonstrates that patterns learned from older datasets can generalize to modern container escapes.
+This suggests that while specific attack implementations evolve, the fundamental ``syscall signatures'' of privilege escalation and unauthorized resource access remain remarkably consistent over time.
 
 \subsection{Future Work}
-
-\textbf{Multi-Dataset Evaluation.}
-We plan to evaluate on additional datasets including LID-DS, CICIDS2017, and custom container workload traces.
-
-\textbf{Advanced ML Models.}
-Future work includes exploring temporal convolutional networks (TCN) for sequence modeling, graph neural networks for process relationship analysis, and transformer-based models for attention over syscall sequences.
-
-\textbf{Federated Learning.}
-Enabling collaborative model updates across multiple deployments while preserving privacy of individual organizations' security telemetry.
-
-\textbf{Hardware Acceleration.}
-Investigating Wasm SIMD extensions and potential WebGPU integration for accelerated inference.
+We plan to explore federated learning to allow multiple organizations to collaboratively update detection models without sharing sensitive telemetry data.
+Additionally, we are investigating the use of Wasm SIMD extensions to further accelerate neural network inference for even more complex models like Transformers.

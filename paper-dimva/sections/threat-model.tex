@@ -3,68 +3,67 @@
 \section{Threat Model}
 \label{sec:threat-model}
 
-This section defines the adversary capabilities we consider, the security goals \textsc{WasmSentinel} aims to achieve, and the boundaries of our trusted computing base.
+This section formalizes the adversary model, defines our security goals, and establishes the trusted computing base (TCB) for \textsc{WasmSentinel}.
 
-\subsection{Adversary Model}
+\subsection{Adversary Model and Capabilities}
 
-We consider two classes of adversaries that differ in their relationship to the monitoring system.
+We define a formal adversary model based on the capabilities available to an attacker at different stages of an intrusion. We distinguish between three levels of adversary capability, summarized in Table~\ref{tab:adversary-capabilities}.
 
-\textbf{External Attackers} are the traditional threat: adversaries who have gained initial access to a monitored system (e.g., through a vulnerable web application or stolen credentials) and are attempting to escalate privileges, establish persistence, or exfiltrate data.
-These attackers generate observable syscall patterns---opening sensitive files, spawning shells, making network connections---that \textsc{WasmSentinel} aims to detect.
-We assume attackers may attempt evasion through syscall obfuscation or mimicry, but do not have prior knowledge of the specific detection model deployed.
+\begin{table}[h]
+\centering
+\caption{Adversary Capabilities and Attack Vectors.}
+\label{tab:adversary-capabilities}
+\begin{tabular}{lp{5cm}l}
+\toprule
+\textbf{Level} & \textbf{Description} & \textbf{Capabilities} \\
+\midrule
+$\mathcal{A}_{ext}$ & \textbf{External Attacker}: Initial access via vulnerable service. & Network access, User-level execution. \\
+$\mathcal{A}_{loc}$ & \textbf{Local Attacker}: Gained persistence, seeking escalation. & File system access, Syscall invocation. \\
+$\mathcal{A}_{rule}$ & \textbf{Malicious Rule Author}: Contributes logic to the registry. & Code execution within Wasm sandbox. \\
+\bottomrule
+\end{tabular}
+\end{table}
 
-\textbf{Malicious Rule Authors} represent a less-considered but increasingly relevant threat.
-As security teams adopt community-contributed detection rules, they must trust that these rules will not themselves become attack vectors.
-A malicious rule might attempt to escape its sandbox, exfiltrate event data, or crash the monitoring daemon.
-\textsc{WasmSentinel}'s Wasm sandboxing specifically addresses this threat---detection rules cannot access the filesystem, network, or any resource not explicitly granted by the host.
+\textbf{Security Assumptions.}
+We assume the Linux kernel and eBPF verifier are part of the TCB. An attacker who compromises the kernel ($\mathcal{A}_{ker}$) is out of scope, as they can bypass any monitoring. However, \textsc{WasmSentinel} is designed to detect $\mathcal{A}_{loc}$ \textit{during} the transition from user to kernel compromise (e.g., via CVE-2024-1086).
 
-\textbf{Scope Boundaries.}
-We assume the Linux kernel and eBPF verifier are trusted; an attacker who can compromise these can disable any monitoring.
-Similarly, we do not defend against attackers who already have root---they can simply kill the daemon.
-However, \textsc{WasmSentinel} provides value as defense-in-depth: it detects attacks \textit{during} privilege escalation, before root is obtained, enabling response before the attacker achieves persistence.
+\subsection{Attack Tree Formalization}
 
-\subsection{Security Goals}
+The goal of an adversary is to compromise the host or exfiltrate data while remaining undetected. Figure~\ref{fig:attack-tree} illustrates the primary attack vectors and how \textsc{WasmSentinel}'s components mitigate them.
 
-\textsc{WasmSentinel} aims to achieve four properties that together enable practical deployment of ML-based detection.
-
-\textbf{Detection integrity} means the system accurately identifies malicious activities.
-We prioritize high recall---catching attacks is more important than avoiding false positives, which can be filtered by operators.
-However, precision must remain reasonable to avoid alert fatigue.
-
-\textbf{Rule isolation} is the distinguishing goal.
-Detection rules execute in Wasm sandboxes and cannot access the host filesystem, network, or memory outside their linear memory region.
-This enables deployment of community-contributed rules without trusting their authors.
-
-\textbf{Data confidentiality} protects the security events themselves, which may contain sensitive information (file paths, command lines, network destinations).
-Wasm memory isolation ensures rules can only access events explicitly passed to them.
-
-\textbf{Availability} requires that the system remain responsive under attack.
-Malicious rules might attempt CPU exhaustion (infinite loops) or memory exhaustion (unbounded allocation).
-We enforce resource limits: 10M instruction fuel, 256MB memory cap, 100ms timeout.
-
-\subsection{Trusted Computing Base}
-
-Figure~\ref{fig:tcb} illustrates the trust boundary in \textsc{WasmSentinel}.
-The TCB includes three components: the Linux kernel with its eBPF verifier (standard assumption for eBPF tools), the Wasmtime runtime (developed by the Bytecode Alliance with ongoing security review), and our Go-based host program that orchestrates event collection and rule execution.
-
-\begin{figure}[t]
+\begin{figure}[h]
 \centering
 \begin{tikzpicture}[
-    box/.style={rectangle, draw, minimum width=2.5cm, minimum height=0.8cm, align=center},
-    trusted/.style={box, fill=green!20},
-    untrusted/.style={box, fill=red!10}
+    level 1/.style={sibling distance=4.5cm},
+    level 2/.style={sibling distance=2.2cm},
+    edge from parent/.style={draw, ->, >=stealth},
+    every node/.style={rectangle, draw, rounded corners, font=\scriptsize, align=center, fill=gray!5}
 ]
-    \node[trusted] (kernel) at (0,0) {Linux Kernel\\+ eBPF};
-    \node[trusted] (wasmtime) at (3,0) {Wasmtime\\Runtime};
-    \node[trusted] (host) at (6,0) {Host Program\\(Go)};
-    \node[untrusted] (rules) at (3,-1.5) {Detection Rules\\(Wasm)};
-    \node[above=0.3cm of kernel, font=\footnotesize\bfseries] {TCB (Trusted)};
-    \node[below=0.3cm of rules, font=\footnotesize\bfseries] {Untrusted};
-    \draw[dashed, thick] (-1.5,-0.7) -- (7.5,-0.7);
+    \node {Compromise Host /\\ Exfiltrate Data}
+        child { node {Execute Malicious Payload}
+            child { node {Binary Execution\\ \textit{(Detected by eBPF)}} }
+            child { node {Reflective Loading\\ \textit{(Detected by ML)}} }
+        }
+        child { node {Escalate Privileges}
+            child { node {Exploit CVE-2024-1086\\ \textit{(Detected by STIDE)}} }
+            child { node {runc Escape (21626)\\ \textit{(Detected by Rules)}} }
+        }
+        child { node {Bypass Monitoring}
+            child { node {Mimicry Attack\\ \textit{(Mitigated by Hybrid)}} }
+            child { node {Rule Poisoning\\ \textit{(Mitigated by Wasm)}} }
+        };
 \end{tikzpicture}
-\caption{Trusted computing base of \textsc{WasmSentinel}.}
-\label{fig:tcb}
+\caption{Attack tree for a containerized environment. \textsc{WasmSentinel} provides multi-layered detection to cover various branches.}
+\label{fig:attack-tree}
 \end{figure}
 
-Critically, detection rules---including ML models---are \textit{untrusted}.
-This is the key design decision that enables deployment of community-contributed rules: the Wasm sandbox confines their execution regardless of whether the rule author is benign.
+\subsection{Security Goals}
+\label{sec:threat-goals}
+
+\textsc{WasmSentinel} aims to satisfy the following security properties:
+
+\begin{enumerate}
+    \item \textbf{Detection Integrity (G1):} Malicious syscall sequences must trigger an alert with high probability ($P_{alert} > 1 - \epsilon$).
+    \item \textbf{Sandbox Isolation (G2):} A malicious rule $\mathcal{A}_{rule}$ cannot access memory, files, or network resources outside its Wasm linear memory.
+    \item \textbf{TOCTOU Protection (G3):} The system must prevent Time-of-Check Time-of-Use attacks on security events transferred via the zero-copy channel.
+\end{enumerate}

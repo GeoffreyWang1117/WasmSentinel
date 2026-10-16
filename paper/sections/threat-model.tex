@@ -1,0 +1,119 @@
+% Threat Model
+
+\section{Threat Model}
+\label{sec:threat-model}
+
+This section defines the adversary capabilities we consider, the security goals \textsc{WasmSentinel} aims to achieve, and the boundaries of our trusted computing base.
+
+\subsection{Adversary Model}
+
+We consider two classes of adversaries:
+
+\textbf{External Attackers.}
+These adversaries attempt to compromise the monitored system through various attack vectors:
+\begin{itemize}
+    \item Execute arbitrary code in user space with unprivileged access
+    \item Perform privilege escalation through kernel vulnerabilities or misconfigurations
+    \item Exfiltrate sensitive data through covert channels
+    \item Deploy persistence mechanisms (rootkits, backdoors)
+    \item Evade detection through syscall obfuscation or mimicry attacks
+\end{itemize}
+
+\textbf{Malicious Rule Authors.}
+A key differentiator of \textsc{WasmSentinel} is its ability to safely execute third-party detection rules.
+We consider adversaries who:
+\begin{itemize}
+    \item Submit malicious detection rules disguised as legitimate threat signatures
+    \item Attempt to escape the Wasm sandbox to access host resources
+    \item Try to exhaust system resources (CPU, memory) through denial-of-service
+    \item Craft adversarial inputs to evade ML-based detection
+\end{itemize}
+
+\textbf{Out of Scope.}
+We do not consider:
+\begin{itemize}
+    \item Attackers with root privileges on the host system
+    \item Physical attacks or hardware-level compromises
+    \item Side-channel attacks against the Wasm runtime (addressed by orthogonal techniques)
+    \item Attacks on the eBPF verifier itself (trusted kernel component)
+\end{itemize}
+
+\subsection{Security Goals}
+
+\textsc{WasmSentinel} aims to achieve the following security properties:
+
+\begin{table}[t]
+\centering
+\caption{Security goals and enforcement mechanisms.}
+\label{tab:security-goals}
+\begin{tabular}{p{2.2cm}p{2.8cm}p{2.2cm}}
+\toprule
+\textbf{Goal} & \textbf{Description} & \textbf{Mechanism} \\
+\midrule
+Detection Integrity & Accurate threat identification & eBPF tracing + ML \\
+Rule Isolation & Malicious rules cannot harm host & Wasm sandbox \\
+Data Confidentiality & Sensitive events protected & Memory isolation \\
+Availability & System remains responsive & Resource limits \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{G1: Detection Integrity.}
+The system must accurately identify malicious activities with high recall (to catch attacks) and reasonable precision (to avoid alert fatigue).
+Attackers should not be able to trivially evade detection through simple obfuscation.
+
+\textbf{G2: Rule Isolation.}
+Third-party detection rules must be confined to their sandbox.
+A compromised or malicious rule should not be able to:
+(1) access host file system or network;
+(2) read memory of other Wasm modules;
+(3) interfere with the host program or kernel.
+
+\textbf{G3: Data Confidentiality.}
+Security events may contain sensitive information (file paths, network destinations, command lines).
+Rules should only access the specific events relevant to their detection logic, enforced through capability-based access control.
+
+\textbf{G4: Availability.}
+The detection system must remain responsive even under attack.
+Resource exhaustion attempts by malicious rules or event floods from external attackers should not render the system unresponsive.
+
+\subsection{Trusted Computing Base}
+
+Our TCB consists of the following components:
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+    box/.style={rectangle, draw, minimum width=2.5cm, minimum height=0.8cm, align=center},
+    trusted/.style={box, fill=green!20},
+    untrusted/.style={box, fill=red!10}
+]
+    % Trusted components
+    \node[trusted] (kernel) at (0,0) {Linux Kernel\\+ eBPF};
+    \node[trusted] (wasmtime) at (3,0) {Wasmtime\\Runtime};
+    \node[trusted] (host) at (6,0) {Host Program\\(Go)};
+
+    % Untrusted
+    \node[untrusted] (rules) at (3,-1.5) {Detection Rules\\(Wasm)};
+
+    % Labels
+    \node[above=0.3cm of kernel, font=\footnotesize\bfseries] {TCB (Trusted)};
+    \node[below=0.3cm of rules, font=\footnotesize\bfseries] {Untrusted};
+
+    % Boundary
+    \draw[dashed, thick] (-1.5,-0.7) -- (7.5,-0.7);
+\end{tikzpicture}
+\caption{Trusted computing base of \textsc{WasmSentinel}.}
+\label{fig:tcb}
+\end{figure}
+
+\begin{itemize}
+    \item \textbf{Linux Kernel + eBPF:} We trust the kernel's eBPF verifier to ensure safety of eBPF programs. This is a standard assumption for eBPF-based security tools.
+
+    \item \textbf{Wasmtime Runtime:} We trust the Wasm runtime to correctly enforce sandbox isolation. Wasmtime is developed by the Bytecode Alliance and has undergone extensive security review.
+
+    \item \textbf{Host Program:} Our Go-based host application is trusted to correctly orchestrate eBPF event collection and Wasm rule execution.
+\end{itemize}
+
+Detection rules, including the ML models, are \textit{untrusted}.
+This is a key design decision that enables deployment of community-contributed rules without compromising system security.

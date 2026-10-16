@@ -1,0 +1,167 @@
+% Implementation
+
+\section{Implementation}
+\label{sec:implementation}
+
+We implement \textsc{WasmSentinel} in approximately 8,500 lines of code across three languages.
+This section describes the key implementation details.
+
+\subsection{eBPF Event Collection}
+
+The kernel-side component consists of 450 lines of C code using libbpf.
+We attach eBPF programs to the following tracepoints:
+
+\begin{table}[t]
+\centering
+\caption{eBPF tracepoints for event collection.}
+\label{tab:tracepoints}
+\begin{tabular}{ll}
+\toprule
+\textbf{Tracepoint} & \textbf{Event Type} \\
+\midrule
+\texttt{sys\_enter\_*} & Syscall entry \\
+\texttt{sys\_exit\_*} & Syscall return \\
+\texttt{sched\_process\_exec} & Process execution \\
+\texttt{sched\_process\_exit} & Process termination \\
+\texttt{sched\_process\_fork} & Process creation \\
+\texttt{tcp\_connect} & Network connections \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Events are written to a BPF ring buffer (available since Linux 5.8) using the following structure:
+
+\begin{lstlisting}[style=rust, caption={Kernel event structure (C).}, label=lst:event-struct]
+struct event {
+    __u64 timestamp;
+    __u32 pid;
+    __u32 ppid;
+    __u32 uid;
+    __u32 gid;
+    __u32 event_type;
+    __u32 syscall_nr;
+    __s64 ret;
+    char comm[16];
+    char filename[256];
+} __attribute__((packed));
+\end{lstlisting}
+
+The ring buffer is sized at 16MB by default, sufficient for approximately 50,000 events before overwriting.
+Events are consumed within milliseconds under normal operation, so overflow is rare.
+
+\subsection{Host Program (Go)}
+
+The host application comprises 2,100 lines of Go code and is responsible for:
+
+\textbf{Event Reading.}
+We use the \texttt{cilium/ebpf} library to read events from the ring buffer.
+A dedicated goroutine polls the buffer every 100$\mu$s, batching events when the arrival rate exceeds 1,000/second.
+
+\textbf{Wasm Engine.}
+We embed the Wasmtime runtime~\cite{wasmtime} using cgo bindings.
+Wasm modules are compiled ahead-of-time at startup, eliminating JIT overhead during detection.
+
+\textbf{Module Management.}
+Each detection rule runs in a separate Wasm instance with:
+\begin{itemize}
+    \item 64MB maximum linear memory
+    \item 100ms execution timeout per event batch
+    \item Separate fuel counters for fair scheduling
+\end{itemize}
+
+\textbf{Alert Handling.}
+Alerts are emitted through a configurable output pipeline supporting:
+syslog, Kafka, file output, and HTTP webhooks.
+
+\subsection{Detection Module (Rust → Wasm)}
+
+The ML detection module comprises 1,850 lines of Rust code, organized as follows:
+
+\begin{lstlisting}[style=rust, caption={Module structure.}]
+ml-detector/
+  src/
+    lib.rs       // Wasm exports, entry point
+    stide.rs     // STIDE n-gram detector
+    mlp.rs       // MLP neural network
+    hybrid.rs    // Hybrid scheduler
+    features.rs  // Feature extraction
+\end{lstlisting}
+
+\textbf{Wasm Exports.}
+The module exports four primary functions:
+
+\begin{lstlisting}[style=rust, caption={Wasm exported functions.}]
+#[no_mangle]
+pub extern "C" fn init(cfg: *const u8, len: usize) -> i32;
+
+#[no_mangle]
+pub extern "C" fn detect(evt: *const u8, len: usize) -> i32;
+
+#[no_mangle]
+pub extern "C" fn train(data: *const u8, len: usize) -> i32;
+
+#[no_mangle]
+pub extern "C" fn get_stats(len: *mut usize) -> *const u8;
+\end{lstlisting}
+
+\textbf{Dependencies.}
+We minimize dependencies to reduce binary size:
+\begin{itemize}
+    \item \texttt{serde\_json}: Event parsing (adds 40KB)
+    \item No external ML libraries
+    \item No standard library allocator (using \texttt{wee\_alloc})
+\end{itemize}
+
+The compiled Wasm module is 180KB, compared to 10--50MB for typical ML deployments.
+
+\subsection{Model Training (Python)}
+
+We train the MLP model using a pure-NumPy implementation (no TensorFlow/PyTorch dependency) in 650 lines of Python:
+
+\textbf{Data Loading.}
+Training data is loaded from the ADFA-LD dataset, which contains 5,951 syscall traces:
+\begin{itemize}
+    \item Normal traces: 5,205 (87.5\%)
+    \item Attack traces: 746 (12.5\%)
+\end{itemize}
+
+\textbf{Class Balancing.}
+To address class imbalance, we apply weighted cross-entropy loss:
+\begin{equation}
+\mathcal{L} = -\frac{1}{N}\sum_{i=1}^{N} w_{y_i} \cdot [y_i \log(\hat{y}_i) + (1-y_i)\log(1-\hat{y}_i)]
+\end{equation}
+where $w_1 = 3.87$ (attack) and $w_0 = 0.57$ (normal) are inversely proportional to class frequencies.
+
+\textbf{Weight Export.}
+After training, weights are exported to JSON format for loading into the Wasm module:
+
+\begin{lstlisting}[style=rust, caption={Weight file format (JSON).}]
+[
+  {
+    "weights": [[...], ...],  // 64x128 matrix
+    "biases": [...]           // 128 vector
+  },
+  // ... additional layers
+]
+\end{lstlisting}
+
+The exported weight file is 558KB for the 4-layer architecture.
+
+\subsection{Build and Deployment}
+
+\textbf{Compilation.}
+The Wasm module is compiled using:
+\begin{verbatim}
+cargo build --target wasm32-wasip1 --release
+\end{verbatim}
+
+With release optimizations (\texttt{lto = true, opt-level = "s"}), the module compiles in approximately 30 seconds.
+
+\textbf{Deployment.}
+\textsc{WasmSentinel} is distributed as a single binary with embedded eBPF bytecode and Wasm modules.
+Deployment requires:
+\begin{itemize}
+    \item Linux kernel 5.8+ (for ring buffer support)
+    \item Root privileges (for eBPF loading)
+    \item No additional runtime dependencies
+\end{itemize}

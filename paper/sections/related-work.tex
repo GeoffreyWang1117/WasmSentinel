@@ -1,0 +1,83 @@
+% Related Work
+
+\section{Related Work}
+\label{sec:related-work}
+
+\subsection{eBPF-Based Security Systems}
+
+\textbf{Falco}~\cite{falco} pioneered eBPF-based runtime security with a rule-based detection engine.
+While highly configurable, Falco's Lua-based rule language limits expressiveness for complex pattern detection.
+\textsc{WasmSentinel} extends this paradigm with ML-based detection while maintaining comparable deployment simplicity.
+
+\textbf{Tetragon}~\cite{tetragon} from Cilium focuses on policy enforcement and observability.
+Its strength lies in network-layer integration with Kubernetes.
+Unlike \textsc{WasmSentinel}, Tetragon does not support ML-based detection or third-party rule isolation.
+
+\textbf{Tracee}~\cite{tracee} by Aqua Security provides signature-based detection with Go-based rule evaluation.
+Our Wasm-based approach offers stronger isolation guarantees for community-contributed rules.
+
+\textbf{bpftrace}~\cite{bpftrace} enables ad-hoc tracing with an awk-like scripting language.
+While powerful for debugging, it lacks the structured detection capabilities required for production security monitoring.
+
+\subsection{WebAssembly for Security}
+
+\textbf{ERIM}~\cite{erim} (USENIX Security 2019) combines Intel MPK with Wasm for efficient in-process isolation.
+Our work focuses on a different use case---isolating detection rules rather than application compartments.
+
+\textbf{WasmBoxC}~\cite{wasmboxc} (USENIX Security 2022) compiles C code to Wasm for sandboxing legacy code.
+We leverage similar Wasm isolation guarantees but for ML inference rather than legacy code compartmentalization.
+
+\textbf{Sledge}~\cite{sledge} (ASPLOS 2020) develops a high-performance serverless runtime based on Wasm.
+Their focus on cold start optimization and multi-tenant isolation informs our design, though our application domain differs significantly.
+
+\textbf{Lucet}~\cite{lucet} (now Wasmtime) demonstrated near-native Wasm performance through AOT compilation.
+We build on this foundation for low-latency ML inference.
+
+\subsection{ML-Based Intrusion Detection}
+
+\textbf{Syscall-based anomaly detection} has a rich history.
+STIDE~\cite{stide} introduced n-gram analysis for syscall sequences.
+pH (process homeostasis)~\cite{ph} extended this with delayed response mechanisms.
+\textsc{WasmSentinel} combines STIDE's efficiency with modern neural networks for improved accuracy.
+
+\textbf{Deep learning approaches} have shown promise for intrusion detection.
+Creech and Hu~\cite{creech} applied deep belief networks to ADFA-LD, achieving high accuracy at the cost of significant computational overhead.
+Kim et al.~\cite{kim-lstm} used LSTMs for sequential syscall modeling.
+Our lightweight MLP achieves comparable accuracy with orders of magnitude lower latency.
+
+\textbf{Graph-based detection} models process relationships and information flows.
+StreamSpot~\cite{streamspot} detects APTs through graph kernel analysis.
+Unicorn~\cite{unicorn} applies graph neural networks to provenance graphs.
+These approaches are complementary to \textsc{WasmSentinel} and could be integrated as additional detection modules.
+
+\subsection{Container and Cloud Security}
+
+\textbf{Sysdig}~\cite{sysdig} provides comprehensive container monitoring through kernel-level instrumentation.
+While feature-rich, its heavyweight agent and commercial licensing model contrast with \textsc{WasmSentinel}'s lightweight, open design.
+
+\textbf{AppArmor and SELinux} provide mandatory access control but require complex policy configuration.
+\textsc{WasmSentinel} offers detection rather than enforcement, complementing these systems.
+
+\textbf{gVisor}~\cite{gvisor} and \textbf{Kata Containers}~\cite{kata} provide stronger isolation through kernel virtualization.
+These incur significant performance overhead compared to our approach of monitoring native container execution.
+
+\subsection{Comparison Summary}
+
+\begin{table}[t]
+\centering
+\caption{Comparison with related systems.}
+\label{tab:related-comparison}
+\begin{tabular}{lccccc}
+\toprule
+\textbf{System} & \textbf{ML} & \textbf{Isolation} & \textbf{Latency} & \textbf{Portable} \\
+\midrule
+Falco & \ding{55} & Low & Medium & \ding{51} \\
+Tetragon & \ding{55} & Low & Medium & \ding{51} \\
+Sysdig & \ding{55} & None & High & \ding{55} \\
+ERIM & \ding{55} & High & Low & \ding{55} \\
+\textbf{WasmSentinel} & \ding{51} & High & \textbf{Low} & \ding{51} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textsc{WasmSentinel} uniquely combines ML-based detection, strong rule isolation, low latency, and deployment portability.

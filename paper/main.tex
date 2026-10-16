@@ -1,0 +1,119 @@
+% WasmSentinel: High-Performance eBPF-Wasm Cooperative Threat Detection
+% Target: ACM CCS 2026 Cycle 2
+
+\documentclass[sigconf,anonymous,review]{acmart}
+
+% Packages
+\usepackage{booktabs}
+\usepackage{subcaption}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\usepackage{pifont}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{shapes,arrows,positioning,fit,backgrounds}
+
+% Code listing style
+\lstdefinestyle{rust}{
+    language=C,
+    basicstyle=\ttfamily\footnotesize,
+    keywordstyle=\color{blue}\bfseries,
+    commentstyle=\color{green!60!black},
+    stringstyle=\color{orange},
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    breaklines=true,
+    frame=single,
+    captionpos=b
+}
+
+% Remove ACM copyright for review
+\setcopyright{none}
+\settopmatter{printacmref=false}
+\renewcommand\footnotetextcopyrightpermission[1]{}
+\pagestyle{plain}
+
+\begin{document}
+
+% Title
+\title{WasmSentinel: High-Performance Runtime Threat Detection with \\
+Sandboxed Machine Learning in WebAssembly}
+
+% Anonymous for review
+\author{Anonymous Authors}
+\affiliation{%
+  \institution{Anonymous Institution}
+  \country{Anonymous Country}
+}
+
+\begin{abstract}
+Runtime threat detection systems face a fundamental trade-off between detection capability, performance overhead, and security isolation.
+Existing approaches either sacrifice detection accuracy for performance (rule-based systems) or incur significant overhead for intelligent detection (ML-based systems).
+We present \textsc{WasmSentinel}, a novel threat detection framework that achieves the best of both worlds by running lightweight machine learning models inside WebAssembly sandboxes.
+
+\textsc{WasmSentinel} introduces three key innovations:
+(1) \textbf{WasmML}, the first system to execute ML inference within Wasm sandbox constraints while maintaining sub-millisecond latency;
+(2) a \textbf{hybrid detection architecture} combining STIDE-based n-gram sequence analysis with a lightweight MLP neural network;
+and (3) a \textbf{zero-copy eBPF-Wasm data channel} that eliminates serialization overhead.
+
+Our evaluation on the ADFA-LD dataset demonstrates that \textsc{WasmSentinel} achieves an F1 score of 0.72 with mean inference latency of only 16.5$\mu$s---121$\times$ to 485$\times$ faster than state-of-the-art systems including Falco, Tetragon, and Sysdig, while using 4$\times$--10$\times$ less memory.
+The complete detection module compiles to a portable 180KB Wasm binary, enabling secure deployment of third-party detection rules with strong isolation guarantees.
+\end{abstract}
+
+% CCS Concepts
+\begin{CCSXML}
+<ccs2012>
+   <concept>
+       <concept_id>10002978.10002991.10002992</concept_id>
+       <concept_desc>Security and privacy~Intrusion detection systems</concept_desc>
+       <concept_significance>500</concept_significance>
+   </concept>
+   <concept>
+       <concept_id>10002978.10003014.10003017</concept_id>
+       <concept_desc>Security and privacy~Malware and its mitigation</concept_desc>
+       <concept_significance>300</concept_significance>
+   </concept>
+   <concept>
+       <concept_id>10011007.10011006.10011066</concept_id>
+       <concept_desc>Software and its engineering~Runtime environments</concept_desc>
+       <concept_significance>300</concept_significance>
+   </concept>
+</ccs2012>
+\end{CCSXML}
+
+\ccsdesc[500]{Security and privacy~Intrusion detection systems}
+\ccsdesc[300]{Security and privacy~Malware and its mitigation}
+\ccsdesc[300]{Software and its engineering~Runtime environments}
+
+\keywords{Runtime Security, eBPF, WebAssembly, Machine Learning, Intrusion Detection}
+
+\maketitle
+
+% Include sections
+\input{sections/introduction}
+\input{sections/background}
+\input{sections/threat-model}
+\input{sections/design}
+\input{sections/implementation}
+\input{sections/evaluation}
+\input{sections/discussion}
+\input{sections/related-work}
+\input{sections/conclusion}
+
+% Acknowledgments (for camera-ready)
+% \begin{acks}
+% We thank the anonymous reviewers for their valuable feedback.
+% \end{acks}
+
+% Bibliography
+\bibliographystyle{ACM-Reference-Format}
+\bibliography{bib/references}
+
+% Appendix
+\appendix
+\input{sections/appendix}
+
+\end{document}

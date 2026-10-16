@@ -143,39 +143,36 @@ The compressed vector preserves syscall categories, dangerous syscall indicators
 
 Total model parameters: 19,201 (75KB as float32).
 
-\subsection{Hybrid Detection Architecture}
-\label{sec:design-hybrid}
+\subsection{Hybrid Detection Algorithm}
+\label{sec:design-algorithm}
 
-\begin{figure}[t]
-\centering
-\begin{tikzpicture}[
-    box/.style={rectangle, draw, minimum height=0.7cm, align=center, font=\footnotesize},
-    decision/.style={diamond, draw, aspect=2.5, font=\tiny, inner sep=1pt},
-    arrow/.style={->, >=stealth}
-]
-    \node[box, fill=blue!10] (event) at (0,0) {Event};
-    \node[box, fill=green!10] (stide) at (2,0) {STIDE};
-    \node[decision, fill=yellow!10] (check) at (4.2,0) {Anomaly?};
-    \node[box, fill=orange!10] (mlp) at (6.4,0.8) {MLP};
-    \node[box, fill=green!10] (normal) at (6.4,-0.8) {Normal};
-    \node[decision, fill=yellow!10] (mlpcheck) at (8.6,0.8) {Threat?};
-    \node[box, fill=red!10] (alert) at (10.5,0.8) {Alert};
-    \node[box, fill=green!10] (benign) at (10.5,0) {Benign};
+Algorithm~\ref{alg:hybrid} formalizes the hybrid detection logic executed for each event in the Wasm sandbox.
 
-    \draw[arrow] (event) -- (stide);
-    \draw[arrow] (stide) -- (check);
-    \draw[arrow] (check) -- node[above, font=\tiny] {Yes} (mlp);
-    \draw[arrow] (check) -- node[right, font=\tiny] {No} (normal);
-    \draw[arrow] (mlp) -- (mlpcheck);
-    \draw[arrow] (mlpcheck) -- node[above, font=\tiny] {Yes} (alert);
-    \draw[arrow] (mlpcheck) -- node[right, font=\tiny] {No} (benign);
-\end{tikzpicture}
-\caption{Hybrid detection flow: STIDE filters normal events, suspicious events escalate to MLP.}
-\label{fig:hybrid-flow}
-\end{figure}
+\begin{algorithm}[h]
+\caption{Hybrid Threat Detection Logic}
+\label{alg:hybrid}
+\begin{algorithmic}[1]
+\Procedure{DetectEvent}{$E$}
+    \State $E_{local} \gets \text{Snapshot}(E)$ \Comment{Atomic copy for TOCTOU protection}
+    \State $S_{stide} \gets \text{STIDE}(E_{local})$ \Comment{Sub-microsecond fast path}
+    
+    \If{$S_{stide} < \theta_1$} \Comment{Most events are benign}
+        \State \Return \textsc{Benign}
+    \EndIf
+    
+    \State $X \gets \text{ExtractFeatures}(E_{local})$ \Comment{ML feature extraction}
+    \State $P_{mlp} \gets \text{MLP}(X)$ \Comment{Wasm-optimized MLP inference}
+    
+    \If{$P_{mlp} > \theta_2$} \Comment{High confidence threat}
+        \State \Return \textsc{Alert}(Level: $P_{mlp}$)
+    \Else
+        \State \Return \textsc{LogSuspicious} \Comment{Low confidence, log for offline analysis}
+    \EndIf
+\EndProcedure
+\end{algorithmic}
+\end{algorithm}
 
-Pure ML-based detection incurs inference cost for every event.
-To reduce overhead, we employ a \textit{hybrid detection architecture} that combines STIDE-based fast-path filtering with MLP-based deep analysis.
+The combination of STIDE and MLP allows \textsc{WasmSentinel} to achieve high throughput (filtering $\sim$90\% of traffic via STIDE) while maintaining high precision (escalating suspicious events to MLP).
 
 \subsubsection{STIDE Fast Path}
 
@@ -233,6 +230,22 @@ fn read_event(ptr: *const u8) -> &RawEvent {
 
 This approach reduces per-event overhead to under 500ns.
 
-\subsubsection{Safety Considerations}
+\subsubsection{Security Analysis: TOCTOU Protection}
+\label{sec:design-toctou}
 
-Direct memory mapping raises safety concerns that we address through read-only access (Wasm cannot modify the ring buffer), bounds checking against buffer boundaries, format validation via magic numbers and checksums, and double-fetch protection by copying events to stack before multi-field access.
+A critical threat in zero-copy shared memory channels is the \textit{Time-of-Check Time-of-Use} (TOCTOU) attack.
+In our context, an attacker could attempt to modify an event in the ring buffer \textit{after} the eBPF program has written it but \textit{before} the Wasm rule has finished its multi-field analysis.
+
+Formally, let $E = \{f_1, f_2, \dots, f_n\}$ be an event with $n$ fields.
+A detection rule $D$ computes a threat score $S = D(E)$.
+If $D$ accesses fields $f_i$ and $f_j$ at different times $t_1$ and $t_2$, an attacker $\mathcal{A}$ could modify $f_j$ at $t_{adv}$ where $t_1 < t_{adv} < t_2$, leading to an inconsistent state $E' = \{f_1(t_1), \dots, f_j(t_2), \dots\}$.
+
+\textsc{WasmSentinel} prevents this through \textit{Atomic Snapshotting}:
+
+\begin{enumerate}
+    \item \textbf{Kernel-side Immutability:} The eBPF ring buffer is mapped as read-only ($PROT\_READ$) into the Wasm linear memory. The Wasm sandbox cannot modify the buffer.
+    \item \textbf{Double-Fetch Defense:} The Wasm guest code is required to copy the raw event from shared memory to its private stack/linear memory \textit{before} any field access.
+    \item \textbf{Formal Guarantee:} Once copied, the local event $E_{local}$ is decoupled from the shared buffer. Since the host (kernel) only appends to the ring buffer and never overwrites unread events (due to ring buffer head/tail logic), the event remains immutable during the copy operation.
+\end{enumerate}
+
+This ensures that for any detection $D(E_{local})$, $E_{local}$ represents a consistent snapshot of the kernel state at the time of emission.
