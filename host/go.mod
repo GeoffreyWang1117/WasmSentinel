@@ -4,6 +4,7 @@ go 1.21
 
 require (
 	github.com/bytecodealliance/wasmtime-go/v17 v17.0.0
+	github.com/cilium/ebpf v0.12.3
 	github.com/sirupsen/logrus v1.9.3
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/viper v1.18.2
