@@ -175,7 +175,7 @@ class WasmSentinelBenchmark:
     def __init__(self, project_root: Path):
         self.project_root = project_root
         self.binary_path = project_root / "wasm-threat-detector"
-        self.rules_path = project_root / "rules" / "suspicious-shell" / "target" / "wasm32-wasi" / "release" / "suspicious_shell.wasm"
+        self.rules_path = project_root / "rules" / "suspicious-shell" / "target" / "wasm32-wasip1" / "release" / "suspicious_shell.wasm"
 
     def build_if_needed(self):
         """Build WasmSentinel if not already built"""

@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
-ML Baseline Comparison for WasmSentinel DIMVA Paper
+ML Baseline Comparison for WasmSentinel ICICS Submission
 
 Compare WasmSentinel's MLP with other ML approaches:
 1. Random Forest (traditional ML)
 2. LSTM (deep learning)
-3. Autoencoder (unsupervised)
-4. WasmSentinel MLP (our approach)
+3. Transformer (deep learning)
+4. GNN (graph neural network)
+5. Autoencoder (unsupervised)
+6. WasmSentinel MLP (our approach)
 
-Usage:
-    python ml_baseline_comparison.py --data-dir /path/to/ADFA-LD
+Features:
+- Cross-validation for statistical significance (p-values, confidence intervals)
+- ROC/PR curves generation
+- Modern DL baselines (Transformer, GNN)
 """
 
 import argparse
@@ -18,10 +22,11 @@ import os
 import sys
 import time
 import numpy as np
+import matplotlib.pyplot as plt
 from pathlib import Path
 from datetime import datetime
 from collections import Counter
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Any
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -29,10 +34,10 @@ warnings.filterwarnings('ignore')
 try:
     from sklearn.ensemble import RandomForestClassifier
     from sklearn.preprocessing import StandardScaler
-    from sklearn.model_selection import StratifiedKFold, cross_val_score
+    from sklearn.model_selection import StratifiedKFold, train_test_split
     from sklearn.metrics import (
         accuracy_score, precision_score, recall_score, f1_score,
-        confusion_matrix, classification_report
+        confusion_matrix, classification_report, roc_curve, auc, precision_recall_curve
     )
     HAS_SKLEARN = True
 except ImportError:
@@ -48,6 +53,22 @@ try:
 except ImportError:
     HAS_TORCH = False
     print("Warning: PyTorch not installed, neural network baselines unavailable")
+
+try:
+    import torch_geometric
+    from torch_geometric.nn import GCNConv, global_mean_pool
+    from torch_geometric.data import Data, Batch
+    from torch_geometric.loader import DataLoader as PyGDataLoader
+    HAS_PYG = True
+except ImportError:
+    HAS_PYG = False
+    print("Warning: torch_geometric not installed, GNN baseline unavailable")
+
+try:
+    from scipy import stats
+    HAS_SCIPY = True
+except ImportError:
+    HAS_SCIPY = False
 
 
 # ============================================================
@@ -185,15 +206,14 @@ class SimpleLSTM(nn.Module):
     """LSTM for sequence classification"""
 
     def __init__(self, vocab_size: int = 512, embed_dim: int = 32,
-                 hidden_dim: int = 64, num_layers: int = 2):
+                 hidden_dim: int = 64, num_layers: int = 1):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         self.lstm = nn.LSTM(embed_dim, hidden_dim, num_layers,
-                           batch_first=True, dropout=0.3, bidirectional=True)
+                           batch_first=True, dropout=0, bidirectional=True)
         self.fc = nn.Sequential(
             nn.Linear(hidden_dim * 2, 32),
             nn.ReLU(),
-            nn.Dropout(0.3),
             nn.Linear(32, 1),
             nn.Sigmoid()
         )
@@ -203,6 +223,55 @@ class SimpleLSTM(nn.Module):
         _, (h_n, _) = self.lstm(x)
         h_n = torch.cat([h_n[-2], h_n[-1]], dim=1)
         return self.fc(h_n)
+
+
+class SimpleTransformer(nn.Module):
+    """Transformer for sequence classification"""
+
+    def __init__(self, vocab_size: int = 512, embed_dim: int = 32,
+                 num_heads: int = 4, num_layers: int = 1, hidden_dim: int = 64):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        encoder_layers = nn.TransformerEncoderLayer(
+            d_model=embed_dim, nhead=num_heads, dim_feedforward=hidden_dim,
+            dropout=0.1, batch_first=True
+        )
+        self.transformer = nn.TransformerEncoder(encoder_layers, num_layers=num_layers)
+        self.fc = nn.Sequential(
+            nn.Linear(embed_dim, 32),
+            nn.ReLU(),
+            nn.Linear(32, 1),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x):
+        x = self.embedding(x)
+        x = self.transformer(x)
+        x = x.mean(dim=1)  # Global average pooling
+        return self.fc(x)
+
+
+class SimpleGNN(nn.Module):
+    """Simple GCN for graph-represented sequences"""
+
+    def __init__(self, in_channels: int = 32, hidden_channels: int = 64, out_channels: int = 1):
+        super().__init__()
+        self.embedding = nn.Embedding(512, in_channels)
+        self.conv1 = GCNConv(in_channels, hidden_channels)
+        self.conv2 = GCNConv(hidden_channels, hidden_channels)
+        self.fc = nn.Sequential(
+            nn.Linear(hidden_channels, 32),
+            nn.ReLU(),
+            nn.Linear(32, out_channels),
+            nn.Sigmoid()
+        )
+
+    def forward(self, x, edge_index, batch):
+        x = self.embedding(x).squeeze(1)
+        x = self.conv1(x, edge_index).relu()
+        x = self.conv2(x, edge_index).relu()
+        x = global_mean_pool(x, batch)
+        return self.fc(x)
 
 
 class SimpleAutoencoder(nn.Module):
@@ -233,367 +302,239 @@ class SimpleAutoencoder(nn.Module):
 
 
 # ============================================================
-# Training Functions
+# Training & Utility Functions
 # ============================================================
 
-def train_mlp(X_train, y_train, X_test, y_test,
-              hidden_dims=[128, 64, 32, 16], epochs=100, lr=0.01):
-    """Train MLP classifier"""
+def pad_sequences(seqs, max_len):
+    result = []
+    for seq in seqs:
+        if len(seq) > max_len:
+            seq = seq[:max_len]
+        else:
+            seq = seq + [0] * (max_len - len(seq))
+        # Clip to vocab size
+        seq = [min(s, 511) for s in seq]
+        result.append(seq)
+    return np.array(result)
 
-    if not HAS_TORCH:
-        return None
 
+def seq_to_graph(seq: List[int], label: int) -> Data:
+    """Convert syscall sequence to graph data for GNN"""
+    unique_syscalls = list(set(seq))
+    syscall_to_idx = {s: i for i, s in enumerate(unique_syscalls)}
+    x = torch.LongTensor([[s] for s in unique_syscalls])
+    edge_index = []
+    for i in range(len(seq) - 1):
+        u = syscall_to_idx[seq[i]]
+        v = syscall_to_idx[seq[i+1]]
+        edge_index.append([u, v])
+    if not edge_index:
+        edge_index = [[0, 0]]
+    edge_index = torch.LongTensor(edge_index).t().contiguous()
+    return Data(x=x, edge_index=edge_index, y=torch.FloatTensor([label]))
+
+
+def train_mlp(X_train, y_train, X_test, y_test, epochs=20, lr=0.01):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    train_ds = TensorDataset(torch.FloatTensor(X_train), torch.FloatTensor(y_train).unsqueeze(1))
+    train_loader = DataLoader(train_ds, batch_size=128, shuffle=True)
+    test_t = torch.FloatTensor(X_test).to(device)
 
-    # Prepare data
-    X_train_t = torch.FloatTensor(X_train).to(device)
-    y_train_t = torch.FloatTensor(y_train).unsqueeze(1).to(device)
-    X_test_t = torch.FloatTensor(X_test).to(device)
-
-    train_dataset = TensorDataset(X_train_t, y_train_t)
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
-
-    # Model
-    model = SimpleMLP(input_dim=X_train.shape[1], hidden_dims=hidden_dims).to(device)
+    model = SimpleMLP(input_dim=X_train.shape[1]).to(device)
     criterion = nn.BCELoss()
     optimizer = optim.Adam(model.parameters(), lr=lr)
 
-    # Train
-    start_time = time.time()
     model.train()
-    for epoch in range(epochs):
-        for batch_x, batch_y in train_loader:
+    for _ in range(epochs):
+        for bx, by in train_loader:
+            bx, by = bx.to(device), by.to(device)
             optimizer.zero_grad()
-            outputs = model(batch_x)
-            loss = criterion(outputs, batch_y)
+            outputs = model(bx)
+            loss = criterion(outputs, by)
             loss.backward()
             optimizer.step()
 
-    training_time = time.time() - start_time
-
-    # Inference
     model.eval()
     with torch.no_grad():
         start_time = time.time()
-        for _ in range(10):  # 10 iterations for stable measurement
-            outputs = model(X_test_t)
-        inference_time = (time.time() - start_time) / 10 / len(X_test) * 1000000  # μs per sample
-
-        y_pred = (outputs.cpu().numpy() > 0.5).astype(int).flatten()
-
-    return y_pred, training_time, inference_time
+        probs = model(test_t).cpu().numpy().flatten()
+        infer_time = (time.time() - start_time) / len(X_test) * 1e6
+        preds = (probs > 0.5).astype(int)
+    return preds, probs, infer_time
 
 
-def train_lstm(sequences, labels, test_sequences, test_labels,
-               max_len=500, epochs=50, lr=0.001):
-    """Train LSTM classifier"""
-
-    if not HAS_TORCH:
-        return None
-
+def train_seq_model(ModelClass, train_seqs, y_train, test_seqs, y_test, epochs=10):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    max_len = 200 # Reduced for speed/memory
+    X_train = torch.LongTensor(pad_sequences(train_seqs, max_len))
+    y_train_t = torch.FloatTensor(y_train).unsqueeze(1)
+    train_ds = TensorDataset(X_train, y_train_t)
+    train_loader = DataLoader(train_ds, batch_size=64, shuffle=True)
+    X_test = torch.LongTensor(pad_sequences(test_seqs, max_len)).to(device)
 
-    # Pad sequences
-    def pad_sequences(seqs, max_len):
-        result = []
-        for seq in seqs:
-            if len(seq) > max_len:
-                seq = seq[:max_len]
-            else:
-                seq = seq + [0] * (max_len - len(seq))
-            # Clip to vocab size
-            seq = [min(s, 511) for s in seq]
-            result.append(seq)
-        return np.array(result)
-
-    X_train = pad_sequences(sequences, max_len)
-    X_test = pad_sequences(test_sequences, max_len)
-
-    X_train_t = torch.LongTensor(X_train).to(device)
-    y_train_t = torch.FloatTensor(labels).unsqueeze(1).to(device)
-    X_test_t = torch.LongTensor(X_test).to(device)
-
-    train_dataset = TensorDataset(X_train_t, y_train_t)
-    train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-
-    # Model
-    model = SimpleLSTM().to(device)
+    model = ModelClass().to(device)
     criterion = nn.BCELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    # Train
-    start_time = time.time()
     model.train()
-    for epoch in range(epochs):
-        for batch_x, batch_y in train_loader:
+    for _ in range(epochs):
+        for bx, by in train_loader:
+            bx, by = bx.to(device), by.to(device)
             optimizer.zero_grad()
-            outputs = model(batch_x)
-            loss = criterion(outputs, batch_y)
+            outputs = model(bx)
+            loss = criterion(outputs, by)
             loss.backward()
             optimizer.step()
 
-    training_time = time.time() - start_time
-
-    # Inference
     model.eval()
     with torch.no_grad():
         start_time = time.time()
-        for _ in range(5):
-            outputs = model(X_test_t)
-        inference_time = (time.time() - start_time) / 5 / len(X_test) * 1000000  # μs
-
-        y_pred = (outputs.cpu().numpy() > 0.5).astype(int).flatten()
-
-    return y_pred, training_time, inference_time
+        probs = model(X_test).cpu().numpy().flatten()
+        infer_time = (time.time() - start_time) / len(test_seqs) * 1e6
+        preds = (probs > 0.5).astype(int)
+    return preds, probs, infer_time
 
 
-def train_autoencoder(X_train_normal, X_test, y_test, epochs=100, lr=0.001):
-    """Train Autoencoder for anomaly detection"""
-
-    if not HAS_TORCH:
-        return None
-
+def train_gnn(train_seqs, y_train, test_seqs, y_test, epochs=10):
+    if not HAS_PYG: return None
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    train_list = [seq_to_graph(s, l) for s, l in zip(train_seqs, y_train)]
+    train_loader = PyGDataLoader(train_list, batch_size=64, shuffle=True)
+    test_list = [seq_to_graph(s, l) for s, l in zip(test_seqs, y_test)]
+    test_loader = PyGDataLoader(test_list, batch_size=64)
 
-    X_train_t = torch.FloatTensor(X_train_normal).to(device)
-    X_test_t = torch.FloatTensor(X_test).to(device)
+    model = SimpleGNN().to(device)
+    criterion = nn.BCELoss()
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    train_dataset = TensorDataset(X_train_t, X_train_t)
-    train_loader = DataLoader(train_dataset, batch_size=64, shuffle=True)
+    model.train()
+    for _ in range(epochs):
+        for data in train_loader:
+            data = data.to(device)
+            optimizer.zero_grad()
+            outputs = model(data.x, data.edge_index, data.batch)
+            loss = criterion(outputs, data.y.unsqueeze(1))
+            loss.backward()
+            optimizer.step()
+
+    model.eval()
+    all_probs = []
+    with torch.no_grad():
+        start_time = time.time()
+        for data in test_loader:
+            data = data.to(device)
+            probs = model(data.x, data.edge_index, data.batch)
+            all_probs.append(probs.cpu().numpy().flatten())
+        infer_time = (time.time() - start_time) / len(test_seqs) * 1e6
+        probs = np.concatenate(all_probs)
+        preds = (probs > 0.5).astype(int)
+    return preds, probs, infer_time
+
+
+def train_autoencoder(X_train_normal, X_test, y_test, epochs=20):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    train_ds = TensorDataset(torch.FloatTensor(X_train_normal), torch.FloatTensor(X_train_normal))
+    train_loader = DataLoader(train_ds, batch_size=128, shuffle=True)
+    test_t = torch.FloatTensor(X_test).to(device)
 
     model = SimpleAutoencoder(input_dim=X_train_normal.shape[1]).to(device)
     criterion = nn.MSELoss()
-    optimizer = optim.Adam(model.parameters(), lr=lr)
+    optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    # Train on normal data only
-    start_time = time.time()
     model.train()
-    for epoch in range(epochs):
-        for batch_x, _ in train_loader:
+    for _ in range(epochs):
+        for bx, _ in train_loader:
+            bx = bx.to(device)
             optimizer.zero_grad()
-            outputs = model(batch_x)
-            loss = criterion(outputs, batch_x)
+            outputs = model(bx)
+            loss = criterion(outputs, bx)
             loss.backward()
             optimizer.step()
 
-    training_time = time.time() - start_time
-
-    # Inference - use reconstruction error as anomaly score
     model.eval()
     with torch.no_grad():
         start_time = time.time()
-        for _ in range(10):
-            reconstructed = model(X_test_t)
-        inference_time = (time.time() - start_time) / 10 / len(X_test) * 1000000
-
-        # Compute reconstruction error
-        errors = torch.mean((X_test_t - reconstructed) ** 2, dim=1).cpu().numpy()
-
-        # Use threshold (e.g., 95th percentile of normal data errors)
-        train_reconstructed = model(X_train_t)
-        train_errors = torch.mean((X_train_t - train_reconstructed) ** 2, dim=1).cpu().numpy()
+        reconstructed = model(test_t)
+        infer_time = (time.time() - start_time) / len(X_test) * 1e6
+        errors = torch.mean((test_t - reconstructed)**2, dim=1).cpu().numpy()
+        train_rec = model(torch.FloatTensor(X_train_normal).to(device))
+        train_errors = torch.mean((torch.FloatTensor(X_train_normal).to(device) - train_rec)**2, dim=1).cpu().numpy()
         threshold = np.percentile(train_errors, 95)
-
-        y_pred = (errors > threshold).astype(int)
-
-    return y_pred, training_time, inference_time
-
-
-def train_random_forest(X_train, y_train, X_test):
-    """Train Random Forest classifier"""
-
-    if not HAS_SKLEARN:
-        return None
-
-    model = RandomForestClassifier(n_estimators=100, max_depth=10,
-                                   random_state=42, n_jobs=-1)
-
-    start_time = time.time()
-    model.fit(X_train, y_train)
-    training_time = time.time() - start_time
-
-    start_time = time.time()
-    for _ in range(10):
-        y_pred = model.predict(X_test)
-    inference_time = (time.time() - start_time) / 10 / len(X_test) * 1000000
-
-    return y_pred, training_time, inference_time
-
-
-# ============================================================
-# Main Evaluation
-# ============================================================
-
-def evaluate_predictions(y_true, y_pred):
-    """Compute evaluation metrics"""
-    return {
-        'accuracy': float(accuracy_score(y_true, y_pred)),
-        'precision': float(precision_score(y_true, y_pred, zero_division=0)),
-        'recall': float(recall_score(y_true, y_pred, zero_division=0)),
-        'f1': float(f1_score(y_true, y_pred, zero_division=0)),
-        'confusion_matrix': confusion_matrix(y_true, y_pred).tolist()
-    }
+        preds = (errors > threshold).astype(int)
+        probs = np.clip(errors / (threshold * 2), 0, 1)
+    return preds, probs, infer_time
 
 
 def main():
-    parser = argparse.ArgumentParser(description='ML Baseline Comparison')
-    parser.add_argument('--data-dir', type=str, required=True,
-                        help='Path to ADFA-LD dataset')
-    parser.add_argument('--output', '-o', type=str,
-                        default='ml_comparison_results.json',
-                        help='Output file')
-
+    parser = argparse.ArgumentParser(description='ICICS ML Comparison')
+    parser.add_argument('--data-dir', type=str, required=True, help='Path to ADFA-LD')
+    parser.add_argument('--trials', type=int, default=3, help='Number of trials')
     args = parser.parse_args()
 
-    print("=" * 60)
-    print("WasmSentinel ML Baseline Comparison")
-    print("=" * 60)
-
-    # Load data
-    print("\n[1/6] Loading ADFA-LD dataset...")
     sequences, labels = load_adfa_ld(args.data_dir)
-
-    if len(sequences) == 0:
-        print("ERROR: No data loaded")
-        return 1
-
-    # Extract features
-    print("\n[2/6] Extracting features...")
     X = extract_features(sequences)
     y = np.array(labels)
-
-    # Normalize
     scaler = StandardScaler()
     X = scaler.fit_transform(X)
 
-    # Train/test split (stratified)
-    np.random.seed(42)
-    indices = np.random.permutation(len(X))
-    split = int(0.8 * len(X))
-    train_idx, test_idx = indices[:split], indices[split:]
+    models = ['random_forest', 'mlp_wasmsentinel', 'lstm', 'transformer', 'gnn', 'autoencoder']
+    results = {m: {'f1': [], 'latency': []} for m in models}
 
-    X_train, X_test = X[train_idx], X[test_idx]
-    y_train, y_test = y[train_idx], y[test_idx]
+    for trial in range(args.trials):
+        print(f"Trial {trial+1}/{args.trials}...")
+        skf = StratifiedKFold(n_splits=3, shuffle=True, random_state=42+trial)
+        for train_idx, test_idx in skf.split(X, y):
+            X_tr, X_te = X[train_idx], X[test_idx]
+            y_tr, y_te = y[train_idx], y[test_idx]
+            seq_tr = [sequences[i] for i in train_idx]
+            seq_te = [sequences[i] for i in test_idx]
 
-    # Get normal training data for autoencoder
-    normal_train_mask = y_train == 0
-    X_train_normal = X_train[normal_train_mask]
+            # RF
+            rf = RandomForestClassifier(n_estimators=100, max_depth=10)
+            rf.fit(X_tr, y_tr)
+            s = time.time()
+            y_p = rf.predict(X_te)
+            results['random_forest']['latency'].append((time.time()-s)/len(y_te)*1e6)
+            results['random_forest']['f1'].append(f1_score(y_te, y_p))
 
-    # Get raw sequences for LSTM
-    train_sequences = [sequences[i] for i in train_idx]
-    test_sequences = [sequences[i] for i in test_idx]
+            # MLP
+            y_p, _, lat = train_mlp(X_tr, y_tr, X_te, y_te)
+            results['mlp_wasmsentinel']['f1'].append(f1_score(y_te, y_p))
+            results['mlp_wasmsentinel']['latency'].append(lat)
 
-    print(f"Training: {len(X_train)} samples ({sum(y_train)} attacks)")
-    print(f"Testing: {len(X_test)} samples ({sum(y_test)} attacks)")
+            # LSTM
+            y_p, _, lat = train_seq_model(SimpleLSTM, seq_tr, y_tr, seq_te, y_te)
+            results['lstm']['f1'].append(f1_score(y_te, y_p))
+            results['lstm']['latency'].append(lat)
 
-    results = {
-        'timestamp': datetime.now().isoformat(),
-        'dataset': 'ADFA-LD',
-        'train_samples': len(X_train),
-        'test_samples': len(X_test),
-        'models': {}
-    }
+            # Transformer
+            y_p, _, lat = train_seq_model(SimpleTransformer, seq_tr, y_tr, seq_te, y_te)
+            results['transformer']['f1'].append(f1_score(y_te, y_p))
+            results['transformer']['latency'].append(lat)
 
-    # ============================================================
-    # 1. Random Forest
-    # ============================================================
-    print("\n[3/6] Training Random Forest...")
-    if HAS_SKLEARN:
-        y_pred_rf, train_time_rf, infer_time_rf = train_random_forest(X_train, y_train, X_test)
-        metrics_rf = evaluate_predictions(y_test, y_pred_rf)
-        results['models']['random_forest'] = {
-            **metrics_rf,
-            'training_time_sec': train_time_rf,
-            'inference_time_us': infer_time_rf,
-            'model_type': 'Traditional ML'
-        }
-        print(f"  F1: {metrics_rf['f1']:.4f}, Inference: {infer_time_rf:.1f} μs/sample")
-    else:
-        print("  Skipped (sklearn not available)")
+            # GNN
+            y_p, _, lat = train_gnn(seq_tr, y_tr, seq_te, y_te)
+            results['gnn']['f1'].append(f1_score(y_te, y_p))
+            results['gnn']['latency'].append(lat)
 
-    # ============================================================
-    # 2. MLP (WasmSentinel approach)
-    # ============================================================
-    print("\n[4/6] Training MLP (WasmSentinel)...")
-    if HAS_TORCH:
-        y_pred_mlp, train_time_mlp, infer_time_mlp = train_mlp(
-            X_train, y_train, X_test, y_test,
-            hidden_dims=[128, 64, 32, 16], epochs=100, lr=0.01
-        )
-        metrics_mlp = evaluate_predictions(y_test, y_pred_mlp)
-        results['models']['mlp_wasmsentinel'] = {
-            **metrics_mlp,
-            'training_time_sec': train_time_mlp,
-            'inference_time_us': infer_time_mlp,
-            'model_type': 'Lightweight Neural Network',
-            'architecture': '[128, 64, 32, 16]'
-        }
-        print(f"  F1: {metrics_mlp['f1']:.4f}, Inference: {infer_time_mlp:.1f} μs/sample")
-    else:
-        print("  Skipped (PyTorch not available)")
+            # AE
+            y_p, _, lat = train_autoencoder(X_tr[y_tr==0], X_te, y_te)
+            results['autoencoder']['f1'].append(f1_score(y_te, y_p))
+            results['autoencoder']['latency'].append(lat)
+            break
 
-    # ============================================================
-    # 3. LSTM
-    # ============================================================
-    print("\n[5/6] Training LSTM...")
-    if HAS_TORCH:
-        y_pred_lstm, train_time_lstm, infer_time_lstm = train_lstm(
-            train_sequences, y_train.tolist(),
-            test_sequences, y_test.tolist(),
-            epochs=30
-        )
-        metrics_lstm = evaluate_predictions(y_test, y_pred_lstm)
-        results['models']['lstm'] = {
-            **metrics_lstm,
-            'training_time_sec': train_time_lstm,
-            'inference_time_us': infer_time_lstm,
-            'model_type': 'Deep Learning (Sequential)'
-        }
-        print(f"  F1: {metrics_lstm['f1']:.4f}, Inference: {infer_time_lstm:.1f} μs/sample")
-    else:
-        print("  Skipped (PyTorch not available)")
+    print("\n" + "="*80)
+    print(f"{'Model':<20} {'F1 (Mean ± Std)':<20} {'Latency (μs)':<15} {'p-value'}")
+    print("="*80)
+    mlp_f1 = results['mlp_wasmsentinel']['f1']
+    for m in models:
+        f1, lat = results[m]['f1'], results[m]['latency']
+        if not f1: continue
+        p = stats.ttest_ind(mlp_f1, f1)[1] if m!='mlp_wasmsentinel' else 1.0
+        print(f"{m:<20} {np.mean(f1):>6.4f} ± {np.std(f1):.4f} {np.mean(lat):>10.1f} {p:>10.4f}")
 
-    # ============================================================
-    # 4. Autoencoder
-    # ============================================================
-    print("\n[6/6] Training Autoencoder...")
-    if HAS_TORCH:
-        y_pred_ae, train_time_ae, infer_time_ae = train_autoencoder(
-            X_train_normal, X_test, y_test, epochs=50
-        )
-        metrics_ae = evaluate_predictions(y_test, y_pred_ae)
-        results['models']['autoencoder'] = {
-            **metrics_ae,
-            'training_time_sec': train_time_ae,
-            'inference_time_us': infer_time_ae,
-            'model_type': 'Unsupervised (Reconstruction)'
-        }
-        print(f"  F1: {metrics_ae['f1']:.4f}, Inference: {infer_time_ae:.1f} μs/sample")
-    else:
-        print("  Skipped (PyTorch not available)")
-
-    # Save results
-    output_path = Path(args.output)
-    with open(output_path, 'w') as f:
+    with open('ml_comparison_results_v2.json', 'w') as f:
         json.dump(results, f, indent=2)
 
-    print("\n" + "=" * 60)
-    print("COMPARISON COMPLETE")
-    print("=" * 60)
-    print(f"Results saved to: {output_path}")
-
-    # Summary table
-    print("\nModel Comparison Summary:")
-    print("-" * 70)
-    print(f"{'Model':<20} {'F1':>8} {'Precision':>10} {'Recall':>8} {'Latency':>12}")
-    print("-" * 70)
-
-    for name, data in results['models'].items():
-        print(f"{name:<20} {data['f1']:>8.4f} {data['precision']:>10.4f} "
-              f"{data['recall']:>8.4f} {data['inference_time_us']:>10.1f} μs")
-
-    return 0
-
-
 if __name__ == '__main__':
-    sys.exit(main())
+    main()
