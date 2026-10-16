@@ -1,0 +1,37 @@
+# Build artifacts
+wasm-threat-detector
+*.wasm
+target/
+host/target/
+rules/*/target/
+
+# Git
+.git
+.gitignore
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Documentation
+*.md
+!README.md
+paper/
+docs/
+
+# Test data and evaluation
+test-datasets/
+evaluation/
+
+# Logs
+logs/
+*.log
+
+# Demo website
+demo-website/
+
+# OS files
+.DS_Store
+Thumbs.db

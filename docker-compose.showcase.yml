@@ -1,0 +1,79 @@
+# WasmSentinel 简历项目演示配置
+# 使用方式: docker compose -f docker-compose.showcase.yml up -d
+# 访问地址: http://localhost:3000
+
+services:
+  # 演示前端界面
+  demo-ui:
+    image: nginx:alpine
+    container_name: wasm-sentinel-demo
+    restart: unless-stopped
+    ports:
+      - "3000:80"
+    volumes:
+      - ./demo-ui/index.html:/usr/share/nginx/html/index.html:ro
+      - ./demo-ui/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./logs/wasm-threat-detector.log:/var/log/wasm-threat-detector.log:ro
+    depends_on:
+      - wasm-threat-detector
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:80/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # 威胁检测核心引擎
+  wasm-threat-detector:
+    logging:            # bound container stdout/stderr: 5 x 20 MB, then rotate
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
+    image: wasm-sentinel:latest
+    container_name: wasm-threat-detector
+    restart: unless-stopped
+    privileged: true
+    pid: host
+    volumes:
+      - /proc:/host/proc:ro
+      - ./logs:/var/log   # demo-ui tails this file; the app does not rotate it, keep showcase runs short
+      - ./config:/etc/wasm-threat-detector:ro
+    environment:
+      - LOG_LEVEL=info
+      - METRICS_PORT=8080
+    command: >
+      --config /etc/wasm-threat-detector/config.yaml
+      --log-level info
+      --log-file /var/log/wasm-threat-detector.log
+      --metrics-port 8080
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # Prometheus 监控
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    restart: unless-stopped
+    ports:
+      - "9091:9090"
+    volumes:
+      - ./monitoring/prometheus-demo.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--storage.tsdb.retention.time=6h'
+      - '--web.enable-lifecycle'
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+networks:
+  default:
+    name: wasm-sentinel-showcase

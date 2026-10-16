@@ -6,6 +6,11 @@ version: '3.8'
 services:
   # 威胁检测器服务
   wasm-threat-detector:
+    logging:            # bound container stdout/stderr: 5 x 20 MB, then rotate
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     build:
       context: .
       dockerfile: Dockerfile

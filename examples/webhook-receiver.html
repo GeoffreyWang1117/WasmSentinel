@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WasmSentinel Webhook Receiver</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1a1a2e; color: #eee; }
+        h1 { color: #00d4ff; }
+        .info { background: #16213e; padding: 15px; border-radius: 8px; margin: 10px 0; }
+        code { background: #0f3460; padding: 2px 6px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <h1>WasmSentinel Webhook Receiver</h1>
+    <div class="info">
+        <h3>Status: Active</h3>
+        <p>This is a mock webhook receiver for testing WasmSentinel alerts.</p>
+        <p>Alerts will be sent to: <code>POST /alerts</code></p>
+    </div>
+    <div class="info">
+        <h3>Expected Payload Format:</h3>
+        <pre><code>{
+  "id": "alert-001",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "severity": "high",
+  "rule": "suspicious-shell",
+  "description": "Suspicious shell command detected",
+  "process": {
+    "pid": 1234,
+    "name": "bash",
+    "command": "/bin/bash -c 'rm -rf /'"
+  }
+}</code></pre>
+    </div>
+</body>
+</html>

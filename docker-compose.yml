@@ -1,8 +1,16 @@
-version: '3.8'
+# WasmSentinel 生产环境部署配置
+# 包含完整的监控栈：Prometheus, Grafana, AlertManager, ELK
+# 使用方式: docker compose up -d
+# 注意: 需要约 4GB 内存
 
 services:
   # 威胁检测器
   wasm-threat-detector:
+    logging:            # bound container stdout/stderr: 5 x 20 MB, then rotate
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "5"
     build: .
     container_name: wasm-threat-detector
     restart: unless-stopped
@@ -19,7 +27,6 @@ services:
     command: >
       --config /etc/wasm-threat-detector/config.yaml
       --log-level info
-      --log-file /var/log/wasm-threat-detector.log
       --metrics-port 8080
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8080/health"]
@@ -54,7 +61,7 @@ services:
     container_name: grafana
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "3001:3000"
     volumes:
       - grafana_data:/var/lib/grafana
       - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
@@ -99,7 +106,7 @@ services:
       - "24224:24224/udp"
     volumes:
       - ./monitoring/fluentd.conf:/fluentd/etc/fluent.conf:ro
-      - ./logs:/var/log:ro
+      - ./logs:/var/log:ro   # NOTE: the detector now logs to stdout (rotated by Docker); this tail finds nothing unless --log-file is set
     depends_on:
       - elasticsearch
 
