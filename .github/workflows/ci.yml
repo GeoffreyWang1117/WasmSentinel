@@ -81,7 +81,7 @@ jobs:
           go-version: stable
           cache-dependency-path: host/go.sum
       - name: Install clang / llvm
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends clang llvm
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends clang llvm libbpf-dev
       - name: Regenerate bpf2go bindings
         working-directory: host/internal/ebpf
         run: go generate ./...
