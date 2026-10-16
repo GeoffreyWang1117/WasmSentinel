@@ -1,11 +1,11 @@
 use serde_json::Value;
 
 /// 检测函数 - 分析事件并返回威胁级别
-/// 
+///
 /// # 参数
 /// * `event_ptr` - 事件数据指针
 /// * `event_len` - 事件数据长度
-/// 
+///
 /// # 返回值
 /// * 0 - 无威胁
 /// * 1-10 - 威胁级别 (1=最低, 10=最高)
@@ -27,7 +27,7 @@ pub extern "C" fn detect(event_ptr: *const u8, event_len: usize) -> i32 {
 
     // 获取事件类型
     let event_type = event["type"].as_str().unwrap_or("");
-    
+
     match event_type {
         "process" => detect_process_threat(&event),
         "network" => detect_network_threat(&event),
@@ -161,9 +161,9 @@ fn check_suspicious_executable(executable: &str) -> i32 {
     for suspicious in &suspicious_executables {
         if executable.contains(suspicious) {
             return match *suspicious {
-                "/bin/sh" | "/bin/bash" => 6,  // shell 高风险
-                "/tmp/" | "/var/tmp/" => 8,    // 临时目录执行极高风险
-                _ => 4,                        // 其他可疑程序中等风险
+                "/bin/sh" | "/bin/bash" => 6, // shell 高风险
+                "/tmp/" | "/var/tmp/" => 8,   // 临时目录执行极高风险
+                _ => 4,                       // 其他可疑程序中等风险
             };
         }
     }
@@ -174,11 +174,8 @@ fn check_suspicious_executable(executable: &str) -> i32 {
 /// 检查可疑的进程名
 fn check_suspicious_process_name(name: &str) -> i32 {
     let suspicious_names = [
-        "sh", "bash", "zsh", "dash",
-        "python", "perl", "ruby", "php",
-        "nc", "netcat", "ncat", "socat",
-        "wget", "curl", "ftp", "tftp",
-        "ssh", "scp", "rsync",
+        "sh", "bash", "zsh", "dash", "python", "perl", "ruby", "php", "nc", "netcat", "ncat",
+        "socat", "wget", "curl", "ftp", "tftp", "ssh", "scp", "rsync",
     ];
 
     for suspicious in &suspicious_names {
@@ -199,20 +196,20 @@ fn check_suspicious_cmdline(cmdline: &str) -> i32 {
     let mut threat_level = 0;
 
     let suspicious_patterns = [
-        ("-c", 4),              // shell 命令执行
-        ("--help", -2),         // 帮助命令，降低威胁
-        ("rm -rf", 8),          // 危险删除命令
-        ("chmod +x", 6),        // 修改执行权限
-        ("wget http", 5),       // 下载文件
-        ("curl http", 5),       // 下载文件
-        ("/dev/tcp/", 7),       // 网络重定向
-        ("base64", 4),          // 编码/解码
-        ("eval", 6),            // 动态执行
-        ("exec", 5),            // 程序执行
-        ("nohup", 4),           // 后台执行
-        ("&", 3),               // 后台进程
-        ("|", 2),               // 管道操作
-        (">>", 3),              // 重定向追加
+        ("-c", 4),        // shell 命令执行
+        ("--help", -2),   // 帮助命令，降低威胁
+        ("rm -rf", 8),    // 危险删除命令
+        ("chmod +x", 6),  // 修改执行权限
+        ("wget http", 5), // 下载文件
+        ("curl http", 5), // 下载文件
+        ("/dev/tcp/", 7), // 网络重定向
+        ("base64", 4),    // 编码/解码
+        ("eval", 6),      // 动态执行
+        ("exec", 5),      // 程序执行
+        ("nohup", 4),     // 后台执行
+        ("&", 3),         // 后台进程
+        ("|", 2),         // 管道操作
+        (">>", 3),        // 重定向追加
     ];
 
     for (pattern, score) in &suspicious_patterns {
@@ -238,9 +235,9 @@ fn check_suspicious_cmdline(cmdline: &str) -> i32 {
 /// 检查可疑用户
 fn check_suspicious_user(user: &str) -> i32 {
     match user {
-        "root" => 3,        // root 用户操作需要关注
-        "nobody" => 2,      // nobody 用户异常活动
-        "www-data" => 2,    // web 服务用户异常活动
+        "root" => 3,     // root 用户操作需要关注
+        "nobody" => 2,   // nobody 用户异常活动
+        "www-data" => 2, // web 服务用户异常活动
         _ => {
             // 检查是否为数字 UID（可能是提权后的用户）
             if user.chars().all(char::is_numeric) {
@@ -281,8 +278,8 @@ fn check_suspicious_ip(ip: &str) -> i32 {
 
     // 检查已知恶意 IP 范围（示例）
     let suspicious_ranges = [
-        "10.0.0.",      // 某些内网扫描
-        "192.168.1.",   // 常见内网段
+        "10.0.0.",    // 某些内网扫描
+        "192.168.1.", // 常见内网段
     ];
 
     for range in &suspicious_ranges {
@@ -296,24 +293,24 @@ fn check_suspicious_ip(ip: &str) -> i32 {
 
 /// 检查是否为私有 IP
 fn is_private_ip(ip: &str) -> bool {
-    ip.starts_with("10.") ||
-    ip.starts_with("192.168.") ||
-    ip.starts_with("172.16.") ||
-    ip.starts_with("172.17.") ||
-    ip.starts_with("172.18.") ||
-    ip.starts_with("172.19.") ||
-    ip.starts_with("172.20.") ||
-    ip.starts_with("172.21.") ||
-    ip.starts_with("172.22.") ||
-    ip.starts_with("172.23.") ||
-    ip.starts_with("172.24.") ||
-    ip.starts_with("172.25.") ||
-    ip.starts_with("172.26.") ||
-    ip.starts_with("172.27.") ||
-    ip.starts_with("172.28.") ||
-    ip.starts_with("172.29.") ||
-    ip.starts_with("172.30.") ||
-    ip.starts_with("172.31.")
+    ip.starts_with("10.")
+        || ip.starts_with("192.168.")
+        || ip.starts_with("172.16.")
+        || ip.starts_with("172.17.")
+        || ip.starts_with("172.18.")
+        || ip.starts_with("172.19.")
+        || ip.starts_with("172.20.")
+        || ip.starts_with("172.21.")
+        || ip.starts_with("172.22.")
+        || ip.starts_with("172.23.")
+        || ip.starts_with("172.24.")
+        || ip.starts_with("172.25.")
+        || ip.starts_with("172.26.")
+        || ip.starts_with("172.27.")
+        || ip.starts_with("172.28.")
+        || ip.starts_with("172.29.")
+        || ip.starts_with("172.30.")
+        || ip.starts_with("172.31.")
 }
 
 /// 检查可疑文件路径
