@@ -80,7 +80,7 @@ EOF
 # 测试规则加载
 echo "测试规则加载..."
 timeout 5 ./wasm-threat-detector \
-    --rules ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm \
+    --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm \
     --log-level debug &
 
 DETECTOR_PID=$!

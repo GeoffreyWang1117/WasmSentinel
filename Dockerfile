@@ -1,41 +1,46 @@
 # 多阶段构建 Dockerfile
 
-# 构建阶段
-FROM golang:1.21-alpine AS go-builder
+# 构建阶段 - 使用 Debian 镜像以兼容 wasmtime-go
+FROM golang:1.21-bookworm AS go-builder
 
 # 安装构建依赖
-RUN apk add --no-cache git ca-certificates tzdata curl build-base
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git ca-certificates curl build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
 # 安装 Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
-RUN rustup target add wasm32-wasi
+RUN rustup target add wasm32-wasip1
 
 WORKDIR /app
 
-# 复制依赖文件
+# 复制依赖文件并下载Go依赖
 COPY host/go.mod host/go.sum ./host/
-COPY rules/suspicious-shell/Cargo.toml rules/suspicious-shell/Cargo.lock ./rules/suspicious-shell/
-
-# 下载依赖
 RUN cd host && go mod download
+
+# 复制Rust项目配置和创建占位符以允许cargo fetch
+COPY rules/suspicious-shell/Cargo.toml rules/suspicious-shell/Cargo.lock ./rules/suspicious-shell/
+RUN mkdir -p rules/suspicious-shell/src && echo "// placeholder" > rules/suspicious-shell/src/lib.rs
 RUN cd rules/suspicious-shell && cargo fetch
 
-# 复制源代码
+# 复制源代码（会覆盖占位符）
 COPY . .
 
 # 构建应用
 RUN chmod +x scripts/build.sh && ./scripts/build.sh
 
-# 运行时阶段
-FROM alpine:latest
+# 运行时阶段 - 使用精简 Debian 镜像
+FROM debian:bookworm-slim
 
 # 安装运行时依赖
-RUN apk --no-cache add ca-certificates tzdata
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    ca-certificates wget procps curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # 创建非 root 用户
-RUN addgroup -g 1001 -S wasm && \
-    adduser -u 1001 -S wasm -G wasm
+RUN groupadd -g 1001 wasm && \
+    useradd -u 1001 -g wasm -s /bin/false wasm
 
 WORKDIR /app
 

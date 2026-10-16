@@ -14,7 +14,7 @@ if [ ! -f "./wasm-threat-detector" ]; then
     exit 1
 fi
 
-if [ ! -f "./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm" ]; then
+if [ ! -f "./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm" ]; then
     echo "❌ Wasm 规则未找到，请先运行构建脚本："
     echo "   ./scripts/build.sh"
     exit 1
@@ -27,7 +27,7 @@ LOG_FILE="/tmp/wasm-threat-detector-demo.log"
 
 # 在后台启动检测器
 ./wasm-threat-detector \
-    --rules ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm \
+    --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm \
     --log-level debug \
     --log-file "$LOG_FILE" \
     --metrics-port 8080 &

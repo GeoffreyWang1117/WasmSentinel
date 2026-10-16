@@ -1,50 +1,33 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# Build the host binary and both Wasm rule modules.
+#   ./wasm-threat-detector            host program (Go + wasmtime)
+#   rules/wasm/suspicious_shell.wasm  rule-based example module
+#   rules/wasm/ml_detector.wasm       STIDE + MLP module
+# Wasm modules are build products (git-ignored); fetch prebuilt ones from GitHub Releases if you
+# do not have a Rust toolchain.
+set -euo pipefail
+cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-# 构建脚本 - WASM-ThreatDetector
-
-set -e
-
-echo "🚀 Building WASM-ThreatDetector..."
-
-# 检查依赖
-echo "📋 Checking dependencies..."
-
-# 检查 Go
-if ! command -v go &> /dev/null; then
-    echo "❌ Go is not installed. Please install Go 1.19 or later."
-    exit 1
+echo "==> checking toolchain"
+command -v go    >/dev/null || { echo "Go is required (https://go.dev/dl/)"; exit 1; }
+command -v cargo >/dev/null || { echo "Rust is required (https://rustup.rs)"; exit 1; }
+if ! rustup target list --installed 2>/dev/null | grep -q '^wasm32-wasip1$'; then
+  echo "==> installing wasm32-wasip1 target"
+  rustup target add wasm32-wasip1
 fi
 
-# 检查 Rust
-if ! command -v rustc &> /dev/null; then
-    echo "❌ Rust is not installed. Please install Rust 1.70 or later."
-    exit 1
-fi
+mkdir -p rules/wasm
+for crate in suspicious-shell ml-detector; do
+  echo "==> building rules/$crate (wasm32-wasip1, release)"
+  (cd "rules/$crate" && cargo build --release --target wasm32-wasip1 --quiet)
+  cp "rules/$crate/target/wasm32-wasip1/release/"*.wasm rules/wasm/
+done
 
-# 检查 Wasm 目标
-if ! rustup target list --installed | grep -q "wasm32-wasi"; then
-    echo "📦 Installing wasm32-wasi target..."
-    rustup target add wasm32-wasi
-fi
+echo "==> building host"
+(cd host && go build -o ../wasm-threat-detector ./cmd/main.go)
 
-# 构建 Rust Wasm 规则
-echo "🔧 Building Wasm rules..."
-cd rules/suspicious-shell
-cargo build --target wasm32-wasi --release
-cd ../..
-
-# 构建 Go 主程序
-echo "🔧 Building host program..."
-cd host
-go mod tidy
-go build -o ../wasm-threat-detector ./cmd/main.go
-cd ..
-
-echo "✅ Build completed successfully!"
-echo ""
-echo "📁 Generated files:"
-echo "  - ./wasm-threat-detector (主程序)"
-echo "  - ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm (示例规则)"
-echo ""
-echo "🚀 Quick start:"
-echo "  ./wasm-threat-detector --rules ./rules/suspicious-shell/target/wasm32-wasi/release/suspicious_shell.wasm"
+echo
+echo "built:"
+ls -la wasm-threat-detector rules/wasm/*.wasm
+echo
+echo "run:  ./wasm-threat-detector --rules ./rules/wasm"
