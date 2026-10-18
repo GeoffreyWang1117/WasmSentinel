@@ -2,6 +2,26 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-18 · P2.0 STIDE 正常库的加载路径（E1 前置，完成）
+
+**做了什么**
+
+- ml-detector 新导出 `train_sequence(ptr, len)`（小端 u32 字节串，一条轨迹一次调用，调用前重置 n-gram 窗口）与 `train_finish()`（返回正常 n-gram 数）。STIDE 的键改为 **syscall 号**优先（有号用号，没号才用名），这样训练库与 eBPF 实时事件、回放事件用同一套键。
+- 引擎新增通用 `HasExport` / `InvokeExport(rule, export, payload)`：对任意 `(i32,i32)->i32` 或 `()->i32` 导出复用同一套缓冲区、限额与统计；缺导出返回 `abi` 错误，不丢实例。
+- CLI `--rule-train-dir <目录>`：启动时把目录里的 ADFA 格式轨迹喂给所有导出 `train_sequence` 的规则，再调 `train_finish`，打印 traces / syscalls / normal_ngrams。
+
+**验收**：`TestInvokeExportTrainsSTIDE`：同一模块两份实例，一份用 UTD-0472 训练后再回放它自己 → 0/305 告警；未训练实例 → 300/305。Rust 侧 `train_sequence_makes_the_training_trace_quiet` 同样成立。全部 Go/Rust 测试通过。
+
+**第一次有意义的在线数字（不是 E1，只是看一眼）**：用 ADFA-LD Training_Data_Master 全部 833 条轨迹训练（308077 个 syscall，正常 n-gram 59885 个，331 ms），然后按 syscall 事件回放：
+
+| 回放 | 事件数 | ml_detector 告警 | 告警率 |
+|---|---|---|---|
+| Hydra_FTP_5 攻击轨迹，未训练 | 5,275 | 5,270 | 99.9%（空库，全部异常） |
+| Hydra_FTP_5 攻击轨迹，已训练 | 5,275 | 3,728 | 70.7% |
+| 50 条 Validation 正常轨迹，已训练 | 17,783 | 3,108 | 17.5% |
+
+**解读与给 E1 的输入**：按单个 syscall 事件报警，正常流量也有 17.5% 的事件被标记——这不是可部署的工作点。原因有三个候选：(1) `StideConfig.max_database_size` 默认 100,000，训练集的 6-gram 数可能超过它而被截断（上表的 n-gram 数就是证据，E1 要把上限调到不截断再测）；(2) 组合分数里 STIDE 一旦判新就贡献 0.4，再加 MLP 的分数很容易过 0.1 的 level-1 门槛，应该按轨迹（或按窗口）聚合而不是逐事件报警；(3) 训练用整条轨迹、在线用 100 长窗口。E1 的离线评估按整条轨迹用 `mlp_score` 做 PR 曲线，不受这三条影响；在线路径的工作点属于 E7/论文 Discussion。
+
 ## 2026-10-18 · E6 沙箱隔离实验（完成，替换硬编码的 "5/5 blocked"）
 
 **做了什么**

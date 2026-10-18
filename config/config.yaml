@@ -23,6 +23,8 @@ event-encoding: json
 # 事件采集器：proc = /proc 轮询（无需特权）；ebpf = 内核钩子（需要 root 与 BTF 内核）；
 # replay = 回放 syscall 轨迹（配合 replay-file / replay-eps / replay-loop，轨迹播完即退出）
 collector: proc
+# 启动时用正常轨迹目录训练导出 train_sequence 的规则（ml_detector 的 STIDE 正常库）；留空不训练
+# rule-train-dir: evaluation/datasets/raw/ADFA-LD/ADFA-LD/Training_Data_Master
 # ebpf 钩子列表（collector=ebpf 时生效）：exec,exit,open,connect,accept,syscall 或 all
 ebpf-hooks: all
 

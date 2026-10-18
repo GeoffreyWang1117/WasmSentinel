@@ -88,6 +88,7 @@ make reproduce          # experiments -> evaluation/results/2026-11/ (isolation 
 | `--collector` | `proc` (default), `ebpf` | `ebpf` attaches the programs in `host/internal/ebpf/bpf/sentinel.bpf.c`; needs root (CAP_BPF + CAP_PERFMON) and a BTF-enabled kernel |
 | `--ebpf-hooks` | `all` (default) or a comma list of `exec,exit,open,connect,accept,syscall` | one BPF program per hook; drop `open` on busy hosts, it dominates the volume |
 | `--collector=replay` with `--replay-file`, `--replay-eps`, `--replay-loop` | a trace file or directory (ADFA-LD format: whitespace-separated syscall numbers) | replays recorded syscalls as events, paced at `--replay-eps` (0 = as fast as possible); the process exits when the trace ends unless `--replay-loop` |
+| `--rule-train-dir` | directory of normal traces (same format) | at startup, feeds every rule that exports `train_sequence` (the ml_detector's STIDE normal database), then calls `train_finish` |
 
 ```bash
 sudo ./wasmsentinel --collector=ebpf --rules ./rules/wasm            # all hooks
