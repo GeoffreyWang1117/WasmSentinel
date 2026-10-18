@@ -71,6 +71,8 @@ WasmSentinel is a lightweight, secure, and portable real-time threat detection t
 
 ```bash
 ./scripts/build.sh      # host binary ./wasmsentinel + rules/wasm/{suspicious_shell,ml_detector}.wasm
+make test               # Go (race) + Rust tests
+make reproduce          # experiments -> evaluation/results/2026-11/ (isolation table, model parity)
 ```
 
 ### Run Detector

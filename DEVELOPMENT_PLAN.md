@@ -170,7 +170,7 @@
 | E3 | 端到端延迟与吞吐 | eBPF 事件 → 告警；JSON 臂 vs 零拷贝臂；1K / 10K / 50K events/s；P50/P99/P999 | ✅ |
 | E4 | 系统开销（真实监控臂） | nginx(wrk) / redis(redis-benchmark) / postgres(pgbench) × {无监控, WasmSentinel, Falco, Tetragon}，每格 ≥5 次；报吞吐 Δ、CPU%、RSS 与 CI。`real_workload_test.py` 的 `simulated` 分支删除 | ✅（Tetragon 列可砍）|
 | E5 | Falco/Tetragon 公平对比 | 同一规则集（读 `/etc/shadow`、`/tmp` 可执行、反弹 shell 序列）在三系统实现；真实检出、延迟、内存采样 | ⚠️ 可缩到只对 Falco |
-| E6 | 沙箱隔离 | 真实编译 7 个恶意 Wasm 模块（读文件、连网、死循环、内存炸、spawn、越界访问、读 host 内存），在 host 里加载，记录 trap/fuel/limit 日志；写成 CI 测试长期存在。`sandbox_isolation_test.py` 的硬编码字典删除 | ✅ |
+| E6 ✅ 2026-10-18（11/11，`make isolation`） | 沙箱隔离 | 真实编译 7 个恶意 Wasm 模块（读文件、连网、死循环、内存炸、spawn、越界访问、读 host 内存），在 host 里加载，记录 trap/fuel/limit 日志；写成 CI 测试长期存在。`sandbox_isolation_test.py` 的硬编码字典删除 | ✅ |
 | E7 | 现代攻击 | 现有模拟脚本如实称为 syscall-pattern replay；若时间允许在容器里跑真实 PoC | 可砍 |
 | E8 | 第二数据集 | LID-DS 2021 真实录制或 CB-DS；做不到就在 Limitations 写明单数据集 | 可砍 |
 
@@ -275,7 +275,7 @@ cd paper-asiaccs && latexmk -pdf main.tex
 | `evaluation/results/20251231_*`、`adfa_ld_*` | 12 月早期结果 | 保留作历史，论文不引用 |
 | `evaluation/results/real_experiments/` | Python n-gram 真实结果 | 保留；被 E1/E2 的 Wasm 结果取代 |
 | `evaluation/results/overhead/`、`real_workload/` | 混有 literature/simulated | 保留目录，论文只引用 2026-11 新结果 |
-| `evaluation/scripts/sandbox_isolation_test.py`、`evaluate_lid_ds.py` 的模拟分支 | 伪证据 | 删除分支，脚本改为真实执行或移除 |
+| `evaluation/scripts/sandbox_isolation_test.py`（已于 2026-10-18 删除，由 E6 取代）、`evaluate_lid_ds.py` 的模拟分支 | 伪证据 | 删除分支，脚本改为真实执行或移除 |
 | `ml_comparison_results_v2.json`（根目录） | 2 折结果 | 移入 `evaluation/results/2026-02/` 并标注 |
 | `logs/wasm-threat-detector.log` | 27 GB 运行日志 | 确认后删除 |
 | `wasm-threat-detector`（二进制） | 32 MB 产物 | 取消跟踪，改 release 分发 |

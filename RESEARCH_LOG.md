@@ -2,6 +2,30 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-18 · E6 沙箱隔离实验（完成，替换硬编码的 "5/5 blocked"）
+
+**做了什么**
+
+- `rules/adversarial/`：10 个故意越界的规则模块（Rust → wasm32-wasip1，共 348 KB）：读 /etc/passwd、列 /、写 /tmp；枚举环境变量与 argv；TCP 连接；8 MiB 刷 stdout/stderr；读时钟（允许的能力，作对照）；16 MiB 步长撑内存直到被拒；一次申请 1 GiB；死循环；`proc_exit(3)`；无界递归。
+- `host/internal/engine/adversarial_test.go`：在默认限额（64 MiB / 5×10⁷ fuel / 100 ms）下逐个加载、调用、记录结果、确认邻居规则不受影响、确认下一次调用引擎已恢复；`WASMSENTINEL_RESULTS_DIR` 设置时写出 `isolation.json` 与 `isolation.md`。
+- 根目录 `Makefile`：`make isolation` / `make parity` / `make reproduce` → `evaluation/results/2026-11/`（附 README 说明每个文件的生成命令）。CI 新增 `isolation` job，在 ubuntu-latest 上重跑并把表格贴进 job summary。
+- 删除 `evaluation/scripts/sandbox_isolation_test.py`（整个脚本是 `simulate_test` 的硬编码字典）。
+
+**结果（本机，commit 见 git log）**：11/11 包含。
+
+| 模块 | 结果 | 耗时 |
+|---|---|---|
+| fs_read / env_leak / net_connect / stdout_flood | 全部返回 0：读不到、看不到、连不上、刷不出去 | ≤ 1.6 ms |
+| clock | 返回 1：时钟是允许的能力（论文里要写明白） | 0.01 ms |
+| mem_bomb_graceful | 到 32 MiB 时 `try_reserve` 失败停下（Vec 翻倍 + 拷贝需要 80 MiB 瞬时），实例内存 49.1 MiB < 64 MiB | 20 ms |
+| mem_bomb_abort | 1 GiB 请求被 limiter 直接拒绝 → 分配器 abort → trap；实例重建 | 0.06 ms |
+| cpu_spin（fuel） | `fuel` trap | 3.5 ms |
+| cpu_spin（仅超时） | `timeout` trap | 104 ms |
+| proc_exit | `exit` trap | 0.03 ms |
+| stack_overflow | trap | 2 ms |
+
+**一个诚实的标注**：一次性申请 1 GiB 时线性内存根本没有增长（grow 被整体拒绝），引擎无法把这个 abort 和普通 `unreachable` 区分开，只能标为通用 `trap`；"被拒绝、实例重建、邻居无感"三条都成立，但论文表格里这一行的类别要写 trap 而不是 memory。wasmtime-go 的静态 limiter 没有回调，要精确归类需要换成带回调的 limiter（升级到 v49 后看 API）。
+
 ## 2026-10-18 · P1.7 命名统一（完成）
 
 三个名字收敛为一个：项目 **WasmSentinel**，二进制 / 容器 / 镜像 / compose 服务 **`wasmsentinel`**，Go 模块 **`github.com/GeoffreyWang1117/WasmSentinel/host`**（与仓库地址一致）。
