@@ -1,14 +1,14 @@
 #!/bin/bash
 
-# 演示脚本 - WASM-ThreatDetector
+# 演示脚本 - WasmSentinel
 
 set -e
 
-echo "🎭 WASM-ThreatDetector 演示"
+echo "🎭 WasmSentinel 演示"
 echo "=============================="
 
 # 检查是否已构建
-if [ ! -f "./wasm-threat-detector" ]; then
+if [ ! -f "./wasmsentinel" ]; then
     echo "❌ 主程序未找到，请先运行构建脚本："
     echo "   ./scripts/build.sh"
     exit 1
@@ -23,10 +23,10 @@ fi
 echo "🚀 启动威胁检测器..."
 
 # 创建临时日志文件
-LOG_FILE="/tmp/wasm-threat-detector-demo.log"
+LOG_FILE="/tmp/wasmsentinel-demo.log"
 
 # 在后台启动检测器
-./wasm-threat-detector \
+./wasmsentinel \
     --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm \
     --log-level debug \
     --log-file "$LOG_FILE" \

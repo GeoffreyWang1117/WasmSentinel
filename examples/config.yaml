@@ -1,11 +1,11 @@
-# WASM-ThreatDetector 配置文件示例
+# WasmSentinel 配置文件示例
 
 # 规则配置
 rules: "./rules"
 
 # 日志配置
 log-level: "info"
-log-file: "/var/log/wasm-threat-detector.log"
+log-file: "/var/log/wasmsentinel.log"
 
 # 输出配置
 webhook: "http://localhost:8081/alerts"

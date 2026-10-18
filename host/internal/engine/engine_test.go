@@ -13,11 +13,11 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/collector"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/ebpf"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/events"
 	"github.com/bytecodealliance/wasmtime-go/v17"
 	"github.com/sirupsen/logrus"
-	"github.com/wasm-threat-detector/host/internal/collector"
-	"github.com/wasm-threat-detector/host/internal/ebpf"
-	"github.com/wasm-threat-detector/host/internal/events"
 )
 
 // quick is a tight but comfortable budget for the WAT guests in testdata/.

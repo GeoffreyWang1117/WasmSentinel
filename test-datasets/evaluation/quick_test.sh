@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# 🚀 WASM-ThreatDetector 快速验证测试
+# 🚀 WasmSentinel 快速验证测试
 # ========================================
 
 set -e
 
-echo "🚀 WASM-ThreatDetector 快速验证测试"
+echo "🚀 WasmSentinel 快速验证测试"
 echo "=========================================="
 
 # 配置
 PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-LOG_DIR="/tmp/wasm-threat-detector-test"
+LOG_DIR="/tmp/wasmsentinel-test"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="$LOG_DIR/quick_test_$TIMESTAMP.log"
 
@@ -25,7 +25,7 @@ echo "  - 项目目录: $PROJECT_DIR"
 # 检查构建状态
 echo ""
 echo "🔧 检查构建状态..."
-if [ ! -f "./wasm-threat-detector" ]; then
+if [ ! -f "./wasmsentinel" ]; then
     echo "❌ 主程序未构建，开始构建..."
     ./scripts/build.sh
 else
@@ -44,7 +44,7 @@ fi
 echo ""
 echo "🎯 启动检测器（后台模式）..."
 # 使用 nohup 后台运行检测器
-nohup ./wasm-threat-detector > "$LOG_FILE" 2>&1 &
+nohup ./wasmsentinel > "$LOG_FILE" 2>&1 &
 DETECTOR_PID=$!
 
 echo "检测器进程 PID: $DETECTOR_PID"

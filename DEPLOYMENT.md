@@ -24,7 +24,7 @@
 
 ```yaml
 # 第 62 行附近
-<loc>https://your-username.github.io/WASM-ThreatDetector/</loc>
+<loc>https://your-username.github.io/WasmSentinel/</loc>
 ```
 
 ### 4. 更新演示网站链接
@@ -34,12 +34,12 @@
 **demo-website/index.html**：
 ```html
 <!-- 第 105 行附近 -->
-<li class="nav-item"><a class="nav-link" href="https://github.com/your-username/WASM-ThreatDetector" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
+<li class="nav-item"><a class="nav-link" href="https://github.com/your-username/WasmSentinel" target="_blank"><i class="fab fa-github"></i> GitHub</a></li>
 ```
 
 **README.md**：
 ```markdown
-**🌐 [访问演示网站](https://your-username.github.io/WASM-ThreatDetector/)**
+**🌐 [访问演示网站](https://your-username.github.io/WasmSentinel/)**
 ```
 
 ### 5. 触发部署
@@ -72,9 +72,9 @@ git push origin main
 
 ### 部署结果
 部署成功后，您的演示网站将在以下地址可用：
-- **主页**: https://your-username.github.io/WASM-ThreatDetector/
-- **文档**: https://your-username.github.io/WASM-ThreatDetector/docs/quickstart.html
-- **API 文档**: https://your-username.github.io/WASM-ThreatDetector/api/
+- **主页**: https://your-username.github.io/WasmSentinel/
+- **文档**: https://your-username.github.io/WasmSentinel/docs/quickstart.html
+- **API 文档**: https://your-username.github.io/WasmSentinel/api/
 
 ## 🔧 自定义配置
 

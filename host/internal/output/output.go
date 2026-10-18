@@ -10,8 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/events"
 	"github.com/sirupsen/logrus"
-	"github.com/wasm-threat-detector/host/internal/events"
 )
 
 // OutputHandler 输出处理器接口

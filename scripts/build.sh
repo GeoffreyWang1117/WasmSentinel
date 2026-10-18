@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the host binary and both Wasm rule modules.
-#   ./wasm-threat-detector            host program (Go + wasmtime)
+#   ./wasmsentinel            host program (Go + wasmtime)
 #   rules/wasm/suspicious_shell.wasm  rule-based example module
 #   rules/wasm/ml_detector.wasm       STIDE + MLP module
 # Wasm modules are build products (git-ignored); fetch prebuilt ones from GitHub Releases if you
@@ -24,10 +24,10 @@ for crate in suspicious-shell ml-detector; do
 done
 
 echo "==> building host"
-(cd host && go build -o ../wasm-threat-detector ./cmd/main.go)
+(cd host && go build -o ../wasmsentinel ./cmd/main.go)
 
 echo
 echo "built:"
-ls -la wasm-threat-detector rules/wasm/*.wasm
+ls -la wasmsentinel rules/wasm/*.wasm
 echo
-echo "run:  ./wasm-threat-detector --rules ./rules/wasm"
+echo "run:  ./wasmsentinel --rules ./rules/wasm"

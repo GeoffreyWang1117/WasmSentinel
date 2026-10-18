@@ -5,14 +5,14 @@
 
 services:
   # 威胁检测器
-  wasm-threat-detector:
+  wasmsentinel:
     logging:            # bound container stdout/stderr: 5 x 20 MB, then rotate
       driver: json-file
       options:
         max-size: "20m"
         max-file: "5"
     build: .
-    container_name: wasm-threat-detector
+    container_name: wasmsentinel
     restart: unless-stopped
     privileged: true  # 需要访问主机进程信息
     pid: host        # 共享主机 PID 命名空间
@@ -20,7 +20,7 @@ services:
     volumes:
       - /proc:/host/proc:ro  # 只读挂载主机 /proc
       - ./logs:/var/log
-      - ./config:/etc/wasm-threat-detector:ro
+      - ./config:/etc/wasmsentinel:ro
     environment:
       - LOG_LEVEL=info
       - METRICS_PORT=8080
@@ -28,7 +28,7 @@ services:
     #   volumes += /sys/kernel/btf:/sys/kernel/btf:ro and /sys/kernel/tracing:/sys/kernel/tracing:ro
     #   command += --collector ebpf
     command: >
-      --config /etc/wasm-threat-detector/config.yaml
+      --config /etc/wasmsentinel/config.yaml
       --log-level info
       --metrics-port 8080
     healthcheck:
@@ -147,4 +147,4 @@ volumes:
 
 networks:
   default:
-    name: wasm-threat-detector-network
+    name: wasmsentinel-network

@@ -13,9 +13,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/ebpf"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/events"
 	"github.com/sirupsen/logrus"
-	"github.com/wasm-threat-detector/host/internal/ebpf"
-	"github.com/wasm-threat-detector/host/internal/events"
 )
 
 // ReplayConfig configures ReplayCollector.

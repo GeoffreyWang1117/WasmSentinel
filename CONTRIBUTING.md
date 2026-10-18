@@ -1,6 +1,6 @@
 # 贡献指南
 
-感谢您对 WASM-ThreatDetector 项目的关注！我们欢迎各种形式的贡献。
+感谢您对 WasmSentinel 项目的关注！我们欢迎各种形式的贡献。
 
 ## 🤝 如何贡献
 
@@ -8,7 +8,7 @@
 
 如果您发现了 bug 或有功能建议，请：
 
-1. 检查 [Issues](https://github.com/wasm-threat-detector/wasm-threat-detector/issues) 确保问题尚未被报告
+1. 检查 [Issues](https://github.com/GeoffreyWang1117/WasmSentinel/issues) 确保问题尚未被报告
 2. 创建新 Issue，包含：
    - 详细的问题描述
    - 重现步骤
@@ -20,8 +20,8 @@
 
 1. **Fork 项目**
    ```bash
-   git clone https://github.com/your-username/wasm-threat-detector.git
-   cd wasm-threat-detector
+   git clone https://github.com/your-username/wasmsentinel.git
+   cd wasmsentinel
    ```
 
 2. **创建特性分支**
@@ -254,7 +254,7 @@ cargo bench
 
 - **GitHub Issues**: 技术问题和 bug 报告
 - **GitHub Discussions**: 功能讨论和社区交流
-- **Email**: security@wasm-threat-detector.org（安全相关）
+- **安全问题**: 通过 GitHub Security Advisories 私下报告（https://github.com/GeoffreyWang1117/WasmSentinel/security/advisories），不要发公开 issue
 
 ## 📋 Pull Request 检查清单
 

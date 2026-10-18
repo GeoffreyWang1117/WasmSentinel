@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/events"
 	"github.com/sirupsen/logrus"
-	"github.com/wasm-threat-detector/host/internal/events"
 )
 
 // Collector 事件收集器接口

@@ -45,13 +45,13 @@ RUN groupadd -g 1001 wasm && \
 WORKDIR /app
 
 # 从构建阶段复制文件
-COPY --from=go-builder /app/wasm-threat-detector .
+COPY --from=go-builder /app/wasmsentinel .
 COPY --from=go-builder /app/rules ./rules
 COPY --from=go-builder /app/examples ./examples
 
 # 创建必要的目录
-RUN mkdir -p /var/log /etc/wasm-threat-detector && \
-    chown -R wasm:wasm /app /var/log /etc/wasm-threat-detector
+RUN mkdir -p /var/log /etc/wasmsentinel && \
+    chown -R wasm:wasm /app /var/log /etc/wasmsentinel
 
 # 切换到非 root 用户
 USER wasm
@@ -64,7 +64,7 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 EXPOSE 8080
 
 # 设置入口点
-ENTRYPOINT ["./wasm-threat-detector"]
+ENTRYPOINT ["./wasmsentinel"]
 
 # 默认参数
 CMD ["--rules", "./rules", "--log-level", "info", "--metrics-port", "8080"]

@@ -3,7 +3,7 @@
 ## 🚀 在线演示
 
 ### GitHub Pages 演示网站
-访问我们的在线演示：**https://your-username.github.io/WASM-ThreatDetector/**
+访问我们的在线演示：**https://your-username.github.io/WasmSentinel/**
 
 > 注意：请将 `your-username` 替换为您的 GitHub 用户名
 
@@ -47,7 +47,7 @@ cd WasmSentinel
 ### Docker 手动启动
 ```bash
 # 构建镜像
-docker build -t wasm-sentinel:latest .
+docker build -t wasmsentinel:latest .
 
 # 启动演示环境
 docker compose -f docker-compose.showcase.yml up -d
@@ -85,7 +85,7 @@ timeout 2 nc -l 4444
 nmap -p 22,80,443 localhost
 
 # 查看检测结果
-tail -f /tmp/wasm-threat-detector-test/*.log
+tail -f /tmp/wasmsentinel-test/*.log
 ```
 
 ### 性能测试
@@ -141,7 +141,7 @@ EOF
 cargo build --target wasm32-wasip1 --release
 
 # 加载规则
-./wasm-threat-detector --rules ./rules/my-custom-rule/target/wasm32-wasip1/release/my_custom_rule.wasm
+./wasmsentinel --rules ./rules/my-custom-rule/target/wasm32-wasip1/release/my_custom_rule.wasm
 ```
 
 ### 集成外部系统
@@ -154,7 +154,7 @@ curl -X POST http://your-siem/api/events \
 # 告警通知
 curl -X POST https://hooks.slack.com/services/YOUR/SLACK/WEBHOOK \
   -H "Content-Type: application/json" \
-  -d '{"text":"🚨 WASM-ThreatDetector: 检测到严重威胁!"}'
+  -d '{"text":"🚨 WasmSentinel: 检测到严重威胁!"}'
 ```
 
 ## 🔧 故障排除
@@ -196,7 +196,7 @@ docker-compose -f docker-compose.demo.yml up -d
 - 🧪 [测试报告](./TEST_REPORT.md)
 - 🏗️ [架构设计](./docs/architecture.md)
 - 🤝 [贡献指南](./CONTRIBUTING.md)
-- 🐛 [问题报告](https://github.com/your-username/WASM-ThreatDetector/issues)
+- 🐛 [问题报告](https://github.com/your-username/WasmSentinel/issues)
 
 ---
 

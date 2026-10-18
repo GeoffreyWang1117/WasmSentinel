@@ -10,14 +10,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/collector"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/engine"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/metrics"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/output"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/pipeline"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	"github.com/wasm-threat-detector/host/internal/collector"
-	"github.com/wasm-threat-detector/host/internal/engine"
-	"github.com/wasm-threat-detector/host/internal/metrics"
-	"github.com/wasm-threat-detector/host/internal/output"
-	"github.com/wasm-threat-detector/host/internal/pipeline"
 )
 
 // wasmtimeVersion is the wasmtime-go major version linked into this binary.
@@ -45,9 +45,9 @@ var (
 
 // rootCmd 代表基本命令
 var rootCmd = &cobra.Command{
-	Use:   "wasm-threat-detector",
+	Use:   "wasmsentinel",
 	Short: "基于 WebAssembly 的轻量化实时威胁检测工具",
-	Long: `WASM-ThreatDetector 是一个基于 WebAssembly 技术的轻量级、安全、
+	Long: `WasmSentinel 是一个基于 WebAssembly 技术的轻量级、安全、
 可移植的实时威胁检测工具。通过 Wasm 沙箱环境运行检测规则，
 提供高性能、低延迟的安全检测能力。`,
 	Run: func(cmd *cobra.Command, args []string) {
@@ -66,7 +66,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// 全局标志
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "配置文件 (默认查找 $HOME/.wasm-threat-detector.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "配置文件 (默认查找 $HOME/.wasmsentinel.yaml)")
 	rootCmd.PersistentFlags().StringVar(&rulesDir, "rules", "./rules", "Wasm 规则目录")
 	rootCmd.PersistentFlags().StringVar(&logLevel, "log-level", "info", "日志级别 (debug, info, warn, error)")
 	rootCmd.PersistentFlags().StringVar(&logFile, "log-file", "", "日志文件路径")
@@ -110,7 +110,7 @@ func initConfig() {
 		viper.AddConfigPath(home)
 		viper.AddConfigPath(".")
 		viper.SetConfigType("yaml")
-		viper.SetConfigName(".wasm-threat-detector")
+		viper.SetConfigName(".wasmsentinel")
 	}
 
 	viper.AutomaticEnv()
@@ -125,7 +125,7 @@ func run() {
 	// 设置日志
 	logger := setupLogger()
 
-	logger.Info("Starting WASM-ThreatDetector")
+	logger.Info("Starting WasmSentinel")
 
 	// 创建上下文
 	ctx, cancel := context.WithCancel(context.Background())
@@ -197,14 +197,14 @@ func run() {
 		})
 	}()
 
-	logger.Info("WASM-ThreatDetector started successfully")
+	logger.Info("WasmSentinel started successfully")
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	select {
 	case <-sigChan:
-		logger.Info("Shutting down WASM-ThreatDetector")
+		logger.Info("Shutting down WasmSentinel")
 		cancel()
 		select {
 		case st := <-done:
@@ -234,7 +234,7 @@ func run() {
 			"memory_bytes":     st.MemoryBytes,
 		}).Info("Rule statistics")
 	}
-	logger.Info("WASM-ThreatDetector stopped")
+	logger.Info("WasmSentinel stopped")
 }
 
 // setupLogger 设置日志

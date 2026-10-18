@@ -21,16 +21,16 @@ FROM alpine:latest
 RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
-COPY --from=builder /app/wasm-sentinel .
+COPY --from=builder /app/wasmsentinel .
 COPY --from=builder /app/rules ./rules
 
-CMD ["./wasm-sentinel"]
+CMD ["./wasmsentinel"]
 ```
 
 ### 2. 运行容器
 
 ```bash
-docker build -t wasm-threat-detector .
+docker build -t wasmsentinel .
 docker run -d \
   --name threat-detector \
   --privileged \
@@ -38,7 +38,7 @@ docker run -d \
   --network host \
   -v /proc:/host/proc:ro \
   -v /var/log:/var/log \
-  wasm-threat-detector
+  wasmsentinel
 ```
 
 ## Kubernetes 部署
@@ -49,22 +49,22 @@ docker run -d \
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: wasm-threat-detector
+  name: wasmsentinel
   namespace: security
 spec:
   selector:
     matchLabels:
-      app: wasm-threat-detector
+      app: wasmsentinel
   template:
     metadata:
       labels:
-        app: wasm-threat-detector
+        app: wasmsentinel
     spec:
       hostPID: true
       hostNetwork: true
       containers:
       - name: threat-detector
-        image: wasm-threat-detector:latest
+        image: wasmsentinel:latest
         securityContext:
           privileged: true
         volumeMounts:
@@ -72,7 +72,7 @@ spec:
           mountPath: /host/proc
           readOnly: true
         - name: config
-          mountPath: /etc/wasm-threat-detector
+          mountPath: /etc/wasmsentinel
         env:
         - name: NODE_NAME
           valueFrom:
@@ -115,7 +115,7 @@ After=network.target
 [Service]
 Type=simple
 User=root
-ExecStart=/usr/local/bin/wasm-threat-detector --config /etc/wasm-threat-detector/config.yaml
+ExecStart=/usr/local/bin/wasmsentinel --config /etc/wasmsentinel/config.yaml
 Restart=always
 RestartSec=5
 
@@ -126,9 +126,9 @@ WantedBy=multi-user.target
 ### 2. 安装服务
 
 ```bash
-sudo cp wasm-threat-detector /usr/local/bin/
-sudo mkdir -p /etc/wasm-threat-detector
-sudo cp examples/config.yaml /etc/wasm-threat-detector/
+sudo cp wasmsentinel /usr/local/bin/
+sudo mkdir -p /etc/wasmsentinel
+sudo cp examples/config.yaml /etc/wasmsentinel/
 sudo cp examples/threat-detector.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable threat-detector
@@ -141,18 +141,18 @@ sudo systemctl start threat-detector
 
 ```json
 {
-  "family": "wasm-threat-detector",
+  "family": "wasmsentinel",
   "taskRoleArn": "arn:aws:iam::ACCOUNT:role/ecsTaskRole",
   "containerDefinitions": [
     {
       "name": "threat-detector",
-      "image": "your-registry/wasm-threat-detector:latest",
+      "image": "your-registry/wasmsentinel:latest",
       "memory": 512,
       "essential": true,
       "logConfiguration": {
         "logDriver": "awslogs",
         "options": {
-          "awslogs-group": "/ecs/wasm-sentinel",
+          "awslogs-group": "/ecs/wasmsentinel",
           "awslogs-region": "us-east-1"
         }
       }
@@ -166,12 +166,12 @@ sudo systemctl start threat-detector
 ```yaml
 apiVersion: 2018-10-01
 location: eastus
-name: wasm-sentinel
+name: wasmsentinel
 properties:
   containers:
   - name: sentinel
     properties:
-      image: your-registry/wasm-sentinel:latest
+      image: your-registry/wasmsentinel:latest
       resources:
         requests:
           cpu: 1.0

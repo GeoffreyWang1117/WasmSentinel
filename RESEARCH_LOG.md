@@ -2,6 +2,16 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-18 · P1.7 命名统一（完成）
+
+三个名字收敛为一个：项目 **WasmSentinel**，二进制 / 容器 / 镜像 / compose 服务 **`wasmsentinel`**，Go 模块 **`github.com/GeoffreyWang1117/WasmSentinel/host`**（与仓库地址一致）。
+
+- 57 个文件、248 处替换（脚本化，按"先具体后一般"的顺序：模块路径 → GitHub URL → 旧指标名 `wasm_threat_detector_total_threats` / `_threats_by_severity` → `wasmsentinel_threats_total` → `WASM-ThreatDetector` → `wasm-threat-detector` → `wasm-sentinel`）。`docs/history/`、`paper*/`、`evaluation/results/`、三份计划/日志文件保留历史写法。
+- 路径随之变化：配置 `/etc/wasmsentinel/config.yaml`、日志 `/var/log/wasmsentinel.log`、用户配置 `~/.wasmsentinel.yaml`、Grafana 面板文件 `wasmsentinel.json`、compose 网络 `wasmsentinel-*`。`CONTRIBUTING.md` 里不存在的 `security@…org` 邮箱改为 GitHub Security Advisories。
+- 验收：`go build/vet/test -race` 全绿；`./wasmsentinel --collector=replay` 冒烟正常；四个 compose 文件 `docker compose config` 通过；CI / Pages workflow、config、Prometheus 配置、Grafana JSON 解析正常。
+
+**Phase 1 至此全部完成**（P1.1–P1.7）。下一步是 10-19 决策点与 Phase 2 实验；Phase 2 开工前必须先解决"STIDE 正常库没人加载"（见 P1.4 / P1.6 观察）。
+
 ## 2026-10-18 · P1.6 测试与端到端回放（完成）
 
 **做了什么**

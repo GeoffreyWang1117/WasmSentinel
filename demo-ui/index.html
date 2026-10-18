@@ -586,7 +586,7 @@
                 const response = await fetch('/metrics');
                 const text = await response.text();
                 for (const line of text.split('\n')) {
-                    if (line.startsWith('wasm_threat_detector_total_threats')) {
+                    if (line.startsWith('wasmsentinel_threats_total')) {
                         const value = parseInt(line.split(' ')[1]);
                         if (!isNaN(value)) {
                             document.getElementById('totalThreats').textContent =

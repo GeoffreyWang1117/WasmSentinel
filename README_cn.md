@@ -67,7 +67,7 @@ WasmSentinel 是一个基于 WebAssembly 技术的轻量级、安全、可移植
 ```bash
 cd host
 go mod tidy
-go build -o wasm-sentinel ./cmd/main.go
+go build -o wasmsentinel ./cmd/main.go
 ```
 
 ### 构建示例检测规则
@@ -80,7 +80,7 @@ cargo build --target wasm32-wasip1 --release
 ### 运行检测器
 
 ```bash
-./wasm-sentinel --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm
+./wasmsentinel --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm
 ```
 
 ### Docker 部署
@@ -247,12 +247,12 @@ curl http://localhost:8080/metrics
 
 ```bash
 # 构建镜像
-docker build -t wasm-sentinel .
+docker build -t wasmsentinel .
 
 # 运行容器
 docker run -d -p 8080:8080 \
   -v $(pwd)/rules:/app/rules:ro \
-  wasm-sentinel
+  wasmsentinel
 ```
 
 ### Kubernetes
@@ -262,10 +262,10 @@ docker run -d -p 8080:8080 \
 kubectl apply -f k8s/
 
 # 检查部署状态
-kubectl get pods -l app=wasm-sentinel
+kubectl get pods -l app=wasmsentinel
 
 # 查看日志
-kubectl logs -f deployment/wasm-sentinel
+kubectl logs -f deployment/wasmsentinel
 ```
 
 ## 🤝 贡献

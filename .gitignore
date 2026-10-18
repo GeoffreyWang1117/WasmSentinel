@@ -8,8 +8,7 @@ target/
 *.rmeta
 *.d
 # host binary: build with scripts/build.sh; distributed via GitHub Releases
-/wasm-threat-detector
-/wasm-sentinel
+/wasmsentinel
 # Wasm rule modules are build products (scripts/build.sh writes them to rules/wasm/)
 *.wasm
 coverage.out

@@ -147,7 +147,7 @@
 | P0.6 ✅ | 修 CI：eBPF 包加 `//go:build linux && ebpf` 或在 CI 里 `go generate`；`actions-rs` 换 `dtolnay/rust-toolchain`；删除 Docker Hub 推送与 codecov（或 `continue-on-error`）；加 `cargo test` for `ml-detector` | CI 全绿 |
 | P0.7 ✅ | 归档过期文档到 `docs/history/`：`CCS2026_ROADMAP.md`、`RESEARCH.md`、`SESSION_STATE.md`、`README_backup.md`、`paper/EVALUATION_GAP_ANALYSIS.md`；新建 `RESEARCH_LOG.md` | 根目录只剩 README、本计划、IMPROVEMENT_PLAN、CONTRIBUTING、DEPLOYMENT、QUICKSTART、DEMO、TEST_REPORT |
 
-### Phase 1 让系统成为论文描述的系统（10-20 至 11-02，约 9 人日）
+### Phase 1 让系统成为论文描述的系统（10-20 至 11-02，约 9 人日）— **2026-10-18 提前完成**，逐项见 `RESEARCH_LOG.md`
 
 | 编号 | 任务 | 验收 |
 |---|---|---|
@@ -157,7 +157,7 @@
 | P1.4 ✅ 2026-10-18（1,400 条输入 max diff 2e-6；发现旧模块从未用训练权重） | ml-detector：用 `embed_weights.py` 真正嵌入训练得到的模型（统一为一个版本，论文与代码一致）；`detect_extended` 返回分数；增加 Wasm 与 NumPy 推理一致性测试 | 1,000 条输入上 max abs diff < 1e-5 |
 | P1.5 ✅ 2026-10-18 | 真实 Prometheus 指标（`prometheus/client_golang`）；修 `wasm_benchmark.py` 等脚本里的绝对路径 | `/metrics` 的 `threats_total` 随告警递增 |
 | P1.6 ✅ 2026-10-18 | Go 测试：engine、bridge、collector 单测 + 一个端到端测试（回放 ADFA-LD 轨迹 → 告警） | `go test -race ./...` 通过；CI 跑 |
-| P1.7 | 名称统一：模块路径 `github.com/wasm-threat-detector/host`、二进制 `wasm-threat-detector` 与项目名 WasmSentinel 三者择一 | README/脚本/compose 一致 |
+| P1.7 ✅ 2026-10-18（WasmSentinel / `wasmsentinel` / `github.com/GeoffreyWang1117/WasmSentinel/host`） | 名称统一：模块路径 `github.com/wasm-threat-detector/host`、二进制 `wasm-threat-detector` 与项目名 WasmSentinel 三者择一 | README/脚本/compose 一致 |
 
 ### Phase 2 实验重做（11-03 至 11-20，约 11 人日）
 

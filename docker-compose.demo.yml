@@ -1,11 +1,11 @@
-# WASM-ThreatDetector 演示环境
+# WasmSentinel 演示环境
 # 包含威胁检测器、演示网站和监控组件
 
 version: '3.8'
 
 services:
   # 威胁检测器服务
-  wasm-threat-detector:
+  wasmsentinel:
     logging:            # bound container stdout/stderr: 5 x 20 MB, then rotate
       driver: json-file
       options:
@@ -44,7 +44,7 @@ services:
       - ./demo-website:/usr/share/nginx/html:ro
       - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
     depends_on:
-      - wasm-threat-detector
+      - wasmsentinel
     restart: unless-stopped
     networks:
       - demo-network
@@ -66,7 +66,7 @@ services:
       - '--storage.tsdb.retention.time=200h'
       - '--web.enable-lifecycle'
     depends_on:
-      - wasm-threat-detector
+      - wasmsentinel
     restart: unless-stopped
     networks:
       - demo-network
@@ -99,14 +99,14 @@ services:
         apk add --no-cache curl netcat-openbsd nmap bash &&
         while true; do
           # 模拟各种攻击
-          echo 'rm -rf /' | nc wasm-threat-detector 8080 || true
-          curl -s http://wasm-threat-detector:8080/health > /dev/null || true
-          timeout 5 nmap -p 22,80,443 wasm-threat-detector 2>/dev/null || true
+          echo 'rm -rf /' | nc wasmsentinel 8080 || true
+          curl -s http://wasmsentinel:8080/health > /dev/null || true
+          timeout 5 nmap -p 22,80,443 wasmsentinel 2>/dev/null || true
           sleep 30
         done
       "
     depends_on:
-      - wasm-threat-detector
+      - wasmsentinel
     restart: unless-stopped
     networks:
       - demo-network

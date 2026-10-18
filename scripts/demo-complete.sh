@@ -120,7 +120,7 @@ start_threat_detector() {
     cd "$PROJECT_DIR"
     
     # 启动威胁检测器（后台）
-    nohup ./wasm-threat-detector > demo_detector.log 2>&1 &
+    nohup ./wasmsentinel > demo_detector.log 2>&1 &
     DETECTOR_PID=$!
     
     echo "威胁检测器 PID: $DETECTOR_PID"

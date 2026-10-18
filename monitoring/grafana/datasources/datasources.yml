@@ -12,7 +12,7 @@ datasources:
     type: elasticsearch
     access: proxy
     url: http://elasticsearch:9200
-    database: "wasm-sentinel-*"
+    database: "wasmsentinel-*"
     jsonData:
       timeField: "@timestamp"
       esVersion: "8.0.0"

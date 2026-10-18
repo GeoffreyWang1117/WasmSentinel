@@ -31,9 +31,9 @@ fi
 echo -e "${BLUE}📦 检查 Docker 镜像...${NC}"
 
 # 检查是否需要构建镜像
-if ! docker image inspect wasm-sentinel:latest &> /dev/null; then
+if ! docker image inspect wasmsentinel:latest &> /dev/null; then
     echo -e "${YELLOW}🔨 镜像不存在，开始构建...${NC}"
-    docker build -t wasm-sentinel:latest .
+    docker build -t wasmsentinel:latest .
     echo -e "${GREEN}✅ 镜像构建完成${NC}"
 else
     echo -e "${GREEN}✅ 镜像已存在${NC}"

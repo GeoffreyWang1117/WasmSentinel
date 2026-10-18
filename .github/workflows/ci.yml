@@ -117,11 +117,11 @@ jobs:
       - name: Package
         run: |
           mkdir -p release/rules
-          cp wasm-threat-detector release/
+          cp wasmsentinel release/
           cp rules/wasm/*.wasm release/rules/
           cp README.md LICENSE release/
-          tar -czf wasm-threat-detector-${{ github.ref_name }}-linux-amd64.tar.gz -C release .
+          tar -czf wasmsentinel-${{ github.ref_name }}-linux-amd64.tar.gz -C release .
       - uses: softprops/action-gh-release@v2
         with:
-          files: wasm-threat-detector-${{ github.ref_name }}-linux-amd64.tar.gz
+          files: wasmsentinel-${{ github.ref_name }}-linux-amd64.tar.gz
           generate_release_notes: true

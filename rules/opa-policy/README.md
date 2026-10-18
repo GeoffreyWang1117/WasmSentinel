@@ -2,7 +2,7 @@
 
 ## 概述
 
-本目录包含使用 Open Policy Agent (OPA) Rego 语言编写的威胁检测策略。这些策略可以编译为 WebAssembly 模块并在 WASM-ThreatDetector 中运行。
+本目录包含使用 Open Policy Agent (OPA) Rego 语言编写的威胁检测策略。这些策略可以编译为 WebAssembly 模块并在 WasmSentinel 中运行。
 
 ## 安装 OPA
 

@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wasm-threat-detector/host/internal/ebpf"
-	"github.com/wasm-threat-detector/host/internal/engine"
-	"github.com/wasm-threat-detector/host/internal/events"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/ebpf"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/engine"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/events"
 )
 
 type fakeEngine struct{ stats map[string]engine.RuleStats }

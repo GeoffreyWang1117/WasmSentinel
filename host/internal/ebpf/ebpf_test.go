@@ -6,7 +6,7 @@ import (
 	"time"
 	"unsafe"
 
-	"github.com/wasm-threat-detector/host/internal/wire"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/wire"
 )
 
 // The C struct is laid out so every member is naturally aligned; the Go type

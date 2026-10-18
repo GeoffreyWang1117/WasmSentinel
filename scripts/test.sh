@@ -1,10 +1,10 @@
 #!/bin/bash
 
-# 测试脚本 - WASM-ThreatDetector
+# 测试脚本 - WasmSentinel
 
 set -e
 
-echo "🧪 运行 WASM-ThreatDetector 测试套件"
+echo "🧪 运行 WasmSentinel 测试套件"
 echo "==================================="
 
 # 检查依赖
@@ -79,7 +79,7 @@ EOF
 
 # 测试规则加载
 echo "测试规则加载..."
-timeout 5 ./wasm-threat-detector \
+timeout 5 ./wasmsentinel \
     --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm \
     --log-level debug &
 

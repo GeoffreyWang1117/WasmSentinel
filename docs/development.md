@@ -250,7 +250,7 @@ mod tests {
 cargo build --target wasm32-wasip1 --release
 
 # 测试规则
-./wasm-threat-detector \
+./wasmsentinel \
   --rules ./target/wasm32-wasip1/release/my_rule.wasm \
   --log-level debug
 ```
@@ -293,13 +293,13 @@ pub extern "C" fn log_message(ptr: *const u8, len: usize) {
 
 ```bash
 # 启用详细日志
-./wasm-threat-detector --log-level debug
+./wasmsentinel --log-level debug
 
 # 使用 strace 监控系统调用
-strace -f ./wasm-threat-detector
+strace -f ./wasmsentinel
 
 # 使用 perf 分析性能
-perf record ./wasm-threat-detector
+perf record ./wasmsentinel
 perf report
 ```
 

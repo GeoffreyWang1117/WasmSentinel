@@ -2,7 +2,7 @@
 
 # 性能测试脚本 - 测试检测器的延迟和吞吐量
 
-echo "⚡ WASM-ThreatDetector 性能测试"
+echo "⚡ WasmSentinel 性能测试"
 echo "================================"
 
 # 检查依赖
@@ -11,7 +11,7 @@ if ! command -v bc &> /dev/null; then
 fi
 
 # 检查程序
-if [ ! -f "./wasm-threat-detector" ]; then
+if [ ! -f "./wasmsentinel" ]; then
     echo "❌ 检测器程序未找到"
     exit 1
 fi
@@ -19,7 +19,7 @@ fi
 LOG_FILE="/tmp/perf_test_$(date +%Y%m%d_%H%M%S).log"
 
 echo "🚀 启动检测器..."
-./wasm-threat-detector \
+./wasmsentinel \
     --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm \
     --log-level info \
     --log-file "$LOG_FILE" \

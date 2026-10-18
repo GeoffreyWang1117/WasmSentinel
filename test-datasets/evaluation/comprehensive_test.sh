@@ -1,15 +1,15 @@
 #!/bin/bash
 
-# WASM-ThreatDetector 综合测试脚本
+# WasmSentinel 综合测试脚本
 # 启动检测器并运行各种攻击模拟，观察检测效果
 
 set -e
 
-echo "🧪 WASM-ThreatDetector 综合测试"
+echo "🧪 WasmSentinel 综合测试"
 echo "=================================="
 
 # 检查程序是否存在
-if [ ! -f "./wasm-threat-detector" ]; then
+if [ ! -f "./wasmsentinel" ]; then
     echo "❌ 检测器程序未找到，请先运行: ./scripts/build.sh"
     exit 1
 fi
@@ -20,7 +20,7 @@ if [ ! -f "./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shel
 fi
 
 # 创建日志目录
-LOG_DIR="/tmp/wasm-threat-detector-test"
+LOG_DIR="/tmp/wasmsentinel-test"
 mkdir -p "$LOG_DIR"
 
 LOG_FILE="$LOG_DIR/test_$(date +%Y%m%d_%H%M%S).log"
@@ -32,7 +32,7 @@ echo ""
 
 # 启动威胁检测器
 echo "🚀 启动威胁检测器..."
-./wasm-threat-detector \
+./wasmsentinel \
     --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm \
     --log-level debug \
     --log-file "$LOG_FILE" \
@@ -115,7 +115,7 @@ echo "🔗 检查指标端点..."
 if curl -s http://localhost:8080/health >/dev/null 2>&1; then
     echo "✅ 健康检查通过"
     echo "📊 Prometheus 指标:"
-    curl -s http://localhost:8080/metrics | grep wasm_threat_detector || echo "未找到指标数据"
+    curl -s http://localhost:8080/metrics | grep wasmsentinel || echo "未找到指标数据"
 else
     echo "❌ 健康检查失败"
 fi

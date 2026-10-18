@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/wasm-threat-detector/host/internal/ebpf"
-	"github.com/wasm-threat-detector/host/internal/wire"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/ebpf"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/wire"
 )
 
 func toJSON(t *testing.T, v interface{}) map[string]interface{} {

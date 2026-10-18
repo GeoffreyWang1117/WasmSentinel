@@ -3,7 +3,7 @@ package engine
 import (
 	"context"
 
-	"github.com/wasm-threat-detector/host/internal/events"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/events"
 )
 
 // ThreatEngine 威胁检测引擎接口

@@ -9,10 +9,10 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/ebpf"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/events"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/wire"
 	"github.com/sirupsen/logrus"
-	"github.com/wasm-threat-detector/host/internal/ebpf"
-	"github.com/wasm-threat-detector/host/internal/events"
-	"github.com/wasm-threat-detector/host/internal/wire"
 )
 
 // EBPFConfig configures the eBPF-backed collector.

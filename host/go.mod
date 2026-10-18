@@ -1,4 +1,4 @@
-module github.com/wasm-threat-detector/host
+module github.com/GeoffreyWang1117/WasmSentinel/host
 
 go 1.26.0
 

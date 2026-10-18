@@ -1,4 +1,4 @@
-# 🛡️ WASM-ThreatDetector 测试报告
+# 🛡️ WasmSentinel 测试报告
 
 ## 📊 测试概览
 
@@ -100,9 +100,9 @@
 
 ### 指标暴露示例
 ```
-# HELP wasm_threat_detector_total_threats Total number of threats detected
-# TYPE wasm_threat_detector_total_threats counter
-wasm_threat_detector_total_threats 1756948927
+# HELP wasmsentinel_threats_total Total number of threats detected
+# TYPE wasmsentinel_threats_total counter
+wasmsentinel_threats_total 1756948927
 ```
 
 ## 📁 测试数据集
@@ -149,7 +149,7 @@ wasm_threat_detector_total_threats 1756948927
 
 ## 🎉 总结
 
-WASM-ThreatDetector项目成功达到了MVP阶段的所有目标：
+WasmSentinel项目成功达到了MVP阶段的所有目标：
 
 - ✅ **功能完整性**: 核心威胁检测功能全部实现并验证
 - ✅ **技术创新性**: WebAssembly在安全领域的成功应用

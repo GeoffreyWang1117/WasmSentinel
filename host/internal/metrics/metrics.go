@@ -8,12 +8,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/ebpf"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/engine"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/events"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/collectors"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
-	"github.com/wasm-threat-detector/host/internal/ebpf"
-	"github.com/wasm-threat-detector/host/internal/engine"
-	"github.com/wasm-threat-detector/host/internal/events"
 )
 
 const namespace = "wasmsentinel"

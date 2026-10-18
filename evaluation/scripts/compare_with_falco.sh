@@ -42,7 +42,7 @@ check_dependencies() {
     fi
 
     # Check if WasmSentinel is built
-    if [ ! -f "./wasm-threat-detector" ]; then
+    if [ ! -f "./wasmsentinel" ]; then
         echo -e "${YELLOW}WasmSentinel not built. Building...${NC}"
         ./scripts/build.sh
     else
@@ -63,7 +63,7 @@ benchmark_wasmsentinel() {
     local result_file="$RESULTS_DIR/wasmsentinel_results.json"
 
     # Start WasmSentinel in background
-    ./wasm-threat-detector --config ./examples/config.yaml \
+    ./wasmsentinel --config ./examples/config.yaml \
         --metrics-port 8080 \
         --log-file "$RESULTS_DIR/wasmsentinel.log" &
     local ws_pid=$!

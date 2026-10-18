@@ -1,4 +1,4 @@
-# WASM-ThreatDetector 配置文件示例
+# WasmSentinel 配置文件示例
 
 # 规则配置
 rules: "./rules"

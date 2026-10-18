@@ -11,12 +11,12 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/collector"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/engine"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/events"
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/metrics"
 	"github.com/bytecodealliance/wasmtime-go/v17"
 	"github.com/sirupsen/logrus"
-	"github.com/wasm-threat-detector/host/internal/collector"
-	"github.com/wasm-threat-detector/host/internal/engine"
-	"github.com/wasm-threat-detector/host/internal/events"
-	"github.com/wasm-threat-detector/host/internal/metrics"
 )
 
 func quiet() *logrus.Logger {

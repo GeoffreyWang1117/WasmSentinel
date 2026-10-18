@@ -11,8 +11,8 @@
 ### 1. 克隆项目
 
 ```bash
-git clone https://github.com/your-username/wasm-threat-detector.git
-cd wasm-threat-detector
+git clone https://github.com/your-username/wasmsentinel.git
+cd wasmsentinel
 ```
 
 ### 2. 一键构建
@@ -72,7 +72,7 @@ cd ../..
 # 2. 构建主程序
 cd host
 go mod tidy
-go build -o ../wasm-threat-detector ./cmd/main.go
+go build -o ../wasmsentinel ./cmd/main.go
 cd ..
 ```
 
@@ -82,16 +82,16 @@ cd ..
 
 ```bash
 # 基本启动
-./wasm-threat-detector --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm
+./wasmsentinel --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm
 
 # 详细日志
-./wasm-threat-detector \
+./wasmsentinel \
   --rules ./rules \
   --log-level debug \
   --log-file /tmp/threats.log
 
 # 使用配置文件
-./wasm-threat-detector --config ./examples/config.yaml
+./wasmsentinel --config ./examples/config.yaml
 ```
 
 ### 查看指标
@@ -110,7 +110,7 @@ curl http://localhost:8080/health
 
 ```bash
 # 构建镜像
-docker build -t wasm-threat-detector .
+docker build -t wasmsentinel .
 
 # 运行容器
 docker run -d \
@@ -119,7 +119,7 @@ docker run -d \
   --pid host \
   --network host \
   -v /proc:/host/proc:ro \
-  wasm-threat-detector
+  wasmsentinel
 ```
 
 ### 使用 Docker Compose
@@ -132,7 +132,7 @@ docker-compose up -d
 docker-compose ps
 
 # 查看日志
-docker-compose logs wasm-threat-detector
+docker-compose logs wasmsentinel
 ```
 
 ### 访问监控界面
@@ -155,22 +155,22 @@ cat <<EOF | kubectl apply -f -
 apiVersion: apps/v1
 kind: DaemonSet
 metadata:
-  name: wasm-threat-detector
+  name: wasmsentinel
   namespace: security
 spec:
   selector:
     matchLabels:
-      app: wasm-threat-detector
+      app: wasmsentinel
   template:
     metadata:
       labels:
-        app: wasm-threat-detector
+        app: wasmsentinel
     spec:
       hostPID: true
       hostNetwork: true
       containers:
       - name: threat-detector
-        image: wasm-threat-detector:latest
+        image: wasmsentinel:latest
         securityContext:
           privileged: true
         volumeMounts:
@@ -190,7 +190,7 @@ EOF
 
 ```bash
 # 检查主进程
-ps aux | grep wasm-threat-detector
+ps aux | grep wasmsentinel
 
 # 检查端口
 netstat -tlnp | grep 8080
@@ -221,10 +221,10 @@ curl -s http://localhost:8080/metrics | grep threat
 #### 1. 权限错误
 ```bash
 # 确保以 root 权限运行
-sudo ./wasm-threat-detector
+sudo ./wasmsentinel
 
 # 或添加必要的 capabilities
-sudo setcap cap_sys_ptrace,cap_dac_read_search+ep ./wasm-threat-detector
+sudo setcap cap_sys_ptrace,cap_dac_read_search+ep ./wasmsentinel
 ```
 
 #### 2. Wasm 模块加载失败
@@ -242,20 +242,20 @@ cd rules/suspicious-shell && cargo clean && cargo build --target wasm32-wasip1 -
 sudo lsof -i :8080
 
 # 修改端口
-./wasm-threat-detector --metrics-port 8081
+./wasmsentinel --metrics-port 8081
 ```
 
 ### 调试模式
 
 ```bash
 # 启用详细日志
-./wasm-threat-detector --log-level debug
+./wasmsentinel --log-level debug
 
 # 使用 strace 调试
-sudo strace -f ./wasm-threat-detector
+sudo strace -f ./wasmsentinel
 
 # 使用 gdb 调试
-gdb ./wasm-threat-detector
+gdb ./wasmsentinel
 ```
 
 ## 📚 下一步
@@ -271,4 +271,4 @@ gdb ./wasm-threat-detector
 - **GitHub Discussions**: 技术讨论和问答
 - **文档**: 查看 `docs/` 目录下的详细文档
 
-欢迎加入 WASM-ThreatDetector 社区！🎉
+欢迎加入 WasmSentinel 社区！🎉

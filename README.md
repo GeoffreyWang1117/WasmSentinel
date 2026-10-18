@@ -70,13 +70,13 @@ WasmSentinel is a lightweight, secure, and portable real-time threat detection t
 ### Build
 
 ```bash
-./scripts/build.sh      # host binary ./wasm-threat-detector + rules/wasm/{suspicious_shell,ml_detector}.wasm
+./scripts/build.sh      # host binary ./wasmsentinel + rules/wasm/{suspicious_shell,ml_detector}.wasm
 ```
 
 ### Run Detector
 
 ```bash
-./wasm-threat-detector --rules ./rules/wasm
+./wasmsentinel --rules ./rules/wasm
 ```
 
 ### Collectors
@@ -88,9 +88,9 @@ WasmSentinel is a lightweight, secure, and portable real-time threat detection t
 | `--collector=replay` with `--replay-file`, `--replay-eps`, `--replay-loop` | a trace file or directory (ADFA-LD format: whitespace-separated syscall numbers) | replays recorded syscalls as events, paced at `--replay-eps` (0 = as fast as possible); the process exits when the trace ends unless `--replay-loop` |
 
 ```bash
-sudo ./wasm-threat-detector --collector=ebpf --rules ./rules/wasm            # all hooks
-sudo ./wasm-threat-detector --collector=ebpf --ebpf-hooks=exec,connect,accept --log-level trace
-./wasm-threat-detector --collector=replay --replay-file evaluation/datasets/raw/ADFA-LD/ADFA-LD/Attack_Data_Master --event-encoding=binary --rules ./rules/wasm
+sudo ./wasmsentinel --collector=ebpf --rules ./rules/wasm            # all hooks
+sudo ./wasmsentinel --collector=ebpf --ebpf-hooks=exec,connect,accept --log-level trace
+./wasmsentinel --collector=replay --replay-file evaluation/datasets/raw/ADFA-LD/ADFA-LD/Attack_Data_Master --event-encoding=binary --rules ./rules/wasm
 ```
 
 The eBPF path delivers exec events with the resolved path and the full argv,
@@ -295,12 +295,12 @@ All series are real counters fed by the pipeline (namespace `wasmsentinel`):
 
 ```bash
 # Build image
-docker build -t wasm-sentinel .
+docker build -t wasmsentinel .
 
 # Run container
 docker run -d -p 8080:8080 \
   -v $(pwd)/rules:/app/rules:ro \
-  wasm-sentinel
+  wasmsentinel
 ```
 
 ### Kubernetes
@@ -310,10 +310,10 @@ docker run -d -p 8080:8080 \
 kubectl apply -f k8s/
 
 # Check deployment status
-kubectl get pods -l app=wasm-sentinel
+kubectl get pods -l app=wasmsentinel
 
 # View logs
-kubectl logs -f deployment/wasm-sentinel
+kubectl logs -f deployment/wasmsentinel
 ```
 
 ## 🤝 Contributing

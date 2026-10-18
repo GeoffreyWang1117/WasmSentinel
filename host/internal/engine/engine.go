@@ -36,9 +36,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/GeoffreyWang1117/WasmSentinel/host/internal/events"
 	"github.com/bytecodealliance/wasmtime-go/v17"
 	"github.com/sirupsen/logrus"
-	"github.com/wasm-threat-detector/host/internal/events"
 )
 
 // Engine hosts a set of Wasm rules and runs them against events.
