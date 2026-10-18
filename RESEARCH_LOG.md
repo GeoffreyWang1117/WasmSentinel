@@ -2,6 +2,19 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-18 · P1.5 真实 Prometheus 指标（完成）
+
+**做了什么**
+
+- 删除假的 `/metrics`（把 `time.Now().Unix()` 当计数器输出）和 `output.PrometheusOutputHandler` 桩；新建 `host/internal/metrics`（prometheus/client_golang v1.25.0，私有 registry）。
+- 指标（namespace `wasmsentinel`）及来源：`threats_total{rule,severity}` 来自输出链；`events_total{type}`、`events_dropped_total`、`detect_latency_seconds` 来自事件循环；`rule_calls_total{rule,encoding}`、`rule_errors_total{rule,kind}`、`rule_fuel_total{rule}`、`rule_latency_seconds{rule}` 来自引擎新增的 `Observer` 钩子（每次规则调用一次回调，含 fuel 与错误类别）；`rule_memory_bytes`、`rule_reinstantiations_total`、`rule_positive_calls_total` 抓取时读引擎快照；`collector_records_total`、`collector_dropped_total`、`collector_events_total{type}` 读 eBPF 采集器快照；`build_info{collector,encoding,wasmtime}`；外加 Go 运行时与进程采集器（`process_resident_memory_bytes` 等，E4 的开销测量直接用）。
+- `main.go` 接线：引擎 `SetObserver`、输出链加 metrics handler、eBPF 采集器注册、事件循环计时与丢弃计数；`/metrics` 走 `promhttp`，`/health` 保留。
+- 顺带：评估脚本里的 `/home/coder-gw/...` 绝对路径改为相对仓库（`run_experiments.py`、`train_mlp.py`、`wasm_benchmark.py`、`evaluate_lid_ds.py`、`quick_test.sh`）；`go.mod` 随依赖升到 go 1.26。
+
+**验收**：`metrics` 包单测抓取文本并断言 21 个序列。本机 proc 模式冒烟，两次抓取间隔 3 s：`events_total{type="process"}` 943 → 1,071，`threats_total` 各严重度同步递增（suspicious_shell critical 316 → 412，ml_detector low 14 → 26），`rule_memory_bytes` 1.18 MB / 1.38 MB，`rule_fuel_total` 累计 5.6×10⁷，RSS 81.5 MB，`/health` 200。
+
+**观察**：proc 采集器启动时把现存进程全部当作新事件（3 s 内 943 个），suspicious_shell 对其中约 99% 报警（root + shell 名就够分），ml_detector 去掉未训练的 MLP 后只报 16 个。规则质量归 E1 / E7。
+
 ## 2026-10-18 · P1.4 模型与 ABI 统一（完成）
 
 **发现（比改动本身更重要）**

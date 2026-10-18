@@ -155,7 +155,7 @@
 | P1.2 ✅ 2026-10-17（wasmtime-go 升级顺延，见 `RESEARCH_LOG.md`） | Wasm 引擎重写（可基于 `wasm_engine.go`）：每规则一个长寿 Store/Instance（或池）；guest 导出 `alloc/free`；`StoreLimits` 内存上限、fuel 预算、epoch 超时；WASI 零能力（不继承 stdout/stderr）；升级 wasmtime-go | 引擎单测覆盖：正常检测、超 fuel、超内存、trap 隔离不影响其他规则 |
 | P1.3 ✅ 2026-10-18（实测端到端 2.1×，非 5×；ml_detector 侧待 P1.4） | 零拷贝通道接入：`bridge` 的二进制事件直写 guest 线性内存；保留 JSON 路径并用 flag 切换（这就是消融的两臂） | 两条路径对同一事件给出相同检测结果 |
 | P1.4 ✅ 2026-10-18（1,400 条输入 max diff 2e-6；发现旧模块从未用训练权重） | ml-detector：用 `embed_weights.py` 真正嵌入训练得到的模型（统一为一个版本，论文与代码一致）；`detect_extended` 返回分数；增加 Wasm 与 NumPy 推理一致性测试 | 1,000 条输入上 max abs diff < 1e-5 |
-| P1.5 | 真实 Prometheus 指标（`prometheus/client_golang`）；修 `wasm_benchmark.py` 等脚本里的绝对路径 | `/metrics` 的 `threats_total` 随告警递增 |
+| P1.5 ✅ 2026-10-18 | 真实 Prometheus 指标（`prometheus/client_golang`）；修 `wasm_benchmark.py` 等脚本里的绝对路径 | `/metrics` 的 `threats_total` 随告警递增 |
 | P1.6 | Go 测试：engine、bridge、collector 单测 + 一个端到端测试（回放 ADFA-LD 轨迹 → 告警） | `go test -race ./...` 通过；CI 跑 |
 | P1.7 | 名称统一：模块路径 `github.com/wasm-threat-detector/host`、二进制 `wasm-threat-detector` 与项目名 WasmSentinel 三者择一 | README/脚本/compose 一致 |
 

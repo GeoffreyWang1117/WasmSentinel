@@ -275,10 +275,17 @@ curl http://localhost:8080/metrics
 
 ### Key Metrics
 
-- `wasm_sentinel_total_threats`: Total number of threats detected
-- `wasm_sentinel_detection_latency`: Detection latency histogram
-- `wasm_sentinel_threats_by_severity`: Threats grouped by severity
-- `wasm_sentinel_rules_loaded`: Number of loaded detection rules
+All series are real counters fed by the pipeline (namespace `wasmsentinel`):
+
+| metric | labels | source |
+|---|---|---|
+| `threats_total` | rule, severity | output path, one increment per detection |
+| `events_total`, `events_dropped_total`, `detect_latency_seconds` | type | event loop |
+| `rule_calls_total`, `rule_errors_total`, `rule_fuel_total`, `rule_latency_seconds` | rule, encoding / kind | engine observer, one callback per rule invocation |
+| `rule_memory_bytes`, `rule_reinstantiations_total`, `rule_positive_calls_total` | rule | engine snapshot at scrape time |
+| `collector_records_total`, `collector_dropped_total`, `collector_events_total` | type | eBPF collector snapshot (`--collector=ebpf`) |
+| `build_info` | collector, encoding, wasmtime | constant 1 |
+| `process_resident_memory_bytes`, `go_*` | | standard process and Go runtime collectors |
 
 ## 🐳 Deployment
 
