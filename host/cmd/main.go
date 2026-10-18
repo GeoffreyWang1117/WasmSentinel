@@ -26,6 +26,10 @@ var (
 	logFile     string
 	webhookURL  string
 	metricsPort int
+
+	ruleMemoryMB int
+	ruleFuel     uint64
+	ruleTimeout  time.Duration
 )
 
 // rootCmd 代表基本命令
@@ -57,6 +61,9 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&logFile, "log-file", "", "日志文件路径")
 	rootCmd.PersistentFlags().StringVar(&webhookURL, "webhook", "", "Webhook URL for alerts")
 	rootCmd.PersistentFlags().IntVar(&metricsPort, "metrics-port", 8080, "Prometheus 指标端口")
+	rootCmd.PersistentFlags().IntVar(&ruleMemoryMB, "rule-memory-mb", int(engine.DefaultMaxMemoryBytes>>20), "每条规则的线性内存上限 (MiB)")
+	rootCmd.PersistentFlags().Uint64Var(&ruleFuel, "rule-fuel", engine.DefaultFuel, "每次检测调用的 fuel 预算 (0 = 不限制)")
+	rootCmd.PersistentFlags().DurationVar(&ruleTimeout, "rule-timeout", engine.DefaultTimeout, "每次检测调用的墙钟超时 (0 = 不限制)")
 
 	// 绑定标志到 viper
 	viper.BindPFlag("rules", rootCmd.PersistentFlags().Lookup("rules"))
@@ -64,6 +71,9 @@ func init() {
 	viper.BindPFlag("log-file", rootCmd.PersistentFlags().Lookup("log-file"))
 	viper.BindPFlag("webhook", rootCmd.PersistentFlags().Lookup("webhook"))
 	viper.BindPFlag("metrics-port", rootCmd.PersistentFlags().Lookup("metrics-port"))
+	viper.BindPFlag("rule-memory-mb", rootCmd.PersistentFlags().Lookup("rule-memory-mb"))
+	viper.BindPFlag("rule-fuel", rootCmd.PersistentFlags().Lookup("rule-fuel"))
+	viper.BindPFlag("rule-timeout", rootCmd.PersistentFlags().Lookup("rule-timeout"))
 }
 
 // initConfig 读取配置文件和环境变量
@@ -98,9 +108,19 @@ func run() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	// 创建 Wasm 引擎
-	wasmEngine := engine.NewSimpleEngine(logger)
+	// 创建 Wasm 引擎：每条规则一个长寿实例，内存 / fuel / 超时三重限额
+	limits := engine.Limits{
+		MaxMemoryBytes: int64(viper.GetInt("rule-memory-mb")) << 20,
+		Fuel:           viper.GetUint64("rule-fuel"),
+		Timeout:        viper.GetDuration("rule-timeout"),
+	}
+	wasmEngine := engine.New(logger, limits)
 	defer wasmEngine.Close()
+	logger.WithFields(logrus.Fields{
+		"memory_bytes": wasmEngine.Limits().MaxMemoryBytes,
+		"fuel":         wasmEngine.Limits().Fuel,
+		"timeout":      wasmEngine.Limits().Timeout.String(),
+	}).Info("Wasm rule limits")
 
 	// 加载规则
 	rulesPath := viper.GetString("rules")
@@ -146,6 +166,21 @@ func run() {
 
 	// 等待一段时间让组件正常关闭
 	time.Sleep(2 * time.Second)
+	for name, st := range wasmEngine.Stats() {
+		logger.WithFields(logrus.Fields{
+			"rule":             name,
+			"calls":            st.Calls,
+			"threats":          st.Threats,
+			"errors":           st.Errors,
+			"traps_fuel":       st.TrapsFuel,
+			"traps_timeout":    st.TrapsTimeout,
+			"traps_memory":     st.TrapsMemory,
+			"reinstantiations": st.Reinstantiations,
+			"fuel_total":       st.FuelTotal,
+			"latency_max":      st.LatencyMax.String(),
+			"memory_bytes":     st.MemoryBytes,
+		}).Info("Rule statistics")
+	}
 	logger.Info("WASM-ThreatDetector stopped")
 }
 

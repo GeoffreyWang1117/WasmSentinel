@@ -12,6 +12,11 @@ log-file: ""
 webhook: "http://localhost:8081/alerts"
 metrics-port: 8080
 
+# 规则沙箱限额（每条规则一个长寿 Wasm 实例；三项互相独立，0 = 关闭该项）
+rule-memory-mb: 64      # 线性内存上限 (MiB)，超出后 guest 内的分配失败并被记为 memory trap
+rule-fuel: 50000000     # 每次 detect 调用的指令预算 (wasmtime fuel)
+rule-timeout: 100ms     # 每次 detect 调用的墙钟超时（epoch 中断）
+
 # 收集器配置
 collectors:
   process:

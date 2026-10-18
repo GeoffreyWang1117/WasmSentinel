@@ -13,5 +13,7 @@ type ThreatEngine interface {
 	UnloadRule(name string) error
 	DetectThreat(ctx context.Context, event *events.Event) ([]*events.DetectionResult, error)
 	GetLoadedRules() []string
+	// Stats returns a snapshot of per-rule counters (calls, traps, fuel, latency, memory).
+	Stats() map[string]RuleStats
 	Close() error
 }
