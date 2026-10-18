@@ -24,6 +24,9 @@ services:
     environment:
       - LOG_LEVEL=info
       - METRICS_PORT=8080
+    # eBPF collector inside the container (privileged + pid: host are already set):
+    #   volumes += /sys/kernel/btf:/sys/kernel/btf:ro and /sys/kernel/tracing:/sys/kernel/tracing:ro
+    #   command += --collector ebpf
     command: >
       --config /etc/wasm-threat-detector/config.yaml
       --log-level info

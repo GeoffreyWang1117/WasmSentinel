@@ -17,7 +17,12 @@ rule-memory-mb: 64      # 线性内存上限 (MiB)，超出后 guest 内的分�
 rule-fuel: 50000000     # 每次 detect 调用的指令预算 (wasmtime fuel)
 rule-timeout: 100ms     # 每次 detect 调用的墙钟超时（epoch 中断）
 
-# 收集器配置
+# 事件采集器：proc = /proc 轮询（无需特权）；ebpf = 内核钩子（需要 root 与 BTF 内核）
+collector: proc
+# ebpf 钩子列表（collector=ebpf 时生效）：exec,exit,open,connect,accept,syscall 或 all
+ebpf-hooks: all
+
+# 收集器配置（proc 模式）
 collectors:
   process:
     enabled: true

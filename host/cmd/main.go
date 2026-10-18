@@ -30,6 +30,9 @@ var (
 	ruleMemoryMB int
 	ruleFuel     uint64
 	ruleTimeout  time.Duration
+
+	collectorMode string
+	ebpfHooks     string
 )
 
 // rootCmd 代表基本命令
@@ -64,6 +67,8 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&ruleMemoryMB, "rule-memory-mb", int(engine.DefaultMaxMemoryBytes>>20), "每条规则的线性内存上限 (MiB)")
 	rootCmd.PersistentFlags().Uint64Var(&ruleFuel, "rule-fuel", engine.DefaultFuel, "每次检测调用的 fuel 预算 (0 = 不限制)")
 	rootCmd.PersistentFlags().DurationVar(&ruleTimeout, "rule-timeout", engine.DefaultTimeout, "每次检测调用的墙钟超时 (0 = 不限制)")
+	rootCmd.PersistentFlags().StringVar(&collectorMode, "collector", "proc", "事件采集器: proc (/proc 轮询, 无需特权) 或 ebpf (内核钩子, 需要 root)")
+	rootCmd.PersistentFlags().StringVar(&ebpfHooks, "ebpf-hooks", "all", "eBPF 钩子列表, 逗号分隔: exec,exit,open,connect,accept,syscall 或 all")
 
 	// 绑定标志到 viper
 	viper.BindPFlag("rules", rootCmd.PersistentFlags().Lookup("rules"))
@@ -74,6 +79,8 @@ func init() {
 	viper.BindPFlag("rule-memory-mb", rootCmd.PersistentFlags().Lookup("rule-memory-mb"))
 	viper.BindPFlag("rule-fuel", rootCmd.PersistentFlags().Lookup("rule-fuel"))
 	viper.BindPFlag("rule-timeout", rootCmd.PersistentFlags().Lookup("rule-timeout"))
+	viper.BindPFlag("collector", rootCmd.PersistentFlags().Lookup("collector"))
+	viper.BindPFlag("ebpf-hooks", rootCmd.PersistentFlags().Lookup("ebpf-hooks"))
 }
 
 // initConfig 读取配置文件和环境变量
@@ -270,19 +277,25 @@ func createOutputHandler(logger *logrus.Logger) (output.OutputHandler, error) {
 	return output.NewMultiOutputHandler(logger, handlers...), nil
 }
 
-// createCollectors 创建事件收集器
+// createCollectors 创建事件收集器：--collector=ebpf 用内核 eBPF 钩子（需要 root），
+// --collector=proc 用 /proc 轮询（无特权，默认）。
 func createCollectors(logger *logrus.Logger) []collector.Collector {
-	var collectors []collector.Collector
-
-	// 进程收集器
-	processCollector := collector.NewProcessCollector(logger)
-	collectors = append(collectors, processCollector)
-
-	// 网络收集器
-	networkCollector := collector.NewNetworkCollector(logger)
-	collectors = append(collectors, networkCollector)
-
-	return collectors
+	switch mode := viper.GetString("collector"); mode {
+	case "ebpf":
+		logger.WithField("hooks", viper.GetString("ebpf-hooks")).Info("Using eBPF collector")
+		return []collector.Collector{
+			collector.NewEBPFCollector(logger, collector.EBPFConfig{Hooks: viper.GetString("ebpf-hooks")}),
+		}
+	case "proc":
+		logger.Info("Using /proc polling collectors")
+		return []collector.Collector{
+			collector.NewProcessCollector(logger),
+			collector.NewNetworkCollector(logger),
+		}
+	default:
+		logger.Fatalf("unknown --collector %q (use proc or ebpf)", mode)
+		return nil
+	}
 }
 
 // processEvents 处理事件
