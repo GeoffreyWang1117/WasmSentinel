@@ -2,6 +2,32 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-18 · P1.4 模型与 ABI 统一（完成）
+
+**发现（比改动本身更重要）**
+
+- 部署的 ml_detector **从未使用训练权重**：`HybridDetector::with_config` 用 `MlpDetector::with_config(config.mlp)` 构造，权重是确定性公式的伪随机初始化；宿主从不调用 `load_mlp_weights`，`with_embedded_weights` 只在单测里出现。
+- 即便用上权重也对不上：Rust 给 MLP 喂的是按 syscall **名**分类的另一套 64 维特征（`mlp::features::extract_syscall_features`），训练用的是按 syscall **号**计算的 `train_mlp.extract_features`（46 维有值）。进程事件还把进程特征塞进这个 syscall 模型。
+- 嵌入的 weights.rs 是 64-32-16-1（6,785 参数）的 `mlp_weights.json`，论文描述的是 128-64-32-16（19,201 参数）的 `best_model_weights.json`。
+- 结论：DIMVA 稿里任何"Wasm 内 MLP"的检测数字都不可能来自这个模块；§1.4 的 ❌ 有了机制层面的原因。
+
+**做了什么**
+
+- `features::adfa_features`：逐行移植 Python `extract_features`（Counter 的首现顺序、`most_common` 的稳定排序、全部按 f64 计算再转 f32）。类别集合混用 ABI 编号（0/1 是 x86_64，56/57 是 aarch64，ADFA-LD 是 i386），原样保留，换特征集是 E1 的评估问题。
+- `weights.rs` 由 `embed_weights.py` 从 `best_model_weights.json` 重新生成：128-64-32-16，19,201 参数，`MODEL_SHA256` `1ee0c5d2…`，阈值 0.7（EXPERIMENT_REPORT 阈值分析）。`MlpDetector::with_embedded_weights` 的结构从 `HIDDEN_SIZES` 读取，不再写死。
+- `hybrid.rs` 重写在 `EventFields` 上（JSON 与二进制同一套代码）：MLP 永远是嵌入模型，config 只能改阈值；syscall 路径按进程维护 syscall 号窗口（默认 100）喂 `adfa_features`；进程 / 网络 / 文件只走规则；处理 `process_exit` 释放状态；`max_processes`（默认 4096）按最近访问淘汰。
+- 新导出 `mlp_score`、`mlp_features`、`model_info`（结构、参数量、阈值、来源、sha256）；`detect_extended` 继续返回 `anomaly_score`。
+- `train/verify_wasm_parity.py`：用 wasmtime-py 加载模块，对 1,000 条合成序列 + 400 条 ADFA-LD 轨迹逐条比较 NumPy 参考与 Wasm 的特征与分数；`--write-golden` 生成 `train/fixtures/features_golden.json`（18 例），`tests/parity_golden.rs` 在 `cargo test` 里对照，CI 不需要 Python；CI 的 ml-detector job 另跑 1,000 条合成序列的 wasmtime 对照。
+- 来源说明写在 `rules/ml-detector/MODEL.md`。
+
+**验收**：1,400 条输入，特征最大绝对差 **0**（逐位一致），分数最大绝对差 **1.97×10⁻⁶** < 10⁻⁵（第 32 条，长度 100：0.371615 vs 0.371613）。Rust 21 个单测 + golden 测试通过；Go 全绿，JSON/二进制对等测试仍通过。hybrid 迁到 trait 后 ml_detector 二进制路径 4.4 µs（JSON 8.1 µs），P1.3 时是 18.9 µs。
+
+**给 E1 的输入**
+
+- 训练用整条轨迹（数百到数千 syscall），线上是 100 长窗口：训练/部署分布不一致，离线评估按整轨迹做，在线窗口是部署选择，论文要写明。
+- STIDE 正常库目前没人加载（`train` 导出存在，宿主不调用）：空库让所有 n-gram 异常、全部走 MLP。E1 和部署都需要一条加载路径。
+- STIDE 窗口是全局的，多进程交错会混；ADFA 回放是单轨迹顺序，不受影响。
+
 ## 2026-10-18 · P1.3 二进制事件通道（完成；含一个推翻预期的测量）
 
 **做了什么**
