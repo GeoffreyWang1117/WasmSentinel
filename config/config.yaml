@@ -20,7 +20,8 @@ rule-timeout: 100ms     # 每次 detect 调用的墙钟超时（epoch 中断）
 # 否则该规则自动回退 json；两条路径对同一事件给出相同结果（见 rules/sentinel-abi）。
 event-encoding: json
 
-# 事件采集器：proc = /proc 轮询（无需特权）；ebpf = 内核钩子（需要 root 与 BTF 内核）
+# 事件采集器：proc = /proc 轮询（无需特权）；ebpf = 内核钩子（需要 root 与 BTF 内核）；
+# replay = 回放 syscall 轨迹（配合 replay-file / replay-eps / replay-loop，轨迹播完即退出）
 collector: proc
 # ebpf 钩子列表（collector=ebpf 时生效）：exec,exit,open,connect,accept,syscall 或 all
 ebpf-hooks: all

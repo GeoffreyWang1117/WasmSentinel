@@ -85,10 +85,12 @@ WasmSentinel is a lightweight, secure, and portable real-time threat detection t
 |---|---|---|
 | `--collector` | `proc` (default), `ebpf` | `ebpf` attaches the programs in `host/internal/ebpf/bpf/sentinel.bpf.c`; needs root (CAP_BPF + CAP_PERFMON) and a BTF-enabled kernel |
 | `--ebpf-hooks` | `all` (default) or a comma list of `exec,exit,open,connect,accept,syscall` | one BPF program per hook; drop `open` on busy hosts, it dominates the volume |
+| `--collector=replay` with `--replay-file`, `--replay-eps`, `--replay-loop` | a trace file or directory (ADFA-LD format: whitespace-separated syscall numbers) | replays recorded syscalls as events, paced at `--replay-eps` (0 = as fast as possible); the process exits when the trace ends unless `--replay-loop` |
 
 ```bash
 sudo ./wasm-threat-detector --collector=ebpf --rules ./rules/wasm            # all hooks
 sudo ./wasm-threat-detector --collector=ebpf --ebpf-hooks=exec,connect,accept --log-level trace
+./wasm-threat-detector --collector=replay --replay-file evaluation/datasets/raw/ADFA-LD/ADFA-LD/Attack_Data_Master --event-encoding=binary --rules ./rules/wasm
 ```
 
 The eBPF path delivers exec events with the resolved path and the full argv,

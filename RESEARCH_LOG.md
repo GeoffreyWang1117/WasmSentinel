@@ -2,6 +2,19 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-18 · P1.6 测试与端到端回放（完成）
+
+**做了什么**
+
+- 事件循环从 `main.go` 搬进 `host/internal/pipeline`：`Run(ctx, Config)` 合并采集器通道、驱动引擎、交给输出链，返回 `Stats{Events, Alerts, DetectErrors, OutputErrors, Elapsed}`；采集器全部关闭或 ctx 取消时结束。合并队列改为**背压**（阻塞发送），不再在管道里静默丢事件；内核侧丢弃由 eBPF 采集器自己计数。
+- `collector.ReplayCollector`（`--collector=replay`，`--replay-file` 文件或目录、`--replay-eps`、`--replay-loop`）：把 ADFA-LD 格式的 syscall 号轨迹按 eBPF 事件形状回放（经 `EventFromEBPF`，含二进制载荷），每条轨迹一个 pid，播完关闭通道 → 进程自行退出并打印 Pipeline / Rule statistics。这就是 E3 吞吐实验的驱动器。
+- 测试：`pipeline` 三个用例——50 个事件经两个采集器全部送达两条规则、指标计数一致；取消即停且 `Elapsed` 正确；**端到端**：真实模块 + `testdata/adfa_attack_hydra_ftp.txt`（306 个 syscall）在 `EncodingBinary` 下回放，两条规则各 306 次调用且全部走 `detect_raw`、0 错误、告警只来自 ml_detector。`collector` 四个回放用例（解析、顺序与 pid、节流与循环、坏路径）。
+- 顺手修掉 `Run` 的 `Elapsed` 永远为 0（defer 改写的是值拷贝）。
+
+**验收**：`go test -race ./...` 七个包全绿（collector / ebpf / engine / metrics / pipeline / wire），CI 跑同一套。CLI 冒烟：`--collector=replay --event-encoding=binary` 回放两条轨迹 611 个 syscall，自动退出，ml_detector 606 告警、suspicious_shell 0 告警，最大单次延迟 276 µs，fuel 总量 3.8×10⁸。
+
+**观察**：STIDE 正常库为空时几乎每个 syscall 事件都升级到 MLP 深路径并报警（306 → 301）；这不是 bug，是 P1.4 已记录的"没人加载 STIDE 库"问题，E1 前必须给 `init` 配置或 `train` 一条真实加载路径，否则在线路径的告警量没有意义。
+
 ## 2026-10-18 · P1.5 真实 Prometheus 指标（完成）
 
 **做了什么**
