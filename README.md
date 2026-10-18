@@ -67,26 +67,33 @@ WasmSentinel is a lightweight, secure, and portable real-time threat detection t
 - Linux kernel 4.18+ (eBPF support)
 - Docker 20.10+ (optional, for containerized deployment)
 
-### Build Host Program
+### Build
 
 ```bash
-cd host
-go mod tidy
-go build -o wasm-sentinel ./cmd/main.go
-```
-
-### Build Sample Detection Rules
-
-```bash
-cd rules/suspicious-shell
-cargo build --target wasm32-wasip1 --release
+./scripts/build.sh      # host binary ./wasm-threat-detector + rules/wasm/{suspicious_shell,ml_detector}.wasm
 ```
 
 ### Run Detector
 
 ```bash
-./wasm-sentinel --rules ./rules/suspicious-shell/target/wasm32-wasip1/release/suspicious_shell.wasm
+./wasm-threat-detector --rules ./rules/wasm
 ```
+
+### Rule sandbox limits
+
+Every rule runs in its own long-lived wasmtime instance under three independent
+limits (see `host/internal/engine`). A rule that exceeds one of them traps, is
+re-instantiated on its next event, and never affects the other rules.
+
+| flag / config key | default | enforced by |
+|---|---|---|
+| `--rule-memory-mb` | 64 | store limiter: `memory.grow` past the cap fails inside the guest |
+| `--rule-fuel` | 50000000 | wasmtime fuel: instruction budget per `detect` call (0 = off) |
+| `--rule-timeout` | 100ms | epoch interruption: wall-clock budget per `detect` call (0 = off) |
+
+Guests get a WASI context with no capabilities: no inherited stdio, no environment,
+no arguments, no preopened directories. The guest ABI a rule must export is
+documented in [`rules/wasm/README.md`](rules/wasm/README.md).
 
 ### Docker Deployment
 
