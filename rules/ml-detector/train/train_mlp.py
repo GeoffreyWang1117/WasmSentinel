@@ -352,7 +352,7 @@ def load_adfa_ld(data_dir: str) -> Tuple[List[np.ndarray], List[int]]:
 def main():
     parser = argparse.ArgumentParser(description='Train MLP model for WasmSentinel')
     parser.add_argument('--data-dir', type=str,
-                        default='/home/coder-gw/Projects/WasmSentinel/evaluation/datasets/raw/ADFA-LD',
+                        default=str(Path(__file__).resolve().parents[3] / 'evaluation/datasets/raw/ADFA-LD/ADFA-LD'),
                         help='Path to ADFA-LD dataset')
     parser.add_argument('--output', type=str, default='mlp_weights.json',
                         help='Output path for weights JSON')

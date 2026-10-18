@@ -9,7 +9,7 @@ echo "🚀 WASM-ThreatDetector 快速验证测试"
 echo "=========================================="
 
 # 配置
-PROJECT_DIR="/home/coder-gw/CodingProjects/WASM_proj"
+PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 LOG_DIR="/tmp/wasm-threat-detector-test"
 TIMESTAMP=$(date +%Y%m%d_%H%M%S)
 LOG_FILE="$LOG_DIR/quick_test_$TIMESTAMP.log"

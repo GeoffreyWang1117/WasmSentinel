@@ -401,10 +401,10 @@ def generate_benchmark_report(results: Dict, output_path: str):
 def main():
     parser = argparse.ArgumentParser(description='Run performance benchmarks')
     parser.add_argument('--wasm-path', type=str,
-                        default='/home/coder-gw/Projects/WasmSentinel/rules/wasm/ml_detector.wasm',
+                        default=str(Path(__file__).resolve().parents[2] / 'rules/wasm/ml_detector.wasm'),
                         help='Path to Wasm module')
     parser.add_argument('--weights-path', type=str,
-                        default='/home/coder-gw/Projects/WasmSentinel/rules/ml-detector/train/mlp_weights.json',
+                        default=str(Path(__file__).resolve().parents[2] / 'rules/ml-detector/train/best_model_weights.json'),
                         help='Path to MLP weights')
     parser.add_argument('--n-events', type=int, default=10000,
                         help='Number of test events')

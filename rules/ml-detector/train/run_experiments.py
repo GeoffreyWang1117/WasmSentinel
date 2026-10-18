@@ -365,7 +365,7 @@ def generate_report(all_results: Dict, output_dir: Path):
 def main():
     parser = argparse.ArgumentParser(description='Run comprehensive experiments')
     parser.add_argument('--data-dir', type=str,
-                        default='/home/coder-gw/Projects/WasmSentinel/evaluation/datasets/raw/ADFA-LD/ADFA-LD',
+                        default=str(Path(__file__).resolve().parents[3] / 'evaluation/datasets/raw/ADFA-LD/ADFA-LD'),
                         help='Path to ADFA-LD dataset')
     parser.add_argument('--output-dir', type=str, default='./results',
                         help='Output directory for results')

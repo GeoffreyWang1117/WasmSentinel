@@ -270,10 +270,10 @@ def simulate_lid_ds_evaluation() -> Dict:
 def main():
     parser = argparse.ArgumentParser(description='Evaluate WasmSentinel on LID-DS')
     parser.add_argument('--data-dir', type=str,
-                        default='/home/coder-gw/Projects/WasmSentinel/evaluation/datasets/raw/LID-DS-2021',
+                        default=str(Path(__file__).resolve().parents[2] / 'evaluation/datasets/raw/LID-DS-2021'),
                         help='Path to LID-DS 2021 data directory')
     parser.add_argument('--weights', type=str,
-                        default='/home/coder-gw/Projects/WasmSentinel/rules/ml-detector/train/best_model_weights.json',
+                        default=str(Path(__file__).resolve().parents[2] / 'rules/ml-detector/train/best_model_weights.json'),
                         help='Path to model weights')
     parser.add_argument('--scenario', type=str, default=None,
                         help='Specific scenario to evaluate (default: all)')
