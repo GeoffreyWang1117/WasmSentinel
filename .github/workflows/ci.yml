@@ -46,7 +46,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        crate: [rules/suspicious-shell, rules/ml-detector]
+        crate: [rules/sentinel-abi, rules/suspicious-shell, rules/ml-detector]
     defaults:
       run:
         working-directory: ${{ matrix.crate }}
@@ -69,7 +69,7 @@ jobs:
         with:
           name: wasm-${{ strategy.job-index }}
           path: ${{ matrix.crate }}/target/wasm32-wasip1/release/*.wasm
-          if-no-files-found: error
+          if-no-files-found: ignore # sentinel-abi is an rlib, no .wasm
 
   ebpf:
     name: eBPF program · compile + bindings up to date

@@ -33,6 +33,7 @@ var (
 
 	collectorMode string
 	ebpfHooks     string
+	eventEncoding string
 )
 
 // rootCmd 代表基本命令
@@ -69,6 +70,7 @@ func init() {
 	rootCmd.PersistentFlags().DurationVar(&ruleTimeout, "rule-timeout", engine.DefaultTimeout, "每次检测调用的墙钟超时 (0 = 不限制)")
 	rootCmd.PersistentFlags().StringVar(&collectorMode, "collector", "proc", "事件采集器: proc (/proc 轮询, 无需特权) 或 ebpf (内核钩子, 需要 root)")
 	rootCmd.PersistentFlags().StringVar(&ebpfHooks, "ebpf-hooks", "all", "eBPF 钩子列表, 逗号分隔: exec,exit,open,connect,accept,syscall 或 all")
+	rootCmd.PersistentFlags().StringVar(&eventEncoding, "event-encoding", "json", "交给规则的事件编码: json 或 binary (binary 仅对 eBPF 事件且规则导出 detect_raw 时生效, 否则回退 json)")
 
 	// 绑定标志到 viper
 	viper.BindPFlag("rules", rootCmd.PersistentFlags().Lookup("rules"))
@@ -81,6 +83,7 @@ func init() {
 	viper.BindPFlag("rule-timeout", rootCmd.PersistentFlags().Lookup("rule-timeout"))
 	viper.BindPFlag("collector", rootCmd.PersistentFlags().Lookup("collector"))
 	viper.BindPFlag("ebpf-hooks", rootCmd.PersistentFlags().Lookup("ebpf-hooks"))
+	viper.BindPFlag("event-encoding", rootCmd.PersistentFlags().Lookup("event-encoding"))
 }
 
 // initConfig 读取配置文件和环境变量
@@ -123,10 +126,16 @@ func run() {
 	}
 	wasmEngine := engine.New(logger, limits)
 	defer wasmEngine.Close()
+	encoding, err := engine.ParseEncoding(viper.GetString("event-encoding"))
+	if err != nil {
+		logger.Fatal(err)
+	}
+	wasmEngine.SetEncoding(encoding)
 	logger.WithFields(logrus.Fields{
 		"memory_bytes": wasmEngine.Limits().MaxMemoryBytes,
 		"fuel":         wasmEngine.Limits().Fuel,
 		"timeout":      wasmEngine.Limits().Timeout.String(),
+		"encoding":     string(encoding),
 	}).Info("Wasm rule limits")
 
 	// 加载规则
@@ -177,6 +186,7 @@ func run() {
 		logger.WithFields(logrus.Fields{
 			"rule":             name,
 			"calls":            st.Calls,
+			"calls_raw":        st.CallsRaw,
 			"threats":          st.Threats,
 			"errors":           st.Errors,
 			"traps_fuel":       st.TrapsFuel,

@@ -1,12 +1,14 @@
 package collector
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
 	"testing"
 	"time"
 
 	"github.com/wasm-threat-detector/host/internal/ebpf"
+	"github.com/wasm-threat-detector/host/internal/wire"
 )
 
 func toJSON(t *testing.T, v interface{}) map[string]interface{} {
@@ -23,7 +25,7 @@ func toJSON(t *testing.T, v interface{}) map[string]interface{} {
 }
 
 func TestEventFromEBPFExecMatchesRuleSchema(t *testing.T) {
-	var names nameCache
+	var names NameCache
 	ev := &ebpf.Event{
 		Timestamp: time.Now(), MonotonicNs: 7, Type: ebpf.EventProcessExec, TypeName: "process_exec",
 		PID: 4242, PPID: 1, UID: 0, GID: 0, Comm: "bash", Filename: "/usr/bin/bash",
@@ -47,7 +49,7 @@ func TestEventFromEBPFExecMatchesRuleSchema(t *testing.T) {
 }
 
 func TestEventFromEBPFExitIsInert(t *testing.T) {
-	var names nameCache
+	var names NameCache
 	m := toJSON(t, EventFromEBPF(&ebpf.Event{Type: ebpf.EventProcessExit, TypeName: "process_exit", PID: 9, Comm: "sh", ExitCode: 3}, &names))
 	if m["type"] != "process_exit" {
 		t.Errorf("exit event typed %v", m["type"])
@@ -58,7 +60,7 @@ func TestEventFromEBPFExitIsInert(t *testing.T) {
 }
 
 func TestEventFromEBPFFileOperations(t *testing.T) {
-	var names nameCache
+	var names NameCache
 	for _, tc := range []struct {
 		flags uint32
 		want  string
@@ -72,7 +74,7 @@ func TestEventFromEBPFFileOperations(t *testing.T) {
 }
 
 func TestEventFromEBPFNetworkAndSyscall(t *testing.T) {
-	var names nameCache
+	var names NameCache
 	m := toJSON(t, EventFromEBPF(&ebpf.Event{
 		Type: ebpf.EventNetworkConnect, TypeName: "network_connect", Comm: "curl", Protocol: "tcp", Family: 2,
 		SrcIP: net.IPv4(10, 0, 0, 2).To4(), DstIP: net.IPv4(1, 2, 3, 4).To4(), SrcPort: 40000, DstPort: 4444,
@@ -91,5 +93,31 @@ func TestEventFromEBPFNetworkAndSyscall(t *testing.T) {
 	data := m["data"].(map[string]interface{})
 	if m["type"] != "syscall" || data["syscall_name"] != "ptrace" || data["pid"].(float64) != 5 {
 		t.Errorf("syscall: %v %v", m["type"], data)
+	}
+}
+
+func TestEventFromEBPFCarriesBinaryPayload(t *testing.T) {
+	var names NameCache
+	ev := &ebpf.Event{Type: ebpf.EventProcessExec, TypeName: "process_exec", PID: 1, UID: 0, GID: 0,
+		Comm: "sh", Filename: "/bin/sh", Argv: []string{"sh"}}
+	ev.Raw = ev.Record()
+	out := EventFromEBPF(ev, &names)
+	if out.Binary == nil {
+		t.Fatal("no binary payload")
+	}
+	p, err := wire.Decode(out.Binary)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(p.Record, ev.Raw) || p.User != "root" || p.Group != "root" {
+		t.Errorf("payload %+v", p)
+	}
+	js, _ := json.Marshal(out)
+	if bytes.Contains(js, []byte("Binary")) || bytes.Contains(js, []byte("WSB1")) {
+		t.Error("binary payload leaked into JSON")
+	}
+	// Events without a raw record (e.g. synthetic) get no binary form.
+	if EventFromEBPF(&ebpf.Event{Type: ebpf.EventSyscall, TypeName: "syscall"}, &names).Binary != nil {
+		t.Error("binary payload without raw record")
 	}
 }

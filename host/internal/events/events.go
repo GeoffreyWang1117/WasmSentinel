@@ -21,6 +21,10 @@ type Event struct {
 	Timestamp time.Time              `json:"timestamp"`
 	Source    string                 `json:"source"`
 	Data      map[string]interface{} `json:"data"`
+	// Binary is the host-built binary form of the same event (package wire),
+	// set by the eBPF collector. Rules that export detect_raw can consume it
+	// instead of the JSON serialization. Never serialized.
+	Binary []byte `json:"-"`
 }
 
 // ProcessEvent 进程事件

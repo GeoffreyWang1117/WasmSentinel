@@ -1,9 +1,12 @@
 package ebpf
 
 import (
+	"net"
 	"testing"
 	"time"
 	"unsafe"
+
+	"github.com/wasm-threat-detector/host/internal/wire"
 )
 
 // The C struct is laid out so every member is naturally aligned; the Go type
@@ -132,6 +135,63 @@ func TestSyscallTableCoversWatchedSyscalls(t *testing.T) {
 	for _, nr := range []uint32{56, 57, 59, 62, 101, 105, 106, 155, 157, 161, 165, 166, 175, 272, 308, 313, 319, 321, 322, 435} {
 		if name := SyscallName(nr); len(name) > 8 && name[:8] == "syscall_" {
 			t.Errorf("syscall %d has no name", nr)
+		}
+	}
+}
+
+func TestRecordLenMatchesWire(t *testing.T) {
+	if recordSize != wire.RecordLen {
+		t.Fatalf("ebpf record is %d bytes, wire.RecordLen is %d", recordSize, wire.RecordLen)
+	}
+}
+
+func TestRecordRoundTrip(t *testing.T) {
+	boot := time.Date(2026, 10, 18, 0, 0, 0, 0, time.UTC)
+	cases := []*Event{
+		{Type: EventProcessExec, MonotonicNs: 99, PID: 10, PPID: 1, UID: 1000, GID: 1000, Comm: "bash",
+			Filename: "/usr/bin/bash", Argv: []string{"bash", "-c", "id"}},
+		{Type: EventProcessExit, PID: 11, Comm: "sh", ExitCode: 2},
+		{Type: EventFileOpen, PID: 12, Comm: "cat", Filename: "/etc/shadow", Flags: 0x241},
+		{Type: EventNetworkConnect, PID: 13, Comm: "curl", Family: 2, Protocol: "tcp",
+			SrcIP: net.IPv4(10, 0, 0, 2).To4(), DstIP: net.IPv4(1, 2, 3, 4).To4(), SrcPort: 40000, DstPort: 4444},
+		{Type: EventSyscall, PID: 14, Comm: "gdb", SyscallNr: 101},
+	}
+	for _, in := range cases {
+		rec := in.Record()
+		if len(rec) != recordSize {
+			t.Fatalf("Record() returned %d bytes", len(rec))
+		}
+		out, err := decode(rec, boot)
+		if err != nil {
+			t.Fatalf("%s: %v", TypeName(in.Type), err)
+		}
+		if out.Type != in.Type || out.PID != in.PID || out.Comm != in.Comm || out.Filename != in.Filename {
+			t.Errorf("%s: header mismatch %+v", TypeName(in.Type), out)
+		}
+		switch in.Type {
+		case EventProcessExec:
+			if len(out.Argv) != 3 || out.Argv[2] != "id" || out.ArgvTruncated {
+				t.Errorf("argv %q", out.Argv)
+			}
+		case EventProcessExit:
+			if out.ExitCode != 2 {
+				t.Errorf("exit code %d", out.ExitCode)
+			}
+		case EventFileOpen:
+			if out.Flags != 0x241 {
+				t.Errorf("flags %#x", out.Flags)
+			}
+		case EventNetworkConnect:
+			if out.DstIP.String() != "1.2.3.4" || out.SrcIP.String() != "10.0.0.2" || out.DstPort != 4444 || out.Protocol != "tcp" {
+				t.Errorf("network %+v", out)
+			}
+		case EventSyscall:
+			if out.SyscallName != "ptrace" {
+				t.Errorf("syscall %q", out.SyscallName)
+			}
+		}
+		if len(out.Raw) != recordSize {
+			t.Errorf("decoded event lost its raw record")
 		}
 	}
 }

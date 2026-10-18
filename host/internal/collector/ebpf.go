@@ -12,6 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/wasm-threat-detector/host/internal/ebpf"
 	"github.com/wasm-threat-detector/host/internal/events"
+	"github.com/wasm-threat-detector/host/internal/wire"
 )
 
 // EBPFConfig configures the eBPF-backed collector.
@@ -27,7 +28,7 @@ type EBPFCollector struct {
 	cfg    EBPFConfig
 	inner  *ebpf.Collector
 	out    chan *events.Event
-	names  nameCache
+	names  NameCache
 
 	wg       sync.WaitGroup
 	stopOnce sync.Once
@@ -121,7 +122,7 @@ func (c *EBPFCollector) Stats() *ebpf.Stats {
 //	syscall      data.{syscall_nr,syscall_name,process_name}
 //
 // Every event also carries data.pid, data.uid and data.comm.
-func EventFromEBPF(ev *ebpf.Event, names *nameCache) *events.Event {
+func EventFromEBPF(ev *ebpf.Event, names *NameCache) *events.Event {
 	out := &events.Event{
 		ID:        fmt.Sprintf("ebpf_%s_%d_%d", ev.TypeName, ev.PID, ev.MonotonicNs),
 		Timestamp: ev.Timestamp,
@@ -191,6 +192,20 @@ func EventFromEBPF(ev *ebpf.Event, names *nameCache) *events.Event {
 	default:
 		out.Type = events.EventType(ev.TypeName)
 	}
+	// Binary form for rules that export detect_raw: the kernel record verbatim
+	// plus the names resolved above. Built once per event, used by every rule.
+	if len(ev.Raw) == wire.RecordLen {
+		var user, group string
+		if ev.Type == ebpf.EventProcessExec || ev.Type == ebpf.EventProcessExit || ev.Type == ebpf.EventFileOpen {
+			user = names.user(ev.UID)
+		}
+		if ev.Type == ebpf.EventProcessExec || ev.Type == ebpf.EventProcessExit {
+			group = names.group(ev.GID)
+		}
+		if b, err := wire.Encode(ev.Raw, user, group, ev.SyscallName); err == nil {
+			out.Binary = b
+		}
+	}
 	return out
 }
 
@@ -222,14 +237,14 @@ func ipString(ip []byte) string {
 	return fmt.Sprintf("%d.%d.%d.%d", ip[0], ip[1], ip[2], ip[3])
 }
 
-// nameCache resolves uids and gids to names once.
-type nameCache struct {
+// NameCache resolves uids and gids to names once.
+type NameCache struct {
 	mu     sync.Mutex
 	users  map[uint32]string
 	groups map[uint32]string
 }
 
-func (n *nameCache) user(uid uint32) string {
+func (n *NameCache) user(uid uint32) string {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if n.users == nil {
@@ -246,7 +261,7 @@ func (n *nameCache) user(uid uint32) string {
 	return name
 }
 
-func (n *nameCache) group(gid uint32) string {
+func (n *NameCache) group(gid uint32) string {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	if n.groups == nil {

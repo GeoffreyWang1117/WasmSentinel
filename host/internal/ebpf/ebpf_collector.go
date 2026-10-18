@@ -116,6 +116,10 @@ type Event struct {
 
 	SyscallNr   uint32 // SYSCALL
 	SyscallName string
+
+	// Raw is the record exactly as the kernel wrote it (recordSize bytes); the
+	// binary event path copies it into the rule's memory without re-encoding.
+	Raw []byte
 }
 
 // Cmdline joins Argv with spaces (empty for non-exec events).
@@ -338,6 +342,7 @@ func decode(raw []byte, bootWall time.Time) (*Event, error) {
 	copy((*[recordSize]byte)(unsafe.Pointer(&rec))[:], raw[:recordSize])
 
 	ev := &Event{
+		Raw:         append([]byte(nil), raw[:recordSize]...),
 		MonotonicNs: rec.TimestampNs,
 		Timestamp:   bootWall.Add(time.Duration(rec.TimestampNs)),
 		Type:        rec.EventType,
@@ -373,6 +378,62 @@ func decode(raw []byte, bootWall time.Time) (*Event, error) {
 		return nil, fmt.Errorf("unknown event type %d", rec.EventType)
 	}
 	return ev, nil
+}
+
+// Record encodes the event back into the kernel record layout. It is the
+// inverse of decode and exists for tests and trace replay; a live Event
+// already carries the original bytes in Raw.
+func (e *Event) Record() []byte {
+	var rec sentinelEvent
+	rec.TimestampNs = e.MonotonicNs
+	rec.EventType = e.Type
+	rec.Pid, rec.Ppid, rec.Uid, rec.Gid = e.PID, e.PPID, e.UID, e.GID
+	putC(rec.Comm[:], e.Comm)
+	putC(rec.Filename[:], e.Filename)
+	switch e.Type {
+	case EventProcessExec:
+		if len(e.Argv) > 0 {
+			block := []byte(strings.Join(e.Argv, "\x00") + "\x00")
+			if len(block) > len(rec.Args) {
+				block = block[:len(rec.Args)]
+			}
+			for i, c := range block {
+				rec.Args[i] = int8(c)
+			}
+			rec.ArgsLen = uint32(len(block))
+		}
+	case EventProcessExit:
+		rec.Retval = int64(e.ExitCode)
+	case EventFileOpen:
+		rec.Flags = e.Flags
+	case EventNetworkConnect, EventNetworkAccept:
+		rec.Family = e.Family
+		if e.Protocol == "tcp" {
+			rec.Protocol = unix.IPPROTO_TCP
+		}
+		rec.Sport, rec.Dport = e.SrcPort, e.DstPort
+		if ip := e.SrcIP.To4(); ip != nil {
+			rec.Saddr = uint32(ip[0]) | uint32(ip[1])<<8 | uint32(ip[2])<<16 | uint32(ip[3])<<24
+		}
+		if ip := e.DstIP.To4(); ip != nil {
+			rec.Daddr = uint32(ip[0]) | uint32(ip[1])<<8 | uint32(ip[2])<<16 | uint32(ip[3])<<24
+		}
+	case EventSyscall:
+		rec.SyscallNr = e.SyscallNr
+	}
+	out := make([]byte, recordSize)
+	copy(out, (*[recordSize]byte)(unsafe.Pointer(&rec))[:])
+	return out
+}
+
+func putC(dst []int8, s string) {
+	n := len(s)
+	if n > len(dst)-1 {
+		n = len(dst) - 1
+	}
+	for i := 0; i < n; i++ {
+		dst[i] = int8(s[i])
+	}
 }
 
 func cString(b []int8) string {

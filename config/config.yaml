@@ -16,6 +16,9 @@ metrics-port: 8080
 rule-memory-mb: 64      # 线性内存上限 (MiB)，超出后 guest 内的分配失败并被记为 memory trap
 rule-fuel: 50000000     # 每次 detect 调用的指令预算 (wasmtime fuel)
 rule-timeout: 100ms     # 每次 detect 调用的墙钟超时（epoch 中断）
+# 交给规则的事件编码：json（默认）或 binary。binary 只对 eBPF 事件生效且规则需导出 detect_raw，
+# 否则该规则自动回退 json；两条路径对同一事件给出相同结果（见 rules/sentinel-abi）。
+event-encoding: json
 
 # 事件采集器：proc = /proc 轮询（无需特权）；ebpf = 内核钩子（需要 root 与 BTF 内核）
 collector: proc

@@ -51,6 +51,7 @@ type Engine struct {
 	rules  map[string]*rule
 	names  []string // sorted; fixes the evaluation order
 	closed bool
+	enc    Encoding
 
 	stopEpoch chan struct{}
 	epochWG   sync.WaitGroup
@@ -61,18 +62,20 @@ type rule struct {
 	path   string
 	module *wasmtime.Module
 
-	mu    sync.Mutex // serializes invocations and guards inst and stats
-	inst  *instance  // nil after a trap until the next invocation
-	stats RuleStats
+	mu     sync.Mutex // serializes invocations and guards inst and stats
+	inst   *instance  // nil after a trap until the next invocation
+	stats  RuleStats
+	hasRaw bool // module exports detect_raw
 }
 
 // instance is one store plus the exports the host needs from it.
 type instance struct {
-	store   *wasmtime.Store
-	memory  *wasmtime.Memory
-	alloc   *wasmtime.Func
-	dealloc *wasmtime.Func
-	detect  *wasmtime.Func
+	store     *wasmtime.Store
+	memory    *wasmtime.Memory
+	alloc     *wasmtime.Func
+	dealloc   *wasmtime.Func
+	detect    *wasmtime.Func
+	detectRaw *wasmtime.Func // optional
 
 	bufPtr int32 // guest event buffer from alloc
 	bufCap int32
@@ -99,6 +102,7 @@ func New(logger *logrus.Logger, limits Limits) *Engine {
 		logger:    logger,
 		rules:     make(map[string]*rule),
 		stopEpoch: make(chan struct{}),
+		enc:       EncodingJSON,
 	}
 	if limits.Timeout > 0 {
 		e.epochWG.Add(1)
@@ -109,6 +113,20 @@ func New(logger *logrus.Logger, limits Limits) *Engine {
 
 // Limits returns the effective limits (zero fields replaced by defaults).
 func (e *Engine) Limits() Limits { return e.cfg }
+
+// SetEncoding selects the event encoding DetectThreat prefers.
+func (e *Engine) SetEncoding(enc Encoding) {
+	e.mu.Lock()
+	e.enc = enc
+	e.mu.Unlock()
+}
+
+// Encoding returns the current preference.
+func (e *Engine) Encoding() Encoding {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.enc
+}
 
 func (e *Engine) runEpoch() {
 	defer e.epochWG.Done()
@@ -173,6 +191,7 @@ func (e *Engine) load(name, path string, wasm []byte) error {
 		return err
 	}
 	r.inst = inst
+	r.hasRaw = inst.detectRaw != nil
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -192,6 +211,7 @@ func (e *Engine) load(name, path string, wasm []byte) error {
 		"rule":         name,
 		"path":         path,
 		"memory_bytes": inst.memory.DataSize(inst.store),
+		"detect_raw":   r.hasRaw,
 	}).Info("Loaded Wasm rule")
 	return nil
 }
@@ -231,6 +251,7 @@ func (e *Engine) instantiate(r *rule) (*instance, error) {
 	if in.detect = wi.GetFunc(store, "detect"); in.detect == nil {
 		return nil, abiError(r.name, "detect")
 	}
+	in.detectRaw = wi.GetFunc(store, "detect_raw") // optional, binary path
 
 	if initFn := wi.GetFunc(store, "init"); initFn != nil {
 		if n := len(initFn.Type(store).Params()); n != 2 {
@@ -327,19 +348,35 @@ func (e *Engine) Invoke(name string, payload []byte) (int32, error) {
 	if !ok {
 		return 0, fmt.Errorf("rule %q not loaded", name)
 	}
-	return e.invoke(r, payload)
+	return e.invoke(r, payload, false)
 }
 
-func (e *Engine) invoke(r *rule, payload []byte) (int32, error) {
+// InvokeRaw runs one rule's detect_raw export on a binary payload (package
+// wire). Rules without the export return a TrapABI error and keep their
+// instance.
+func (e *Engine) InvokeRaw(name string, payload []byte) (int32, error) {
+	e.mu.RLock()
+	r, ok := e.rules[name]
+	e.mu.RUnlock()
+	if !ok {
+		return 0, fmt.Errorf("rule %q not loaded", name)
+	}
+	return e.invoke(r, payload, true)
+}
+
+func (e *Engine) invoke(r *rule, payload []byte, raw bool) (int32, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	start := time.Now()
-	level, fuel, err := e.invokeLocked(r, payload)
+	level, fuel, err := e.invokeLocked(r, payload, raw)
 	d := time.Since(start)
 
 	st := &r.stats
 	st.Calls++
+	if raw {
+		st.CallsRaw++
+	}
 	st.LatencyLast = d
 	st.LatencyTotal += d
 	if d > st.LatencyMax {
@@ -363,6 +400,8 @@ func (e *Engine) invoke(r *rule, payload []byte) (int32, error) {
 				st.TrapsMemory++
 			case TrapExit:
 				st.TrapsExit++
+			case TrapABI:
+				// contract error, instance kept; counted in Errors only
 			default:
 				st.TrapsOther++
 			}
@@ -375,9 +414,12 @@ func (e *Engine) invoke(r *rule, payload []byte) (int32, error) {
 	return level, nil
 }
 
-func (e *Engine) invokeLocked(r *rule, payload []byte) (int32, uint64, error) {
+func (e *Engine) invokeLocked(r *rule, payload []byte, raw bool) (int32, uint64, error) {
 	if len(payload) > math.MaxInt32 {
-		return 0, 0, &RuleError{Rule: r.name, Kind: TrapOther, Err: fmt.Errorf("payload of %d bytes is too large", len(payload))}
+		return 0, 0, &RuleError{Rule: r.name, Kind: TrapABI, Err: fmt.Errorf("payload of %d bytes is too large", len(payload))}
+	}
+	if raw && !r.hasRaw {
+		return 0, 0, &RuleError{Rule: r.name, Kind: TrapABI, Err: errors.New("module does not export detect_raw")}
 	}
 	if r.inst == nil {
 		inst, err := e.instantiate(r)
@@ -404,14 +446,18 @@ func (e *Engine) invokeLocked(r *rule, payload []byte) (int32, uint64, error) {
 	mem := in.memory.UnsafeData(in.store)
 	copy(mem[in.bufPtr:int(in.bufPtr)+len(payload)], payload)
 
+	fn, stage := in.detect, "detect"
+	if raw {
+		fn, stage = in.detectRaw, "detect_raw"
+	}
 	e.arm(in.store)
-	res, err := in.detect.Call(in.store, in.bufPtr, int32(len(payload)))
+	res, err := fn.Call(in.store, in.bufPtr, int32(len(payload)))
 	if err != nil {
-		return fail("detect", err)
+		return fail(stage, err)
 	}
 	level, ok := res.(int32)
 	if !ok {
-		return fail("detect", fmt.Errorf("returned %T, want i32", res))
+		return fail(stage, fmt.Errorf("returned %T, want i32", res))
 	}
 	return level, e.fuelUsed(in.store), nil
 }
@@ -442,28 +488,38 @@ func (e *Engine) classify(mem *wasmtime.Memory, store *wasmtime.Store, err error
 	return TrapOther
 }
 
-// DetectThreat serializes the event once and runs every loaded rule on it, in
-// rule-name order. A rule that fails is logged and skipped; the error return is
-// reserved for problems with the event itself or a cancelled context.
+// DetectThreat runs every loaded rule on the event, in rule-name order. With
+// EncodingBinary, rules that export detect_raw receive event.Binary when it is
+// set; everything else receives the JSON serialization, which is produced at
+// most once per event. A rule that fails is logged and skipped; the error
+// return is reserved for problems with the event itself or a cancelled context.
 func (e *Engine) DetectThreat(ctx context.Context, event *events.Event) ([]*events.DetectionResult, error) {
-	payload, err := event.ToJSON()
-	if err != nil {
-		return nil, fmt.Errorf("serialize event: %w", err)
-	}
-
 	e.mu.RLock()
+	enc := e.enc
 	rules := make([]*rule, 0, len(e.names))
 	for _, n := range e.names {
 		rules = append(rules, e.rules[n])
 	}
 	e.mu.RUnlock()
 
+	var jsonPayload []byte
 	var results []*events.DetectionResult
 	for _, r := range rules {
 		if err := ctx.Err(); err != nil {
 			return results, err
 		}
-		level, err := e.invoke(r, payload)
+		raw := enc == EncodingBinary && len(event.Binary) > 0 && r.hasRaw
+		payload := event.Binary
+		if !raw {
+			if jsonPayload == nil {
+				var err error
+				if jsonPayload, err = event.ToJSON(); err != nil {
+					return nil, fmt.Errorf("serialize event: %w", err)
+				}
+			}
+			payload = jsonPayload
+		}
+		level, err := e.invoke(r, payload, raw)
 		if err != nil {
 			e.logger.WithError(err).WithField("rule", r.name).Warn("Rule invocation failed")
 			continue

@@ -115,11 +115,39 @@ type RuleError struct {
 func (e *RuleError) Error() string { return fmt.Sprintf("rule %s: %s: %v", e.Rule, e.Kind, e.Err) }
 func (e *RuleError) Unwrap() error { return e.Err }
 
+// Encoding selects how DetectThreat hands events to rules.
+type Encoding string
+
+const (
+	// EncodingJSON serializes events.Event to JSON and calls detect.
+	EncodingJSON Encoding = "json"
+	// EncodingBinary hands the host-built binary payload (events.Event.Binary,
+	// see package wire) to detect_raw when the event carries one and the rule
+	// exports it; any other combination falls back to JSON for that rule.
+	EncodingBinary Encoding = "binary"
+)
+
+// ParseEncoding accepts "json" (default), "binary" or "raw".
+func ParseEncoding(s string) (Encoding, error) {
+	switch s {
+	case "", "json":
+		return EncodingJSON, nil
+	case "binary", "raw":
+		return EncodingBinary, nil
+	}
+	return "", fmt.Errorf("unknown event encoding %q (use json or binary)", s)
+}
+
+// TrapABI marks a host-side contract error (missing export, bad payload); the
+// instance is kept.
+const TrapABI TrapKind = "abi"
+
 // RuleStats is a snapshot of one rule's counters.
 type RuleStats struct {
-	Calls   uint64
-	Threats uint64 // calls that returned a level > 0
-	Errors  uint64 // calls that returned an error (sum of the Traps* fields plus ABI errors)
+	Calls    uint64
+	CallsRaw uint64 // subset of Calls that went through detect_raw
+	Threats  uint64 // calls that returned a level > 0
+	Errors   uint64 // calls that returned an error (sum of the Traps* fields plus ABI errors)
 
 	TrapsFuel    uint64
 	TrapsTimeout uint64
