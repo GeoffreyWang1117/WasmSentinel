@@ -1,13 +1,20 @@
-// Package ebpf provides high-performance kernel-level event collection using eBPF
+// Package ebpf collects kernel events with eBPF. Six hooks (see
+// bpf/sentinel.bpf.c) write fixed-size records into one ring buffer, which
+// Collector drains into a channel of decoded Events.
+//
+// Loading and attaching needs CAP_BPF and CAP_PERFMON (in practice: root) and a
+// kernel with BTF at /sys/kernel/btf/vmlinux. The package itself compiles and
+// its decoding is testable without privileges: the generated bindings embed the
+// BPF object, so no clang is needed at run time.
 package ebpf
 
 import (
 	"bytes"
-	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"net"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -17,429 +24,390 @@ import (
 	"github.com/cilium/ebpf/ringbuf"
 	"github.com/cilium/ebpf/rlimit"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/sys/unix"
 )
 
-//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target bpfel sentinel ./bpf/sentinel.bpf.c
+//go:generate go run github.com/cilium/ebpf/cmd/bpf2go -cc clang -cflags "-O2 -g -Wall -Werror -D__TARGET_ARCH_x86" -target bpfel -type event sentinel ./bpf/sentinel.bpf.c
 
-// Event types matching eBPF definitions
+// Event types, matching EVENT_* in bpf/sentinel.bpf.c.
 const (
-	EventProcessExec    = 1
-	EventProcessExit    = 2
-	EventFileOpen       = 3
-	EventNetworkConnect = 4
-	EventNetworkAccept  = 5
-	EventSyscall        = 6
+	EventProcessExec    uint32 = 1
+	EventProcessExit    uint32 = 2
+	EventFileOpen       uint32 = 3
+	EventNetworkConnect uint32 = 4
+	EventNetworkAccept  uint32 = 5
+	EventSyscall        uint32 = 6
 )
 
+// Hook names accepted by Config.Hooks, one per BPF program.
 const (
-	MaxFilenameLen = 256
-	MaxCommLen     = 16
-	MaxArgsLen     = 256
+	HookExec    = "exec"    // tracepoint sched/sched_process_exec
+	HookExit    = "exit"    // tracepoint sched/sched_process_exit
+	HookOpen    = "open"    // tracepoint syscalls/sys_enter_openat
+	HookConnect = "connect" // kprobe tcp_connect
+	HookAccept  = "accept"  // kretprobe inet_csk_accept
+	HookSyscall = "syscall" // raw tracepoint sys_enter (allow-listed syscalls)
 )
 
-// RawEvent represents the event structure from eBPF (must match C struct)
-type RawEvent struct {
-	TimestampNs uint64
-	PID         uint32
-	PPID        uint32
-	UID         uint32
-	GID         uint32
-	EventType   uint32
-	RetVal      int64
-	Comm        [MaxCommLen]byte
-	Filename    [MaxFilenameLen]byte
-	SAddr       uint32
-	DAddr       uint32
-	SPort       uint16
-	DPort       uint16
-	Family      uint16
-	Protocol    uint16
-	SyscallNr   uint32
-	Flags       uint32
-	Args        [MaxArgsLen]byte
-	ArgsLen     uint32
+// AllHooks lists every hook in attach order.
+var AllHooks = []string{HookExec, HookExit, HookOpen, HookConnect, HookAccept, HookSyscall}
+
+// ParseHooks turns a comma-separated list such as "exec,open" into a validated,
+// de-duplicated hook list. "" and "all" select AllHooks.
+func ParseHooks(s string) ([]string, error) {
+	s = strings.TrimSpace(s)
+	if s == "" || s == "all" {
+		return append([]string(nil), AllHooks...), nil
+	}
+	seen := map[string]bool{}
+	var out []string
+	for _, h := range strings.Split(s, ",") {
+		h = strings.TrimSpace(h)
+		if h == "" {
+			continue
+		}
+		valid := false
+		for _, known := range AllHooks {
+			if h == known {
+				valid = true
+				break
+			}
+		}
+		if !valid {
+			return nil, fmt.Errorf("unknown eBPF hook %q (valid: %s)", h, strings.Join(AllHooks, ","))
+		}
+		if !seen[h] {
+			seen[h] = true
+			out = append(out, h)
+		}
+	}
+	if len(out) == 0 {
+		return nil, errors.New("no eBPF hooks selected")
+	}
+	return out, nil
 }
 
-// Event is the processed event structure for consumption
+// Event is one decoded kernel event.
 type Event struct {
-	Timestamp time.Time
-	PID       uint32
-	PPID      uint32
-	UID       uint32
-	GID       uint32
-	EventType uint32
-	EventName string
-	RetVal    int64
-	Comm      string
-	Filename  string
-	Args      string
-	SrcIP     net.IP
-	DstIP     net.IP
-	SrcPort   uint16
-	DstPort   uint16
-	Protocol  string
-	SyscallNr uint32
-	Flags     uint32
+	Timestamp   time.Time // wall clock, derived from the kernel's monotonic stamp
+	MonotonicNs uint64
+	Type        uint32
+	TypeName    string
+
+	PID  uint32
+	PPID uint32
+	UID  uint32
+	GID  uint32
+	Comm string
+
+	Filename      string   // EXEC: resolved executable path; FILE_OPEN: path argument
+	Argv          []string // EXEC: argv (first 256 bytes of the argument block)
+	ArgvTruncated bool     // EXEC: argv block was longer than the record can carry
+	ExitCode      int32    // EXIT
+
+	Flags uint32 // FILE_OPEN: open(2) flags
+
+	Family   uint16 // NETWORK: AF_INET or AF_INET6
+	Protocol string // NETWORK: "tcp"
+	SrcIP    net.IP // NETWORK: nil for AF_INET6 (addresses not carried yet)
+	DstIP    net.IP
+	SrcPort  uint16
+	DstPort  uint16
+
+	SyscallNr   uint32 // SYSCALL
+	SyscallName string
 }
 
-// CollectorStats holds statistics about event collection
-type CollectorStats struct {
-	EventsReceived   uint64
-	EventsDropped    uint64
-	EventsProcessed  uint64
-	ProcessExecCount uint64
-	ProcessExitCount uint64
-	FileOpenCount    uint64
-	NetworkCount     uint64
-	SyscallCount     uint64
-	LastEventTime    time.Time
-	StartTime        time.Time
+// Cmdline joins Argv with spaces (empty for non-exec events).
+func (e *Event) Cmdline() string { return strings.Join(e.Argv, " ") }
+
+// Config configures a Collector.
+type Config struct {
+	Hooks    []string // nil means AllHooks
+	ChanSize int      // decoded-event channel capacity; 0 means 16384
+	Logger   *logrus.Logger
 }
 
-// Collector is the eBPF-based event collector
+// Stats is a snapshot of the collector's counters.
+type Stats struct {
+	Received uint64 // ring buffer records read
+	Decoded  uint64 // records delivered to Events()
+	Dropped  uint64 // records lost because Events() was full or undecodable
+	ByType   map[string]uint64
+	Attached []string
+	Since    time.Time
+}
+
+// Collector owns the loaded BPF objects, the attached links and the ring buffer
+// reader.
 type Collector struct {
-	objs      *sentinelObjects
-	links     []link.Link
-	reader    *ringbuf.Reader
-	eventChan chan *Event
-	stopChan  chan struct{}
-	wg        sync.WaitGroup
-	stats     CollectorStats
-	mu        sync.RWMutex
-	logger    *logrus.Logger
+	objs     *sentinelObjects
+	links    []link.Link
+	reader   *ringbuf.Reader
+	out      chan *Event
+	logger   *logrus.Logger
+	hooks    []string
+	attached []string
+	bootWall time.Time // wall clock corresponding to monotonic 0
 
-	// Batch processing
-	batchSize     int
-	batchTimeout  time.Duration
-	adaptiveBatch bool
+	wg       sync.WaitGroup
+	started  atomic.Bool
+	stopOnce sync.Once
+	since    time.Time
 
-	// Metrics
-	eventsReceived  atomic.Uint64
-	eventsProcessed atomic.Uint64
-	eventsDropped   atomic.Uint64
+	received atomic.Uint64
+	decoded  atomic.Uint64
+	dropped  atomic.Uint64
+	byType   [EventSyscall + 1]atomic.Uint64
 }
 
-// CollectorConfig holds configuration for the eBPF collector
-type CollectorConfig struct {
-	EventChanSize int
-	BatchSize     int
-	BatchTimeout  time.Duration
-	AdaptiveBatch bool
-	Logger        *logrus.Logger
-}
-
-// DefaultCollectorConfig returns default configuration
-func DefaultCollectorConfig() *CollectorConfig {
-	return &CollectorConfig{
-		EventChanSize: 10000,
-		BatchSize:     100,
-		BatchTimeout:  10 * time.Millisecond,
-		AdaptiveBatch: true,
-		Logger:        logrus.StandardLogger(),
+// NewCollector loads the BPF programs and maps into the kernel and opens the
+// ring buffer. Nothing is attached until Start.
+func NewCollector(cfg Config) (*Collector, error) {
+	if cfg.Logger == nil {
+		cfg.Logger = logrus.StandardLogger()
 	}
-}
-
-// NewCollector creates a new eBPF-based event collector
-func NewCollector(config *CollectorConfig) (*Collector, error) {
-	if config == nil {
-		config = DefaultCollectorConfig()
+	if cfg.ChanSize <= 0 {
+		cfg.ChanSize = 16384
+	}
+	hooks := cfg.Hooks
+	if len(hooks) == 0 {
+		hooks = append([]string(nil), AllHooks...)
 	}
 
-	// Remove memory lock limit for eBPF
 	if err := rlimit.RemoveMemlock(); err != nil {
-		return nil, fmt.Errorf("failed to remove memlock limit: %w", err)
+		return nil, fmt.Errorf("remove memlock rlimit: %w", err)
 	}
-
-	// Load pre-compiled eBPF programs and maps
 	objs := &sentinelObjects{}
 	if err := loadSentinelObjects(objs, nil); err != nil {
-		return nil, fmt.Errorf("failed to load eBPF objects: %w", err)
+		return nil, fmt.Errorf("load eBPF objects: %w", err)
 	}
-
-	// Create ring buffer reader
 	reader, err := ringbuf.NewReader(objs.Events)
 	if err != nil {
 		objs.Close()
-		return nil, fmt.Errorf("failed to create ring buffer reader: %w", err)
+		return nil, fmt.Errorf("open ring buffer: %w", err)
 	}
 
-	c := &Collector{
-		objs:          objs,
-		links:         make([]link.Link, 0),
-		reader:        reader,
-		eventChan:     make(chan *Event, config.EventChanSize),
-		stopChan:      make(chan struct{}),
-		logger:        config.Logger,
-		batchSize:     config.BatchSize,
-		batchTimeout:  config.BatchTimeout,
-		adaptiveBatch: config.AdaptiveBatch,
-		stats: CollectorStats{
-			StartTime: time.Now(),
-		},
+	var ts unix.Timespec
+	if err := unix.ClockGettime(unix.CLOCK_MONOTONIC, &ts); err != nil {
+		reader.Close()
+		objs.Close()
+		return nil, fmt.Errorf("clock_gettime: %w", err)
 	}
-
-	return c, nil
+	return &Collector{
+		objs:     objs,
+		reader:   reader,
+		out:      make(chan *Event, cfg.ChanSize),
+		logger:   cfg.Logger,
+		hooks:    hooks,
+		bootWall: time.Now().Add(-time.Duration(ts.Nano())),
+	}, nil
 }
 
-// Start begins collecting events
+// Start attaches the configured hooks and begins draining the ring buffer.
+// Every requested hook must attach; a failure detaches what was attached and
+// names the hook in the error.
 func (c *Collector) Start() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Attach tracepoints and kprobes
-	if err := c.attachPrograms(); err != nil {
-		return fmt.Errorf("failed to attach eBPF programs: %w", err)
+	if !c.started.CompareAndSwap(false, true) {
+		return errors.New("ebpf collector already started")
 	}
-
-	// Start event reader goroutine
-	c.wg.Add(1)
-	go c.readEvents()
-
-	c.logger.Info("eBPF collector started successfully")
-	return nil
-}
-
-// attachPrograms attaches all eBPF programs to their hooks
-func (c *Collector) attachPrograms() error {
-	var err error
-	var l link.Link
-
-	// Attach execve tracepoint
-	l, err = link.Tracepoint("syscalls", "sys_enter_execve", c.objs.TracepointSyscallsSysEnterExecve, nil)
-	if err != nil {
-		return fmt.Errorf("failed to attach execve tracepoint: %w", err)
-	}
-	c.links = append(c.links, l)
-	c.logger.Debug("Attached sys_enter_execve tracepoint")
-
-	// Attach process exit tracepoint
-	l, err = link.Tracepoint("sched", "sched_process_exit", c.objs.TracepointSchedSchedProcessExit, nil)
-	if err != nil {
-		return fmt.Errorf("failed to attach process exit tracepoint: %w", err)
-	}
-	c.links = append(c.links, l)
-	c.logger.Debug("Attached sched_process_exit tracepoint")
-
-	// Attach openat tracepoint
-	l, err = link.Tracepoint("syscalls", "sys_enter_openat", c.objs.TracepointSyscallsSysEnterOpenat, nil)
-	if err != nil {
-		return fmt.Errorf("failed to attach openat tracepoint: %w", err)
-	}
-	c.links = append(c.links, l)
-	c.logger.Debug("Attached sys_enter_openat tracepoint")
-
-	// Attach tcp_connect kprobe
-	l, err = link.Kprobe("tcp_connect", c.objs.KprobeTcpConnect, nil)
-	if err != nil {
-		c.logger.Warnf("Failed to attach tcp_connect kprobe: %v (network events may be limited)", err)
-	} else {
-		c.links = append(c.links, l)
-		c.logger.Debug("Attached tcp_connect kprobe")
-	}
-
-	// Attach inet_csk_accept kretprobe
-	l, err = link.Kretprobe("inet_csk_accept", c.objs.KretprobeInetCskAccept, nil)
-	if err != nil {
-		c.logger.Warnf("Failed to attach inet_csk_accept kretprobe: %v (network events may be limited)", err)
-	} else {
-		c.links = append(c.links, l)
-		c.logger.Debug("Attached inet_csk_accept kretprobe")
-	}
-
-	// Attach raw tracepoint for syscalls
-	l, err = link.AttachRawTracepoint(link.RawTracepointOptions{
-		Name:    "sys_enter",
-		Program: c.objs.RawTpSysEnter,
-	})
-	if err != nil {
-		c.logger.Warnf("Failed to attach sys_enter raw tracepoint: %v", err)
-	} else {
-		c.links = append(c.links, l)
-		c.logger.Debug("Attached sys_enter raw tracepoint")
-	}
-
-	return nil
-}
-
-// readEvents continuously reads events from the ring buffer
-func (c *Collector) readEvents() {
-	defer c.wg.Done()
-
-	for {
-		select {
-		case <-c.stopChan:
-			return
-		default:
+	for _, h := range c.hooks {
+		l, err := c.attach(h)
+		if err != nil {
+			for _, done := range c.links {
+				done.Close()
+			}
+			c.links = nil
+			return fmt.Errorf("attach hook %q: %w", h, err)
 		}
+		c.links = append(c.links, l)
+		c.attached = append(c.attached, h)
+		c.logger.WithField("hook", h).Debug("Attached eBPF hook")
+	}
+	c.since = time.Now()
+	c.wg.Add(1)
+	go c.readLoop()
+	c.logger.WithField("hooks", strings.Join(c.attached, ",")).Info("eBPF collector started")
+	return nil
+}
 
-		record, err := c.reader.Read()
+func (c *Collector) attach(hook string) (link.Link, error) {
+	switch hook {
+	case HookExec:
+		return link.Tracepoint("sched", "sched_process_exec", c.objs.TracepointSchedSchedProcessExec, nil)
+	case HookExit:
+		return link.Tracepoint("sched", "sched_process_exit", c.objs.TracepointSchedSchedProcessExit, nil)
+	case HookOpen:
+		return link.Tracepoint("syscalls", "sys_enter_openat", c.objs.TracepointSyscallsSysEnterOpenat, nil)
+	case HookConnect:
+		return link.Kprobe("tcp_connect", c.objs.KprobeTcpConnect, nil)
+	case HookAccept:
+		return link.Kretprobe("inet_csk_accept", c.objs.KretprobeInetCskAccept, nil)
+	case HookSyscall:
+		return link.AttachRawTracepoint(link.RawTracepointOptions{Name: "sys_enter", Program: c.objs.RawTpSysEnter})
+	}
+	return nil, fmt.Errorf("unknown hook %q", hook)
+}
+
+func (c *Collector) readLoop() {
+	defer c.wg.Done()
+	for {
+		rec, err := c.reader.Read()
 		if err != nil {
 			if errors.Is(err, ringbuf.ErrClosed) {
 				return
 			}
-			c.logger.Errorf("Error reading from ring buffer: %v", err)
-			c.eventsDropped.Add(1)
+			c.logger.WithError(err).Warn("Ring buffer read failed")
 			continue
 		}
-
-		c.eventsReceived.Add(1)
-
-		event, err := c.parseEvent(record.RawSample)
+		c.received.Add(1)
+		ev, err := decode(rec.RawSample, c.bootWall)
 		if err != nil {
-			c.logger.Debugf("Error parsing event: %v", err)
-			c.eventsDropped.Add(1)
+			c.dropped.Add(1)
 			continue
 		}
-
-		// Non-blocking send to event channel
 		select {
-		case c.eventChan <- event:
-			c.eventsProcessed.Add(1)
-			c.updateStats(event)
+		case c.out <- ev:
+			c.decoded.Add(1)
+			if int(ev.Type) < len(c.byType) {
+				c.byType[ev.Type].Add(1)
+			}
 		default:
-			c.eventsDropped.Add(1)
+			c.dropped.Add(1)
 		}
 	}
 }
 
-// parseEvent parses a raw event from eBPF
-func (c *Collector) parseEvent(data []byte) (*Event, error) {
-	if len(data) < int(unsafe.Sizeof(RawEvent{})) {
-		return nil, fmt.Errorf("event data too short: %d bytes", len(data))
-	}
+// Events returns the decoded-event channel. It is closed by Stop.
+func (c *Collector) Events() <-chan *Event { return c.out }
 
-	var raw RawEvent
-	reader := bytes.NewReader(data)
-	if err := binary.Read(reader, binary.LittleEndian, &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse raw event: %w", err)
-	}
+// Attached lists the hooks that Start attached.
+func (c *Collector) Attached() []string { return append([]string(nil), c.attached...) }
 
-	event := &Event{
-		Timestamp: time.Unix(0, int64(raw.TimestampNs)),
-		PID:       raw.PID,
-		PPID:      raw.PPID,
-		UID:       raw.UID,
-		GID:       raw.GID,
-		EventType: raw.EventType,
-		RetVal:    raw.RetVal,
-		Comm:      nullTerminatedString(raw.Comm[:]),
-		Filename:  nullTerminatedString(raw.Filename[:]),
-		Args:      nullTerminatedString(raw.Args[:]),
-		SrcPort:   raw.SPort,
-		DstPort:   raw.DPort,
-		SyscallNr: raw.SyscallNr,
-		Flags:     raw.Flags,
+// Stats snapshots the counters.
+func (c *Collector) Stats() Stats {
+	s := Stats{
+		Received: c.received.Load(),
+		Decoded:  c.decoded.Load(),
+		Dropped:  c.dropped.Load(),
+		ByType:   make(map[string]uint64, len(c.byType)),
+		Attached: c.Attached(),
+		Since:    c.since,
 	}
-
-	// Parse IP addresses
-	if raw.SAddr != 0 {
-		event.SrcIP = uint32ToIP(raw.SAddr)
+	for t := range c.byType {
+		if n := c.byType[t].Load(); n > 0 {
+			s.ByType[TypeName(uint32(t))] = n
+		}
 	}
-	if raw.DAddr != 0 {
-		event.DstIP = uint32ToIP(raw.DAddr)
-	}
-
-	// Set event name and protocol
-	event.EventName = eventTypeName(raw.EventType)
-	if raw.Protocol == 6 {
-		event.Protocol = "TCP"
-	} else if raw.Protocol == 17 {
-		event.Protocol = "UDP"
-	}
-
-	return event, nil
+	return s
 }
 
-// updateStats updates internal statistics
-func (c *Collector) updateStats(event *Event) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	c.stats.EventsProcessed++
-	c.stats.LastEventTime = event.Timestamp
-
-	switch event.EventType {
-	case EventProcessExec:
-		c.stats.ProcessExecCount++
-	case EventProcessExit:
-		c.stats.ProcessExitCount++
-	case EventFileOpen:
-		c.stats.FileOpenCount++
-	case EventNetworkConnect, EventNetworkAccept:
-		c.stats.NetworkCount++
-	case EventSyscall:
-		c.stats.SyscallCount++
-	}
-}
-
-// Events returns the event channel for consuming events
-func (c *Collector) Events() <-chan *Event {
-	return c.eventChan
-}
-
-// Stats returns current collector statistics
-func (c *Collector) Stats() CollectorStats {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	stats := c.stats
-	stats.EventsReceived = c.eventsReceived.Load()
-	stats.EventsDropped = c.eventsDropped.Load()
-	stats.EventsProcessed = c.eventsProcessed.Load()
-	return stats
-}
-
-// Stop stops the collector and cleans up resources
+// Stop detaches the hooks, closes the ring buffer and the BPF objects, waits
+// for the reader and closes Events. It is idempotent.
 func (c *Collector) Stop() error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
-	// Signal stop
-	close(c.stopChan)
-
-	// Close ring buffer reader
-	if c.reader != nil {
-		c.reader.Close()
-	}
-
-	// Wait for goroutines to finish
-	c.wg.Wait()
-
-	// Detach all programs
-	for _, l := range c.links {
-		l.Close()
-	}
-
-	// Close eBPF objects
-	if c.objs != nil {
-		c.objs.Close()
-	}
-
-	// Close event channel
-	close(c.eventChan)
-
-	c.logger.Info("eBPF collector stopped")
+	c.stopOnce.Do(func() {
+		for _, l := range c.links {
+			l.Close()
+		}
+		c.links = nil
+		if c.reader != nil {
+			c.reader.Close() // unblocks readLoop
+		}
+		c.wg.Wait()
+		if c.objs != nil {
+			c.objs.Close()
+		}
+		close(c.out)
+		s := c.Stats()
+		c.logger.WithFields(logrus.Fields{
+			"received": s.Received, "decoded": s.Decoded, "dropped": s.Dropped, "by_type": s.ByType,
+		}).Info("eBPF collector stopped")
+	})
 	return nil
 }
 
-// Helper functions
+// recordSize is the size of one ring buffer record; it must equal sizeof(struct event) in C.
+const recordSize = int(unsafe.Sizeof(sentinelEvent{}))
 
-func nullTerminatedString(b []byte) string {
-	for i, c := range b {
-		if c == 0 {
-			return string(b[:i])
-		}
+// decode converts one raw ring buffer record into an Event.
+func decode(raw []byte, bootWall time.Time) (*Event, error) {
+	if len(raw) < recordSize {
+		return nil, fmt.Errorf("record of %d bytes, want %d", len(raw), recordSize)
 	}
-	return string(b)
+	var rec sentinelEvent
+	copy((*[recordSize]byte)(unsafe.Pointer(&rec))[:], raw[:recordSize])
+
+	ev := &Event{
+		MonotonicNs: rec.TimestampNs,
+		Timestamp:   bootWall.Add(time.Duration(rec.TimestampNs)),
+		Type:        rec.EventType,
+		TypeName:    TypeName(rec.EventType),
+		PID:         rec.Pid,
+		PPID:        rec.Ppid,
+		UID:         rec.Uid,
+		GID:         rec.Gid,
+		Comm:        cString(rec.Comm[:]),
+	}
+	switch rec.EventType {
+	case EventProcessExec:
+		ev.Filename = cString(rec.Filename[:])
+		ev.Argv, ev.ArgvTruncated = splitArgv(rec.Args[:], rec.ArgsLen)
+	case EventProcessExit:
+		ev.ExitCode = int32(rec.Retval)
+	case EventFileOpen:
+		ev.Filename = cString(rec.Filename[:])
+		ev.Flags = rec.Flags
+	case EventNetworkConnect, EventNetworkAccept:
+		ev.Family = rec.Family
+		ev.Protocol = "tcp"
+		ev.SrcPort = rec.Sport
+		ev.DstPort = rec.Dport
+		if rec.Family == unix.AF_INET {
+			ev.SrcIP = ipv4(rec.Saddr)
+			ev.DstIP = ipv4(rec.Daddr)
+		}
+	case EventSyscall:
+		ev.SyscallNr = rec.SyscallNr
+		ev.SyscallName = SyscallName(rec.SyscallNr)
+	default:
+		return nil, fmt.Errorf("unknown event type %d", rec.EventType)
+	}
+	return ev, nil
 }
 
-func uint32ToIP(n uint32) net.IP {
+func cString(b []int8) string {
+	bs := unsafe.Slice((*byte)(unsafe.Pointer(&b[0])), len(b))
+	if i := bytes.IndexByte(bs, 0); i >= 0 {
+		bs = bs[:i]
+	}
+	return string(bs)
+}
+
+// splitArgv splits the NUL-separated argument block captured from mm->arg_start.
+func splitArgv(b []int8, n uint32) (argv []string, truncated bool) {
+	if n == 0 {
+		return nil, false
+	}
+	if int(n) > len(b) {
+		n = uint32(len(b))
+	}
+	bs := unsafe.Slice((*byte)(unsafe.Pointer(&b[0])), int(n))
+	truncated = int(n) == len(b) && bs[len(bs)-1] != 0
+	for _, part := range bytes.Split(bytes.TrimRight(bs, "\x00"), []byte{0}) {
+		argv = append(argv, string(part))
+	}
+	return argv, truncated
+}
+
+func ipv4(n uint32) net.IP {
 	ip := make(net.IP, 4)
-	binary.LittleEndian.PutUint32(ip, n)
+	// Stored in network byte order; the u32 was copied verbatim from the kernel.
+	ip[0], ip[1], ip[2], ip[3] = byte(n), byte(n>>8), byte(n>>16), byte(n>>24)
 	return ip
 }
 
-func eventTypeName(t uint32) string {
+// TypeName names an event type.
+func TypeName(t uint32) string {
 	switch t {
 	case EventProcessExec:
 		return "process_exec"
@@ -453,91 +421,24 @@ func eventTypeName(t uint32) string {
 		return "network_accept"
 	case EventSyscall:
 		return "syscall"
-	default:
-		return "unknown"
 	}
+	return fmt.Sprintf("unknown_%d", t)
 }
 
-// BatchReader provides batch event reading for high-throughput scenarios
-type BatchReader struct {
-	collector     *Collector
-	batchSize     int
-	timeout       time.Duration
-	adaptive      bool
-	currentRate   float64
-	lastRateCheck time.Time
+// SyscallName names a syscall number (x86_64 table) or returns syscall_<nr>.
+func SyscallName(nr uint32) string {
+	if name, ok := syscallNames[nr]; ok {
+		return name
+	}
+	return fmt.Sprintf("syscall_%d", nr)
 }
 
-// NewBatchReader creates a new batch reader
-func NewBatchReader(collector *Collector, batchSize int, timeout time.Duration) *BatchReader {
-	return &BatchReader{
-		collector:     collector,
-		batchSize:     batchSize,
-		timeout:       timeout,
-		adaptive:      true,
-		lastRateCheck: time.Now(),
+// KnownSyscalls lists the syscall numbers the table can name, sorted.
+func KnownSyscalls() []uint32 {
+	out := make([]uint32, 0, len(syscallNames))
+	for nr := range syscallNames {
+		out = append(out, nr)
 	}
-}
-
-// ReadBatch reads a batch of events
-func (br *BatchReader) ReadBatch(ctx context.Context) ([]*Event, error) {
-	batch := make([]*Event, 0, br.batchSize)
-	timer := time.NewTimer(br.timeout)
-	defer timer.Stop()
-
-	for len(batch) < br.batchSize {
-		select {
-		case <-ctx.Done():
-			return batch, ctx.Err()
-		case event, ok := <-br.collector.Events():
-			if !ok {
-				return batch, nil
-			}
-			batch = append(batch, event)
-		case <-timer.C:
-			return batch, nil
-		}
-	}
-
-	// Adaptive batch size adjustment
-	if br.adaptive {
-		br.adjustBatchSize()
-	}
-
-	return batch, nil
-}
-
-// adjustBatchSize dynamically adjusts batch size based on event rate
-func (br *BatchReader) adjustBatchSize() {
-	now := time.Now()
-	elapsed := now.Sub(br.lastRateCheck).Seconds()
-	if elapsed < 1.0 {
-		return
-	}
-
-	stats := br.collector.Stats()
-	rate := float64(stats.EventsReceived) / elapsed
-	br.currentRate = rate
-	br.lastRateCheck = now
-
-	// Adjust batch size based on rate
-	switch {
-	case rate < 100:
-		br.batchSize = 1
-		br.timeout = 1 * time.Millisecond
-	case rate < 1000:
-		br.batchSize = 10
-		br.timeout = 10 * time.Millisecond
-	case rate < 10000:
-		br.batchSize = 100
-		br.timeout = 50 * time.Millisecond
-	default:
-		br.batchSize = 1000
-		br.timeout = 100 * time.Millisecond
-	}
-}
-
-// CurrentRate returns the current event rate
-func (br *BatchReader) CurrentRate() float64 {
-	return br.currentRate
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
 }

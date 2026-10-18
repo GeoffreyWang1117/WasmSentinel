@@ -1,7 +1,7 @@
 # 多阶段构建 Dockerfile
 
 # 构建阶段 - 使用 Debian 镜像以兼容 wasmtime-go
-FROM golang:1.21-bookworm AS go-builder
+FROM golang:1.26-bookworm AS go-builder
 
 # 安装构建依赖
 RUN apt-get update && apt-get install -y --no-install-recommends \

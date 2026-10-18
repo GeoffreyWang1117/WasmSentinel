@@ -47,7 +47,7 @@ func (b *EventBuffer) Write(event *ebpfcollector.Event) int {
 	// Calculate required size
 	eventSize := 128 // Base event size
 	filenameLen := len(event.Filename)
-	argsLen := len(event.Args)
+	argsLen := len(event.Cmdline())
 	commLen := len(event.Comm)
 	totalSize := eventSize + filenameLen + argsLen + commLen + 16 // padding
 
@@ -68,7 +68,7 @@ func (b *EventBuffer) Write(event *ebpfcollector.Event) int {
 	b.offset += 4
 	binary.LittleEndian.PutUint32(b.data[b.offset:], event.GID)
 	b.offset += 4
-	binary.LittleEndian.PutUint32(b.data[b.offset:], event.EventType)
+	binary.LittleEndian.PutUint32(b.data[b.offset:], event.Type)
 	b.offset += 4
 	binary.LittleEndian.PutUint32(b.data[b.offset:], event.SyscallNr)
 	b.offset += 4
@@ -103,7 +103,7 @@ func (b *EventBuffer) Write(event *ebpfcollector.Event) int {
 	b.offset += commLen
 	copy(b.data[b.offset:], event.Filename)
 	b.offset += filenameLen
-	copy(b.data[b.offset:], event.Args)
+	copy(b.data[b.offset:], event.Cmdline())
 	b.offset += argsLen
 
 	// Align to 8 bytes
@@ -369,7 +369,7 @@ func (w *WasmMemoryWriter) WriteEvent(event *ebpfcollector.Event, offset uint32)
 	offset += 4
 
 	// Write event type
-	binary.LittleEndian.PutUint32(w.memory[offset:], event.EventType)
+	binary.LittleEndian.PutUint32(w.memory[offset:], event.Type)
 	offset += 4
 
 	// Write syscall number
@@ -393,7 +393,7 @@ func (w *WasmMemoryWriter) WriteEvent(event *ebpfcollector.Event, offset uint32)
 	// Write strings with length prefix
 	commBytes := []byte(event.Comm)
 	filenameBytes := []byte(event.Filename)
-	argsBytes := []byte(event.Args)
+	argsBytes := []byte(event.Cmdline())
 
 	// Comm
 	binary.LittleEndian.PutUint16(w.memory[offset:], uint16(len(commBytes)))
@@ -506,7 +506,7 @@ func GetEventSize(event *ebpfcollector.Event) int {
 	size := LayoutHeaderSize
 	size += len(event.Comm)
 	size += len(event.Filename)
-	size += len(event.Args)
+	size += len(event.Cmdline())
 	// Align to 8 bytes
 	return (size + 7) & ^7
 }
