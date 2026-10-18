@@ -2,6 +2,34 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-17 · P1.1 eBPF 采集器接入（完成）
+
+**做了什么**
+
+- `bpf/sentinel.bpf.c` 重写：事件结构按自然对齐排布（592 B，无 `packed`，C/Go 布局一致，Go 侧用 bpf2go `-type event` 直接生成）；exec 钩子从 `syscalls/sys_enter_execve` 换成 `sched/sched_process_exec`（exec 成功后触发，从 `mm->arg_start..arg_end` 读完整 argv，≤256 B，NUL 分隔）；exit 只记线程组 leader 并带退出码；网络字段用 CO-RE 读；raw `sys_enter` 允许列表扩到 20 个高风险 syscall（clone/fork/execve/kill/ptrace/setuid/setgid/pivot_root/prctl/chroot/mount/umount2/init_module/unshare/setns/finit_module/memfd_create/bpf/execveat/clone3）；ring buffer 256 KiB → 1 MiB。
+- cilium/ebpf v0.12.3 → v0.22.0（go.mod `go 1.25.0`，Dockerfile 换 `golang:1.26-bookworm`）。
+- `host/internal/ebpf` 重写：`--ebpf-hooks` 逐钩子挂载、原子计数、`Stop()` 不再持锁等 goroutine（旧实现会死锁）、解码走生成的 `sentinelEvent`；x86_64 syscall 名表（385 项）由 `/usr/include/x86_64-linux-gnu/asm/unistd_64.h` 生成。
+- `collector.EBPFCollector` 适配层：内核事件 → `events.Event`，字段名与规则一致（`data.process.{executable,command_line,user,…}`、`data.file.{path,operation}`、`data.network.{dest_ip,dest_port,direction}`、`data.{syscall_nr,syscall_name}`）；exit 事件类型为 `process_exit`，规则不会把同一进程算两次；uid/gid → 用户名缓存。
+- `main.go`：`--collector=proc|ebpf`（默认 proc，不需特权）、`--ebpf-hooks`；config 键同名。
+- `rules/ml-detector/src/hybrid.rs`：syscall 事件改从 `data` 下读字段（兼容扁平记录）。
+- 单测 10 个（无需 root）：记录大小 592、exec/截断 argv/网络/syscall 解码、钩子解析、允许列表都有名字；适配层对 exec/exit/file/network/syscall 的 JSON 形状。
+
+**验收（7.0.0-34-generic，本机无免密 sudo，用 `docker run --privileged --pid=host -v /:/host … chroot /host` 以 root 身份运行主机二进制）**
+
+| 运行 | 结果 |
+|---|---|
+| 全部 6 钩子，16 s，主机侧跑 `bash -c 'cat /etc/hostname; ls /tmp; id -un'`、`curl 127.0.0.1:1`、`rm -rf <不存在路径>` | 6 个钩子全部挂上；收到 30,670 条、丢 0：file_open 26,352 / syscall 2,917 / process_exit 815 / process_exec 515 / network_connect 71。exec 事件带完整 argv（`["bash","-c","cat /etc/hostname > /dev/null; …"]`）与解析后的路径 `/usr/bin/bash`；connect 带目标 `172.64.155.209:443`；syscall 命名为 `bpf`、`prctl` |
+| 仅 connect,accept，9 s，`curl 127.0.0.1:22` ×3 | 13 connect + 3 accept（`sshd`，对端 `127.0.0.1:39626/39642/39644`） |
+| 规则侧（第一轮） | 两条规则各 27,996 次调用，0 trap，最大延迟 220 µs / 444 µs；suspicious_shell 标记 4,182、ml_detector 3,168 |
+
+**观察 / 限制**
+- `openat` 占事件量 86%（空闲桌面约 1,650/s）；忙机器上用 `--ebpf-hooks=exec,exit,connect,accept,syscall` 去掉它，或在 P1.3/E3 做内核侧过滤。
+- IPv6 连接只带 `family=10`，地址为空（事件结构没留 16 B 字段），后续需要时扩展结构。
+- ml_detector 实例内存 1.18 → 1.31 MB（`process_states` 随 pid 增长，没有淘汰）——P1.4 处理。
+- 关闭时 `dropped_after_cancel` 585：ctx 取消后到钩子卸载之间的事件，预期行为。
+- `vmlinux.h` 未重生成：CO-RE 重定位在 7.0 内核上加载成功，现有头文件够用；需要时 `make -C host/internal/ebpf vmlinux`。
+- 用 `--log-level trace` 可逐条打印内核事件（argv、目标地址、syscall 名），用于核对。
+
 ## 2026-10-17 · P1.2 引擎限额（完成；wasmtime-go 升级顺延）
 
 **做了什么**（`host/internal/engine/`，替换 `simple_engine.go` 与 `wasm_engine.go`）

@@ -151,7 +151,7 @@
 
 | 编号 | 任务 | 验收 |
 |---|---|---|
-| P1.1 | 接入 eBPF 采集器：`main.go` 增 `--collector=ebpf|proc`；重生成 `vmlinux.h`；升级 cilium/ebpf 到当前版本；6 个 hook 在 7.0 内核上逐个验证 | `sudo ./wasm-threat-detector --collector=ebpf` 能看到 execve/openat/connect 事件 |
+| P1.1 ✅ 2026-10-17（vmlinux.h 未重生成，CO-RE 在 7.0 上已验证） | 接入 eBPF 采集器：`main.go` 增 `--collector=ebpf|proc`；重生成 `vmlinux.h`；升级 cilium/ebpf 到当前版本；6 个 hook 在 7.0 内核上逐个验证 | `sudo ./wasm-threat-detector --collector=ebpf` 能看到 execve/openat/connect 事件 |
 | P1.2 ✅ 2026-10-17（wasmtime-go 升级顺延，见 `RESEARCH_LOG.md`） | Wasm 引擎重写（可基于 `wasm_engine.go`）：每规则一个长寿 Store/Instance（或池）；guest 导出 `alloc/free`；`StoreLimits` 内存上限、fuel 预算、epoch 超时；WASI 零能力（不继承 stdout/stderr）；升级 wasmtime-go | 引擎单测覆盖：正常检测、超 fuel、超内存、trap 隔离不影响其他规则 |
 | P1.3 | 零拷贝通道接入：`bridge` 的二进制事件直写 guest 线性内存；保留 JSON 路径并用 flag 切换（这就是消融的两臂） | 两条路径对同一事件给出相同检测结果 |
 | P1.4 | ml-detector：用 `embed_weights.py` 真正嵌入训练得到的模型（统一为一个版本，论文与代码一致）；`detect_extended` 返回分数；增加 Wasm 与 NumPy 推理一致性测试 | 1,000 条输入上 max abs diff < 1e-5 |

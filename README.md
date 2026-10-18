@@ -79,6 +79,23 @@ WasmSentinel is a lightweight, secure, and portable real-time threat detection t
 ./wasm-threat-detector --rules ./rules/wasm
 ```
 
+### Collectors
+
+| flag / config key | values | notes |
+|---|---|---|
+| `--collector` | `proc` (default), `ebpf` | `ebpf` attaches the programs in `host/internal/ebpf/bpf/sentinel.bpf.c`; needs root (CAP_BPF + CAP_PERFMON) and a BTF-enabled kernel |
+| `--ebpf-hooks` | `all` (default) or a comma list of `exec,exit,open,connect,accept,syscall` | one BPF program per hook; drop `open` on busy hosts, it dominates the volume |
+
+```bash
+sudo ./wasm-threat-detector --collector=ebpf --rules ./rules/wasm            # all hooks
+sudo ./wasm-threat-detector --collector=ebpf --ebpf-hooks=exec,connect,accept --log-level trace
+```
+
+The eBPF path delivers exec events with the resolved path and the full argv,
+file opens with path and flags, TCP connect/accept with peer address, and an
+allow-list of high-risk syscalls by name. The JSON shape handed to rules is
+documented on `collector.EventFromEBPF`.
+
 ### Rule sandbox limits
 
 Every rule runs in its own long-lived wasmtime instance under three independent
