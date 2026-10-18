@@ -1,3 +1,4 @@
+use sentinel_abi::{EventFields, JsonEvent, RawEvent};
 use serde_json::Value;
 
 // ---------------------------------------------------------------------------
@@ -54,50 +55,65 @@ pub extern "C" fn detect(event_ptr: *const u8, event_len: usize) -> i32 {
         Ok(event) => event,
         Err(_) => return 0, // 解析失败，认为无威胁
     };
+    detect_value(&event)
+}
 
-    // 获取事件类型
-    let event_type = event["type"].as_str().unwrap_or("");
+/// 二进制路径：宿主把内核事件记录（sentinel-abi 布局）直接写进线性内存，
+/// 规则直接按字段读取记录，不解析 JSON、不重建 JSON 树。
+#[no_mangle]
+pub extern "C" fn detect_raw(payload_ptr: *const u8, payload_len: usize) -> i32 {
+    if payload_ptr.is_null() || payload_len == 0 {
+        return 0;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(payload_ptr, payload_len) };
+    let payload = match sentinel_abi::parse(bytes) {
+        Ok(p) => p,
+        Err(_) => return 0,
+    };
+    detect_fields(&RawEvent(&payload))
+}
 
-    match event_type {
-        "process" => detect_process_threat(&event),
-        "network" => detect_network_threat(&event),
-        "file" => detect_file_threat(&event),
+/// JSON 路径与二进制路径共用的检测入口：两条路径只在字段访问层不同。
+fn detect_value(event: &Value) -> i32 {
+    detect_fields(&JsonEvent(event))
+}
+
+fn detect_fields<E: EventFields>(event: &E) -> i32 {
+    match event.event_type() {
+        "process" => detect_process_threat(event),
+        "network" => detect_network_threat(event),
+        "file" => detect_file_threat(event),
         _ => 0,
     }
 }
 
 /// 检测进程威胁
-fn detect_process_threat(event: &Value) -> i32 {
+fn detect_process_threat<E: EventFields>(event: &E) -> i32 {
     let mut threat_level = 0;
 
-    // 检查进程数据
-    if let Some(process_data) = event["data"]["process"].as_object() {
-        // 检查可执行文件路径
-        if let Some(executable) = process_data["executable"].as_str() {
-            threat_level += check_suspicious_executable(executable);
-        }
+    // 检查可执行文件路径
+    if let Some(executable) = event.executable() {
+        threat_level += check_suspicious_executable(executable);
+    }
 
-        // 检查进程名
-        if let Some(name) = process_data["name"].as_str() {
-            threat_level += check_suspicious_process_name(name);
-        }
+    // 检查进程名
+    if let Some(name) = event.process_name() {
+        threat_level += check_suspicious_process_name(name);
+    }
 
-        // 检查命令行参数
-        if let Some(cmdline) = process_data["command_line"].as_str() {
-            threat_level += check_suspicious_cmdline(cmdline);
-        }
+    // 检查命令行参数
+    if let Some(cmdline) = event.command_line() {
+        threat_level += check_suspicious_cmdline(&cmdline);
+    }
 
-        // 检查用户
-        if let Some(user) = process_data["user"].as_str() {
-            threat_level += check_suspicious_user(user);
-        }
+    // 检查用户
+    if let Some(user) = event.user() {
+        threat_level += check_suspicious_user(user);
     }
 
     // 检查事件动作
-    if let Some(action) = event["data"]["action"].as_str() {
-        if action == "suspicious_activity" {
-            threat_level += 3;
-        }
+    if event.action() == Some("suspicious_activity") {
+        threat_level += 3;
     }
 
     // 限制威胁级别在有效范围内
@@ -109,33 +125,27 @@ fn detect_process_threat(event: &Value) -> i32 {
 }
 
 /// 检测网络威胁
-fn detect_network_threat(event: &Value) -> i32 {
+fn detect_network_threat<E: EventFields>(event: &E) -> i32 {
     let mut threat_level = 0;
 
-    if let Some(network_data) = event["data"]["network"].as_object() {
-        // 检查目标端口
-        if let Some(dest_port) = network_data["dest_port"].as_i64() {
-            threat_level += check_suspicious_port(dest_port as i32);
-        }
+    // 检查目标端口
+    if let Some(dest_port) = event.dest_port() {
+        threat_level += check_suspicious_port(dest_port as i32);
+    }
 
-        // 检查目标 IP
-        if let Some(dest_ip) = network_data["dest_ip"].as_str() {
-            threat_level += check_suspicious_ip(dest_ip);
-        }
+    // 检查目标 IP
+    if let Some(dest_ip) = event.dest_ip() {
+        threat_level += check_suspicious_ip(&dest_ip);
+    }
 
-        // 检查协议
-        if let Some(protocol) = network_data["protocol"].as_str() {
-            if protocol == "tcp" {
-                threat_level += 1; // TCP 连接相对可疑
-            }
-        }
+    // 检查协议
+    if event.protocol() == Some("tcp") {
+        threat_level += 1; // TCP 连接相对可疑
+    }
 
-        // 检查连接方向
-        if let Some(direction) = network_data["direction"].as_str() {
-            if direction == "outbound" {
-                threat_level += 2; // 出站连接更可疑
-            }
-        }
+    // 检查连接方向
+    if event.direction() == Some("outbound") {
+        threat_level += 2; // 出站连接更可疑
     }
 
     if threat_level > 10 {
@@ -146,19 +156,17 @@ fn detect_network_threat(event: &Value) -> i32 {
 }
 
 /// 检测文件威胁
-fn detect_file_threat(event: &Value) -> i32 {
+fn detect_file_threat<E: EventFields>(event: &E) -> i32 {
     let mut threat_level = 0;
 
-    if let Some(file_data) = event["data"]["file"].as_object() {
-        // 检查文件路径
-        if let Some(path) = file_data["path"].as_str() {
-            threat_level += check_suspicious_file_path(path);
-        }
+    // 检查文件路径
+    if let Some(path) = event.file_path() {
+        threat_level += check_suspicious_file_path(path);
+    }
 
-        // 检查操作类型
-        if let Some(operation) = file_data["operation"].as_str() {
-            threat_level += check_suspicious_file_operation(operation);
-        }
+    // 检查操作类型
+    if let Some(operation) = event.file_operation() {
+        threat_level += check_suspicious_file_operation(operation);
     }
 
     if threat_level > 10 {
@@ -385,5 +393,61 @@ fn check_suspicious_file_operation(operation: &str) -> i32 {
         "chmod" | "chown" => 4,
         "rename" | "move" => 2,
         _ => 0,
+    }
+}
+
+#[cfg(test)]
+mod raw_parity_tests {
+    use super::*;
+    use sentinel_abi::{encode, RawRecord, EVENT_FILE_OPEN, EVENT_PROCESS_EXEC};
+
+    fn put(dst: &mut [u8], s: &[u8]) -> u32 {
+        dst[..s.len()].copy_from_slice(s);
+        s.len() as u32
+    }
+
+    #[test]
+    fn raw_and_json_paths_agree() {
+        let mut r = RawRecord::default();
+        r.event_type = EVENT_PROCESS_EXEC;
+        r.pid = 7;
+        put(&mut r.comm, b"bash");
+        put(&mut r.filename, b"/usr/bin/bash");
+        r.args_len = put(&mut r.args, b"bash\0-c\0rm -rf /tmp/x\0");
+        let payload = encode(&r, "root", "root", "");
+        let value = sentinel_abi::to_value(&sentinel_abi::parse(&payload).unwrap());
+        let json = serde_json::to_vec(&value).unwrap();
+
+        let via_json = detect(json.as_ptr(), json.len());
+        let via_raw = detect_raw(payload.as_ptr(), payload.len());
+        assert_eq!(via_json, via_raw);
+        assert_eq!(via_raw, 10, "bash -c rm -rf as root saturates the score");
+
+        let mut r = RawRecord::default();
+        r.event_type = EVENT_FILE_OPEN;
+        put(&mut r.filename, b"/etc/shadow");
+        r.flags = 0x1; // O_WRONLY -> "write"
+        let payload = encode(&r, "alice", "alice", "");
+        let value = sentinel_abi::to_value(&sentinel_abi::parse(&payload).unwrap());
+        let json = serde_json::to_vec(&value).unwrap();
+        assert_eq!(
+            detect(json.as_ptr(), json.len()),
+            detect_raw(payload.as_ptr(), payload.len())
+        );
+        assert!(detect_raw(payload.as_ptr(), payload.len()) > 0);
+
+        let mut r = RawRecord::default();
+        r.event_type = sentinel_abi::EVENT_NETWORK_CONNECT;
+        put(&mut r.comm, b"nc");
+        r.family = 2;
+        r.daddr = 0x0101a8c0;
+        r.dport = 4444;
+        let payload = encode(&r, "", "", "");
+        let value = sentinel_abi::to_value(&sentinel_abi::parse(&payload).unwrap());
+        let json = serde_json::to_vec(&value).unwrap();
+        assert_eq!(
+            detect(json.as_ptr(), json.len()),
+            detect_raw(payload.as_ptr(), payload.len())
+        );
     }
 }

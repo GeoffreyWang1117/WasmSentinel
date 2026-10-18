@@ -173,7 +173,26 @@ pub extern "C" fn detect(event_ptr: *const u8, event_len: usize) -> i32 {
         Ok(e) => e,
         Err(_) => return -1,
     };
+    detect_value(&event)
+}
 
+/// Binary path: the host writes the kernel record (sentinel-abi layout) straight
+/// into linear memory; the same JSON structure is rebuilt without text parsing
+/// and the same detector runs on it.
+#[no_mangle]
+pub extern "C" fn detect_raw(payload_ptr: *const u8, payload_len: usize) -> i32 {
+    if payload_ptr.is_null() || payload_len == 0 {
+        return 0;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(payload_ptr, payload_len) };
+    let payload = match sentinel_abi::parse(bytes) {
+        Ok(p) => p,
+        Err(_) => return -1,
+    };
+    detect_value(&sentinel_abi::to_value(&payload))
+}
+
+fn detect_value(event: &Value) -> i32 {
     // Get or create detector
     let detector = unsafe {
         if DETECTOR.is_none() {
@@ -181,10 +200,7 @@ pub extern "C" fn detect(event_ptr: *const u8, event_len: usize) -> i32 {
         }
         DETECTOR.as_mut().unwrap()
     };
-
-    // Perform detection
-    let result = detector.detect(&event);
-    result.threat_level
+    detector.detect(event).threat_level
 }
 
 /// Extended detection with detailed results

@@ -18,6 +18,7 @@ checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
 name = "ml-detector"
 version = "0.1.0"
 dependencies = [
+ "sentinel-abi",
  "serde",
  "serde_json",
 ]
@@ -38,6 +39,13 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a338cc41d27e6cc6dce6cefc13a0729dfbb81c262b1f519331575dd80ef3067f"
 dependencies = [
  "proc-macro2",
+]
+
+[[package]]
+name = "sentinel-abi"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
 ]
 
 [[package]]

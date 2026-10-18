@@ -1,0 +1,11 @@
+[package]
+name = "sentinel-abi"
+version = "0.1.0"
+edition = "2021"
+description = "Binary event payload shared between the WasmSentinel host and its Wasm rule modules"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+serde_json = "1.0"

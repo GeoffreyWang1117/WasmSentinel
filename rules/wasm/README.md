@@ -19,8 +19,9 @@ The host (`host/internal/engine`) talks to a rule module through these exports:
 | `dealloc` | `(ptr: i32, size: i32)` | release a buffer from `alloc` |
 | `detect` | `(ptr: i32, len: i32) -> i32` | analyse the event JSON at `ptr..ptr+len`; return a threat level 0..10 (0 = benign) |
 | `init` | `(ptr: i32, len: i32) -> i32` (optional) | called once per instance with `(0, 0)` right after instantiation |
+| `detect_raw` | `(ptr: i32, len: i32) -> i32` (optional) | binary path: the payload is the kernel record plus host-resolved strings (`rules/sentinel-abi`, Go `host/internal/wire`); must return the same level as `detect` would for the JSON form |
 
-Writing at a fixed offset (the pre-v2 host behaviour) is gone: the host refuses to
+With `--event-encoding=binary` the host prefers `detect_raw` for eBPF events and falls back to `detect` per rule when the export or the binary form is missing. Writing at a fixed offset (the pre-v2 host behaviour) is gone: the host refuses to
 load a module that does not export `alloc`/`dealloc`. In Rust the two allocator
 exports are ten lines (see `rules/suspicious-shell/src/lib.rs`). A trap of any kind
 (unreachable, fuel exhausted, deadline, failed allocation under the memory cap,
