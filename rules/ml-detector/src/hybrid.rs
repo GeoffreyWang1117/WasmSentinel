@@ -142,8 +142,15 @@ impl HybridDetector {
 
     /// Detect threats in syscall events using hybrid approach
     fn detect_syscall(&mut self, event: &Value) -> DetectionResult {
-        let pid = event["pid"].as_u64().unwrap_or(0) as u32;
-        let syscall_name = event["syscall_name"].as_str().unwrap_or("");
+        // Host events carry their payload under "data" (events.Event); flat
+        // ADFA-style records keep the fields at the top level.
+        let fields = if event["data"].is_object() {
+            &event["data"]
+        } else {
+            event
+        };
+        let pid = fields["pid"].as_u64().unwrap_or(0) as u32;
+        let syscall_name = fields["syscall_name"].as_str().unwrap_or("");
 
         // Update process state
         let state = self
