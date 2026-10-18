@@ -16,8 +16,12 @@ import (
 	"github.com/wasm-threat-detector/host/internal/collector"
 	"github.com/wasm-threat-detector/host/internal/engine"
 	"github.com/wasm-threat-detector/host/internal/events"
+	"github.com/wasm-threat-detector/host/internal/metrics"
 	"github.com/wasm-threat-detector/host/internal/output"
 )
+
+// wasmtimeVersion is the wasmtime-go major version linked into this binary.
+const wasmtimeVersion = "wasmtime-go/v17"
 
 var (
 	cfgFile     string
@@ -138,6 +142,12 @@ func run() {
 		"encoding":     string(encoding),
 	}).Info("Wasm rule limits")
 
+	// 指标：真实计数器，规则调用由引擎观察者喂入，威胁计数由输出链喂入
+	m := metrics.New()
+	m.SetBuildInfo(viper.GetString("collector"), string(encoding), wasmtimeVersion)
+	wasmEngine.SetObserver(m)
+	m.RegisterEngine(wasmEngine)
+
 	// 加载规则
 	rulesPath := viper.GetString("rules")
 	if err := loadRules(wasmEngine, rulesPath, logger); err != nil {
@@ -145,7 +155,7 @@ func run() {
 	}
 
 	// 创建输出处理器
-	outputHandler, err := createOutputHandler(logger)
+	outputHandler, err := createOutputHandler(logger, m)
 	if err != nil {
 		logger.Fatalf("Failed to create output handler: %v", err)
 	}
@@ -153,6 +163,11 @@ func run() {
 
 	// 创建事件收集器
 	collectors := createCollectors(logger)
+	for _, col := range collectors {
+		if s, ok := col.(metrics.EBPFStatser); ok {
+			m.RegisterEBPF(s)
+		}
+	}
 
 	// 启动收集器
 	for _, col := range collectors {
@@ -163,12 +178,10 @@ func run() {
 	}
 
 	// 启动 Prometheus 指标服务器
-	if prometheusHandler, ok := outputHandler.(*output.MultiOutputHandler); ok {
-		go startMetricsServer(logger, prometheusHandler)
-	}
+	go startMetricsServer(logger, m)
 
 	// 处理事件
-	go processEvents(ctx, wasmEngine, collectors, outputHandler, logger)
+	go processEvents(ctx, wasmEngine, collectors, outputHandler, m, logger)
 
 	logger.Info("WASM-ThreatDetector started successfully")
 
@@ -263,7 +276,7 @@ func loadRules(wasmEngine engine.ThreatEngine, rulesPath string, logger *logrus.
 }
 
 // createOutputHandler 创建输出处理器
-func createOutputHandler(logger *logrus.Logger) (output.OutputHandler, error) {
+func createOutputHandler(logger *logrus.Logger, m *metrics.Metrics) (output.OutputHandler, error) {
 	var handlers []output.OutputHandler
 
 	// 日志输出处理器
@@ -280,9 +293,8 @@ func createOutputHandler(logger *logrus.Logger) (output.OutputHandler, error) {
 		handlers = append(handlers, webhookHandler)
 	}
 
-	// Prometheus 输出处理器
-	prometheusHandler := output.NewPrometheusOutputHandler(logger)
-	handlers = append(handlers, prometheusHandler)
+	// Prometheus 威胁计数
+	handlers = append(handlers, m)
 
 	return output.NewMultiOutputHandler(logger, handlers...), nil
 }
@@ -309,7 +321,7 @@ func createCollectors(logger *logrus.Logger) []collector.Collector {
 }
 
 // processEvents 处理事件
-func processEvents(ctx context.Context, wasmEngine engine.ThreatEngine, collectors []collector.Collector, outputHandler output.OutputHandler, logger *logrus.Logger) {
+func processEvents(ctx context.Context, wasmEngine engine.ThreatEngine, collectors []collector.Collector, outputHandler output.OutputHandler, m *metrics.Metrics, logger *logrus.Logger) {
 	// 合并所有收集器的事件通道
 	eventChan := make(chan *events.Event, 1000)
 
@@ -322,7 +334,8 @@ func processEvents(ctx context.Context, wasmEngine engine.ThreatEngine, collecto
 				case <-ctx.Done():
 					return
 				default:
-					logger.Warn("Event channel full, dropping event")
+					m.ObserveDrop()
+					logger.Debug("Event channel full, dropping event")
 				}
 			}
 		}(col)
@@ -335,7 +348,9 @@ func processEvents(ctx context.Context, wasmEngine engine.ThreatEngine, collecto
 			return
 		case event := <-eventChan:
 			// 使用 Wasm 引擎检测威胁
+			start := time.Now()
 			results, err := wasmEngine.DetectThreat(ctx, event)
+			m.ObserveEvent(event.Type, time.Since(start))
 			if err != nil {
 				logger.Warnf("Threat detection failed: %v", err)
 				continue
@@ -351,26 +366,19 @@ func processEvents(ctx context.Context, wasmEngine engine.ThreatEngine, collecto
 	}
 }
 
-// startMetricsServer 启动 Prometheus 指标服务器
-func startMetricsServer(logger *logrus.Logger, multiHandler *output.MultiOutputHandler) {
+// startMetricsServer 启动 Prometheus 指标与健康检查服务
+func startMetricsServer(logger *logrus.Logger, m *metrics.Metrics) {
 	port := viper.GetInt("metrics-port")
 
-	http.HandleFunc("/metrics", func(w http.ResponseWriter, r *http.Request) {
-		// 这里需要从 multiHandler 中获取 PrometheusOutputHandler
-		// 简化处理，实际应该提供更好的接口
-		w.Header().Set("Content-Type", "text/plain")
-		w.Write([]byte("# HELP wasm_threat_detector_total_threats Total number of threats detected\n"))
-		w.Write([]byte("# TYPE wasm_threat_detector_total_threats counter\n"))
-		w.Write([]byte(fmt.Sprintf("wasm_threat_detector_total_threats %d\n", time.Now().Unix())))
-	})
-
-	http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+	mux := http.NewServeMux()
+	mux.Handle("/metrics", m.Handler())
+	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("OK"))
+		_, _ = w.Write([]byte("OK"))
 	})
 
 	logger.Infof("Starting metrics server on port %d", port)
-	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), nil); err != nil {
+	if err := http.ListenAndServe(fmt.Sprintf(":%d", port), mux); err != nil {
 		logger.Errorf("Metrics server failed: %v", err)
 	}
 }

@@ -33,6 +33,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/bytecodealliance/wasmtime-go/v17"
@@ -52,6 +53,8 @@ type Engine struct {
 	names  []string // sorted; fixes the evaluation order
 	closed bool
 	enc    Encoding
+
+	observer atomic.Pointer[observerBox]
 
 	stopEpoch chan struct{}
 	epochWG   sync.WaitGroup
@@ -126,6 +129,24 @@ func (e *Engine) Encoding() Encoding {
 	e.mu.RLock()
 	defer e.mu.RUnlock()
 	return e.enc
+}
+
+// Observer receives one callback per rule invocation, after the rule's
+// counters were updated. Implementations must be cheap and must not call back
+// into the engine.
+type Observer interface {
+	ObserveInvoke(rule string, raw bool, d time.Duration, fuel uint64, err error)
+}
+
+type observerBox struct{ o Observer }
+
+// SetObserver installs (or, with nil, removes) the invocation observer.
+func (e *Engine) SetObserver(o Observer) {
+	if o == nil {
+		e.observer.Store(nil)
+		return
+	}
+	e.observer.Store(&observerBox{o: o})
 }
 
 func (e *Engine) runEpoch() {
@@ -406,10 +427,14 @@ func (e *Engine) invoke(r *rule, payload []byte, raw bool) (int32, error) {
 				st.TrapsOther++
 			}
 		}
-		return 0, err
-	}
-	if level > 0 {
+	} else if level > 0 {
 		st.Threats++
+	}
+	if box := e.observer.Load(); box != nil {
+		box.o.ObserveInvoke(r.name, raw, d, fuel, err)
+	}
+	if err != nil {
+		return 0, err
 	}
 	return level, nil
 }

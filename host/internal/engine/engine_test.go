@@ -641,3 +641,43 @@ func BenchmarkEventPathEndToEnd(b *testing.B) {
 		})
 	}
 }
+
+type recordingObserver struct {
+	mu    sync.Mutex
+	calls []string
+	errs  int
+	fuel  uint64
+}
+
+func (o *recordingObserver) ObserveInvoke(rule string, raw bool, d time.Duration, fuel uint64, err error) {
+	o.mu.Lock()
+	defer o.mu.Unlock()
+	o.calls = append(o.calls, rule)
+	o.fuel += fuel
+	if err != nil {
+		o.errs++
+	}
+}
+
+func TestObserverSeesEveryInvocation(t *testing.T) {
+	e := newEngine(t, Limits{Fuel: 2_000_000})
+	load(t, e, "echo", "echo_level.wat")
+	load(t, e, "spin", "spin.wat")
+	obs := &recordingObserver{}
+	e.SetObserver(obs)
+	if _, err := e.Invoke("echo", []byte("1")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := e.Invoke("spin", []byte("x")); err == nil {
+		t.Fatal("spin should trap")
+	}
+	e.SetObserver(nil)
+	if _, err := e.Invoke("echo", []byte("1")); err != nil {
+		t.Fatal(err)
+	}
+	obs.mu.Lock()
+	defer obs.mu.Unlock()
+	if len(obs.calls) != 2 || obs.calls[0] != "echo" || obs.calls[1] != "spin" || obs.errs != 1 || obs.fuel == 0 {
+		t.Errorf("observer saw %v errs=%d fuel=%d", obs.calls, obs.errs, obs.fuel)
+	}
+}
