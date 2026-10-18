@@ -96,10 +96,41 @@ jobs:
         working-directory: host
         run: go build ./internal/ebpf/
 
+  isolation:
+    name: Isolation · adversarial Wasm modules against the engine (E6)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-wasip1
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: rules/adversarial
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache-dependency-path: host/go.sum
+      - name: Build adversarial modules
+        working-directory: rules/adversarial
+        run: cargo build --release --target wasm32-wasip1
+      - name: Run every module against the engine under default limits
+        working-directory: host
+        env:
+          WASMSENTINEL_RESULTS_DIR: ${{ github.workspace }}/isolation-results
+        run: |
+          go test -count=1 -run Adversarial -v ./internal/engine/ | grep -E 'adversarial_test|^(ok|FAIL)' | sed 's/^ *adversarial_test.go:[0-9]*: //'
+      - name: Table
+        run: cat isolation-results/isolation.md >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: isolation-results
+          path: isolation-results/
+
   release:
     name: GitHub Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: [go, wasm-rules, ebpf]
+    needs: [go, wasm-rules, ebpf, isolation]
     runs-on: ubuntu-latest
     permissions:
       contents: write
