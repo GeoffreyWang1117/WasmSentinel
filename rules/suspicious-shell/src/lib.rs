@@ -1,5 +1,35 @@
 use serde_json::Value;
 
+// ---------------------------------------------------------------------------
+// Guest ABI v2: host-visible allocator.
+//
+// The host calls `alloc` once per rule instance to obtain an event buffer in
+// linear memory, copies the serialized event into it and then calls
+// `detect(ptr, len)`. The buffer is released with `dealloc` when the host grows
+// it or drops the instance. Writing at a fixed offset (the pre-v2 behaviour)
+// is no longer supported: it silently overlapped the shadow stack.
+// ---------------------------------------------------------------------------
+
+/// Allocate `size` bytes in linear memory and hand ownership to the host.
+#[no_mangle]
+pub extern "C" fn alloc(size: usize) -> *mut u8 {
+    let mut buf = Vec::<u8>::with_capacity(size);
+    let ptr = buf.as_mut_ptr();
+    std::mem::forget(buf);
+    ptr
+}
+
+/// Release a buffer previously returned by [`alloc`] with the same `size`.
+///
+/// # Safety
+/// `ptr` must come from `alloc(size)` and must not be used afterwards.
+#[no_mangle]
+pub unsafe extern "C" fn dealloc(ptr: *mut u8, size: usize) {
+    if !ptr.is_null() && size > 0 {
+        drop(Vec::from_raw_parts(ptr, 0, size));
+    }
+}
+
 /// 检测函数 - 分析事件并返回威胁级别
 ///
 /// # 参数
