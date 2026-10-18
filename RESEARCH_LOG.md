@@ -2,6 +2,32 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-18 · P1.3 二进制事件通道（完成；含一个推翻预期的测量）
+
+**做了什么**
+
+- 定义二进制事件载荷（Go `host/internal/wire`，Rust `rules/sentinel-abi`）：16 B 头（magic `WSB1`、版本、记录长度、字符串区长度）+ 内核记录原样 592 B + 宿主解析好的字符串（user、group、syscall_name，NUL 结尾）。记录从 ring buffer 到 guest 线性内存只经过一次拷贝，不经过 Go 结构体编码或 JSON。
+- `events.Event` 增加 `Binary []byte`（不序列化），eBPF 适配层每个事件构造一次；`ebpf.Event` 保留 `Raw` 记录并提供 `Record()` 逆向编码（测试与回放用）。
+- 引擎：`--event-encoding=json|binary`；规则可选导出 `detect_raw(ptr,len)`；binary 模式下有二进制形式且规则导出 `detect_raw` 时走 raw，否则该规则回退 JSON（JSON 每事件最多序列化一次）；`InvokeRaw`、`RuleStats.CallsRaw`；缺导出时返回 `abi` 类错误且不丢实例。
+- 两个规则 crate 都导出 `detect_raw`。sentinel-abi 提供 `to_value()`（从记录重建与 Go `EventFromEBPF` 相同的 JSON 结构）和 `EventFields` trait（`JsonEvent` / `RawEvent` 两个视图，直接按字段读取、不建树）。suspicious-shell 的三段检测逻辑改写到 trait 上；ml-detector 暂用 `to_value()`。
+- 删除 `host/internal/bridge/zero_copy.go`（515 行，自定义格式，从未被引用）。
+- CI 的 Rust matrix 加入 `rules/sentinel-abi`。
+
+**验收**：`TestRawAndJSONPathsAgreeOnRealModules` 用 9 个覆盖全部事件类型的内核记录，对 suspicious_shell 与 ml_detector 各开两份实例（一份喂 JSON，一份喂二进制），逐条比较 level，全部相等且含正例；sentinel-abi 内 `raw_view_matches_json_view` 逐访问器比较两个视图；suspicious-shell crate 内 `raw_and_json_paths_agree`。`go test -race ./...` 全绿（collector / ebpf / engine / wire 四个包）。
+
+**测量（本机单 goroutine，`-benchtime 2s`）**
+
+| 基准 | JSON | binary | 备注 |
+|---|---|---|---|
+| suspicious_shell 单次调用，`to_value()` 重建 JSON 树的第一版 | 7.6 µs | **8.1 µs** | 更慢：建树的分配量与 serde_json 文本解析相当，"省掉解析"只是把成本搬了地方 |
+| suspicious_shell 单次调用，改为 `EventFields` 直接读记录 | 7.8 µs | **4.2 µs** | −46%；剩余 4.2 µs 中约 2.2 µs 是引擎调用开销 |
+| ml_detector 单次调用（仍用 `to_value()`） | 17.5 µs | 18.9 µs | 同第一行的原因；P1.4 把 hybrid.rs 迁到 trait 上 |
+| 端到端：适配层转换 + `DetectThreat`（suspicious_shell） | 11.7 µs / 39 allocs / 2.5 KB | **5.6 µs / 26 allocs / 1.8 KB** | 2.1×，省掉 `json.Marshal` 与 guest 解析 |
+
+**结论与对论文的影响**：论文草稿里"零拷贝 5×（165→33 µs）"没有来源，本次实测给出的是 **2.1×（端到端）**，且前提是规则按字段读记录；一旦规则在 guest 内重建通用 JSON 结构，收益归零。E3 应报告两臂的端到端数字与这个前提。命名上不再用"zero-copy"：ring buffer → guest 至少一次拷贝，文稿改称 binary direct-write / in-place record。
+
+**遗留**：ml_detector 的 raw 路径仍建树（P1.4 一并迁移）；默认编码保持 `json`，E3 两臂对比后再定默认值。
+
 ## 2026-10-17 · P1.1 eBPF 采集器接入（完成）
 
 **做了什么**
