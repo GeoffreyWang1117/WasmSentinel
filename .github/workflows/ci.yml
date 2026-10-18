@@ -65,6 +65,11 @@ jobs:
         run: cargo test --release
       - name: Build Wasm module
         run: cargo build --release --target wasm32-wasip1
+      - name: Model parity, NumPy reference vs Wasm module (ml-detector only)
+        if: matrix.crate == 'rules/ml-detector'
+        run: |
+          python3 -m pip install --quiet --user wasmtime numpy
+          python3 train/verify_wasm_parity.py --wasm target/wasm32-wasip1/release/ml_detector.wasm --count 1000 --adfa-count 0
       - uses: actions/upload-artifact@v4
         with:
           name: wasm-${{ strategy.job-index }}
