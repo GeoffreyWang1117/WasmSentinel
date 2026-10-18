@@ -310,3 +310,171 @@ mod tests {
         assert!(burstiness >= 1.0);
     }
 }
+
+// ---------------------------------------------------------------------------
+// Feature set v1 (ADFA-LD): exact port of `extract_features` in
+// train/train_mlp.py. The model embedded in weights.rs was trained on these 64
+// values (46 populated) computed from syscall *numbers*. Everything is computed
+// in f64 like the NumPy reference and cast to f32 at the end, so the Wasm
+// module and the training script agree to within f32 rounding
+// (train/verify_wasm_parity.py checks this against the module).
+//
+// The category sets mix ABI numberings (0/1 are x86_64 read/write, 56/57 are
+// aarch64 openat/close, ...) while ADFA-LD itself uses i386 numbers. They are
+// kept verbatim because the trained weights depend on them; a semantically
+// clean feature set is an evaluation question (E1), not a porting one.
+// ---------------------------------------------------------------------------
+
+/// Length of the v1 feature vector.
+pub const ADFA_FEATURE_DIM: usize = 64;
+
+const IO_SYSCALLS: &[u32] = &[0, 1, 63, 64, 65, 66, 67];
+const FILE_SYSCALLS: &[u32] = &[56, 57, 80, 81, 82, 83];
+const MEMORY_SYSCALLS: &[u32] = &[222, 226, 215, 214];
+const NETWORK_SYSCALLS: &[u32] = &[198, 200, 201, 202, 203, 204, 205, 206];
+const PROCESS_SYSCALLS: &[u32] = &[220, 221, 93, 94, 129];
+const DANGEROUS_SYSCALLS: &[u32] = &[117, 105, 106, 142, 143, 40, 41, 165, 166];
+
+/// Feature set v1 for a syscall-number sequence (a whole ADFA-LD trace when
+/// training, the per-process window when deployed).
+pub fn adfa_features(syscalls: &[u32]) -> [f32; ADFA_FEATURE_DIM] {
+    let mut f = [0f32; ADFA_FEATURE_DIM];
+    if syscalls.is_empty() {
+        return f;
+    }
+    let n = syscalls.len();
+    let total = n as f64;
+
+    // collections.Counter semantics: keys in first-occurrence order.
+    let mut order: Vec<u32> = Vec::new();
+    let mut counts: HashMap<u32, u64> = HashMap::new();
+    for &s in syscalls {
+        let c = counts.entry(s).or_insert_with(|| {
+            order.push(s);
+            0
+        });
+        *c += 1;
+    }
+    let count_of = |s: u32| -> u64 { counts.get(&s).copied().unwrap_or(0) };
+    let category = |set: &[u32]| -> f32 {
+        (set.iter().map(|&s| count_of(s)).sum::<u64>() as f64 / total) as f32
+    };
+
+    // 0..6 category frequencies
+    f[0] = category(IO_SYSCALLS);
+    f[1] = category(FILE_SYSCALLS);
+    f[2] = category(MEMORY_SYSCALLS);
+    f[3] = category(NETWORK_SYSCALLS);
+    f[4] = category(PROCESS_SYSCALLS);
+    f[5] = category(DANGEROUS_SYSCALLS);
+
+    // 6..16 ten most common syscalls (stable: ties keep first-occurrence order)
+    let mut ranked: Vec<u64> = order.iter().map(|s| counts[s]).collect();
+    ranked.sort_by(|a, b| b.cmp(a));
+    for (i, c) in ranked.iter().take(10).enumerate() {
+        f[6 + i] = (*c as f64 / total) as f32;
+    }
+
+    // 16..26 the first ten syscall numbers, scaled
+    for (i, &s) in syscalls.iter().take(10).enumerate() {
+        f[16 + i] = (s as f64 / 300.0) as f32;
+    }
+
+    // 26..36 ten most common bigrams
+    if n >= 2 {
+        let mut pair_order: Vec<(u32, u32)> = Vec::new();
+        let mut pairs: HashMap<(u32, u32), u64> = HashMap::new();
+        for w in syscalls.windows(2) {
+            let k = (w[0], w[1]);
+            let c = pairs.entry(k).or_insert_with(|| {
+                pair_order.push(k);
+                0
+            });
+            *c += 1;
+        }
+        let mut ranked: Vec<u64> = pair_order.iter().map(|k| pairs[k]).collect();
+        ranked.sort_by(|a, b| b.cmp(a));
+        for (i, c) in ranked.iter().take(10).enumerate() {
+            f[26 + i] = (*c as f64 / (total - 1.0)) as f32;
+        }
+    }
+
+    // 36..46 statistics
+    let denom = (total - 1.0).max(1.0);
+    f[36] = (total / 1000.0).min(1.0) as f32;
+    f[37] = (counts.len() as f64 / total.max(1.0)) as f32;
+    let mut ent = 0f64;
+    for &s in &order {
+        let p = counts[&s] as f64 / total;
+        ent += p * (p + 1e-10).log2();
+    }
+    f[38] = (-ent / (counts.len() as f64).max(2.0).log2()) as f32;
+    let maxc = order.iter().map(|s| counts[s]).max().unwrap_or(0) as f64;
+    let mean_count = total / counts.len() as f64;
+    f[39] = (maxc / mean_count / 10.0) as f32;
+    f[40] = if syscalls.iter().any(|s| DANGEROUS_SYSCALLS.contains(s)) {
+        1.0
+    } else {
+        0.0
+    };
+    let (mut consecutive, mut net_after_file, mut mem_after_proc) = (0u64, 0u64, 0u64);
+    for w in syscalls.windows(2) {
+        if w[0] == w[1] {
+            consecutive += 1;
+        }
+        if FILE_SYSCALLS.contains(&w[0]) && NETWORK_SYSCALLS.contains(&w[1]) {
+            net_after_file += 1;
+        }
+        if PROCESS_SYSCALLS.contains(&w[0]) && MEMORY_SYSCALLS.contains(&w[1]) {
+            mem_after_proc += 1;
+        }
+    }
+    f[41] = (consecutive as f64 / denom) as f32;
+    f[42] = (net_after_file as f64 / denom) as f32;
+    f[43] = (mem_after_proc as f64 / denom) as f32;
+    let mean_nr = syscalls.iter().map(|&s| s as f64).sum::<f64>() / total;
+    f[44] = (mean_nr / 300.0) as f32;
+    if n > 1 {
+        let var = syscalls
+            .iter()
+            .map(|&s| {
+                let d = s as f64 - mean_nr;
+                d * d
+            })
+            .sum::<f64>()
+            / total;
+        f[45] = (var.sqrt() / 100.0) as f32;
+    }
+    f
+}
+
+#[cfg(test)]
+mod adfa_feature_tests {
+    use super::*;
+
+    #[test]
+    fn empty_sequence_is_all_zero() {
+        assert!(adfa_features(&[]).iter().all(|v| *v == 0.0));
+    }
+
+    #[test]
+    fn hand_checked_values() {
+        // 0 read, 1 write, 1 write, 57 close, 117 ptrace
+        let f = adfa_features(&[0, 1, 1, 57, 117]);
+        assert!((f[0] - 3.0 / 5.0).abs() < 1e-6, "io ratio");
+        assert!((f[1] - 1.0 / 5.0).abs() < 1e-6, "file ratio");
+        assert!((f[5] - 1.0 / 5.0).abs() < 1e-6, "dangerous ratio");
+        assert!((f[6] - 2.0 / 5.0).abs() < 1e-6, "most common = write x2");
+        assert!(
+            (f[7] - 1.0 / 5.0).abs() < 1e-6,
+            "ties keep first-seen order"
+        );
+        assert!((f[16] - 0.0).abs() < 1e-6 && (f[20] - 117.0 / 300.0).abs() < 1e-6);
+        assert!((f[26] - 1.0 / 4.0).abs() < 1e-6, "bigram counts");
+        assert!((f[36] - 0.005).abs() < 1e-6);
+        assert!((f[37] - 4.0 / 5.0).abs() < 1e-6);
+        assert_eq!(f[40], 1.0);
+        assert!((f[41] - 1.0 / 4.0).abs() < 1e-6, "one consecutive repeat");
+        assert!((f[44] - (176.0 / 5.0) / 300.0).abs() < 1e-6);
+    }
+}

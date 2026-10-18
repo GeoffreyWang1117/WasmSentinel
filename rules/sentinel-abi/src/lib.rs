@@ -430,15 +430,23 @@ pub trait EventFields {
     fn protocol(&self) -> Option<&str>;
     fn direction(&self) -> Option<&str>;
     fn syscall_name(&self) -> Option<&str>;
+    fn syscall_nr(&self) -> Option<u64>;
     fn pid(&self) -> Option<u64>;
+    fn uid(&self) -> Option<u64>;
 }
 
 /// JSON-path view over `events.Event` as serialized by the host.
 pub struct JsonEvent<'a>(pub &'a Value);
 
 impl<'a> JsonEvent<'a> {
+    /// Host events keep their payload under "data"; flat records (ADFA-style
+    /// replay, unit tests) keep the same fields at the top level.
     fn data(&self) -> &'a Value {
-        &self.0["data"]
+        if self.0["data"].is_object() {
+            &self.0["data"]
+        } else {
+            self.0
+        }
     }
     fn block(&self) -> &'a Value {
         let d = self.data();
@@ -499,8 +507,14 @@ impl<'a> EventFields for JsonEvent<'a> {
     fn syscall_name(&self) -> Option<&str> {
         self.data()["syscall_name"].as_str()
     }
+    fn syscall_nr(&self) -> Option<u64> {
+        self.data()["syscall_nr"].as_u64()
+    }
     fn pid(&self) -> Option<u64> {
         self.data()["pid"].as_u64()
+    }
+    fn uid(&self) -> Option<u64> {
+        self.data()["uid"].as_u64()
     }
 }
 
@@ -607,8 +621,14 @@ impl<'a> EventFields for RawEvent<'a> {
     fn syscall_name(&self) -> Option<&str> {
         (self.rec().event_type == EVENT_SYSCALL).then_some(self.0.syscall_name)
     }
+    fn syscall_nr(&self) -> Option<u64> {
+        (self.rec().event_type == EVENT_SYSCALL).then_some(self.rec().syscall_nr as u64)
+    }
     fn pid(&self) -> Option<u64> {
         Some(self.rec().pid as u64)
+    }
+    fn uid(&self) -> Option<u64> {
+        Some(self.rec().uid as u64)
     }
 }
 
@@ -682,7 +702,9 @@ mod view_tests {
             assert_eq!(raw.protocol(), json.protocol(), "{t}");
             assert_eq!(raw.direction(), json.direction(), "{t}");
             assert_eq!(raw.syscall_name(), json.syscall_name(), "{t}");
+            assert_eq!(raw.syscall_nr(), json.syscall_nr(), "{t}");
             assert_eq!(raw.pid(), json.pid(), "{t}");
+            assert_eq!(raw.uid(), json.uid(), "{t}");
         }
     }
 }

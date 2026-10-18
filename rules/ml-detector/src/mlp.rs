@@ -148,17 +148,21 @@ impl MlpDetector {
         current
     }
 
+    /// Score a feature vector (padded or truncated to the input size) without
+    /// touching statistics. This is the function train/verify_wasm_parity.py
+    /// compares against the NumPy reference.
+    pub fn score(&self, features: &[f32]) -> f32 {
+        let mut input = vec![0.0; self.config.input_size];
+        let len = features.len().min(self.config.input_size);
+        input[..len].copy_from_slice(&features[..len]);
+        self.forward(&input).first().copied().unwrap_or(0.0)
+    }
+
     /// Detect anomaly from feature vector
     ///
     /// Returns anomaly score (0.0 = normal, 1.0 = anomalous)
     pub fn detect(&mut self, features: &[f32]) -> f32 {
-        // Pad or truncate input to match expected size
-        let mut input = vec![0.0; self.config.input_size];
-        let len = features.len().min(self.config.input_size);
-        input[..len].copy_from_slice(&features[..len]);
-
-        let output = self.forward(&input);
-        let score = output.get(0).copied().unwrap_or(0.0);
+        let score = self.score(features);
 
         self.stats.total_inferences += 1;
         if score >= self.config.threshold {
@@ -234,6 +238,11 @@ impl MlpDetector {
     pub fn get_config(&self) -> &MlpConfig {
         &self.config
     }
+
+    /// Override the decision threshold.
+    pub fn set_threshold(&mut self, threshold: f32) {
+        self.config.threshold = threshold;
+    }
 }
 
 impl Default for MlpDetector {
@@ -247,9 +256,10 @@ impl MlpDetector {
     pub fn with_embedded_weights() -> Self {
         let embedded_weights = crate::weights::load_embedded_weights();
 
+        // The architecture comes from the generated weights, never from here.
         let config = MlpConfig {
             input_size: crate::weights::INPUT_SIZE,
-            hidden_sizes: vec![32, 16], // Matches embedded model architecture
+            hidden_sizes: crate::weights::HIDDEN_SIZES.to_vec(),
             output_size: 1,
             threshold: crate::weights::DEFAULT_THRESHOLD,
         };

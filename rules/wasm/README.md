@@ -6,7 +6,7 @@ Compiled Wasm rule modules land here. They are **build products** and are git-ig
 | module | source | what it does |
 |---|---|---|
 | `suspicious_shell.wasm` | `rules/suspicious-shell/` | keyword / port / path rules for shell, network and file events |
-| `ml_detector.wasm` | `rules/ml-detector/` | STIDE n-gram fast path + embedded MLP on syscall sequences |
+| `ml_detector.wasm` | `rules/ml-detector/` | STIDE n-gram fast path + embedded 128-64-32-16 MLP on syscall-number windows; provenance and parity check in `rules/ml-detector/MODEL.md` |
 
 ## Guest ABI (v2)
 
