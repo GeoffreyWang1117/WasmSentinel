@@ -203,11 +203,10 @@ impl HybridDetector {
         let pid = event.pid().unwrap_or(0) as u32;
         let nr = event.syscall_nr();
         let name = event.syscall_name().unwrap_or("");
-        let key = if name.is_empty() {
-            nr.map(|n| n.to_string()).unwrap_or_default()
-        } else {
-            name.to_string()
-        };
+        // STIDE keys on the syscall number when the event carries one (live
+        // eBPF events and replays both do), so a database trained through
+        // train_sequence matches; the name is the fallback for flat records.
+        let key = stide_key(nr, name);
 
         let window = self.config.syscall_window;
         let state = self.state_for(pid);
@@ -428,15 +427,34 @@ impl HybridDetector {
         for event in events {
             let view = JsonEvent(event);
             if view.event_type() == "syscall" {
-                let name = view.syscall_name().unwrap_or("");
-                if !name.is_empty() {
-                    self.stide.train_on(name);
-                } else if let Some(nr) = view.syscall_nr() {
-                    self.stide.train_on(&nr.to_string());
+                let key = stide_key(view.syscall_nr(), view.syscall_name().unwrap_or(""));
+                if !key.is_empty() {
+                    self.stide.train_on(&key);
                 }
             }
         }
         self.stide.fit();
+    }
+
+    /// Feed one normal syscall-number trace to STIDE. Each trace starts with a
+    /// fresh n-gram window so traces do not blend into each other. Call
+    /// [`train_finish`](Self::train_finish) when all traces are in.
+    pub fn train_sequence(&mut self, seq: &[u32]) {
+        self.stide.reset_window();
+        for nr in seq {
+            self.stide.train_on(&nr.to_string());
+        }
+    }
+
+    /// Finalize STIDE training and return the normal-database size.
+    pub fn train_finish(&mut self) -> usize {
+        self.stide.fit();
+        self.stide.database_size()
+    }
+
+    /// Number of normal n-grams STIDE knows.
+    pub fn stide_database_size(&self) -> usize {
+        self.stide.database_size()
     }
 
     /// Load MLP weights at run time (tests, experiments); deployments use the
@@ -473,6 +491,13 @@ impl HybridDetector {
 impl Default for HybridDetector {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+fn stide_key(nr: Option<u64>, name: &str) -> String {
+    match nr {
+        Some(n) => n.to_string(),
+        None => name.to_string(),
     }
 }
 
@@ -551,6 +576,37 @@ mod tests {
         let _ = detector
             .detect(&serde_json::json!({"type": "process_exit", "pid": 20, "data": {"pid": 20}}));
         assert_eq!(detector.tracked_processes(), 7);
+    }
+
+    #[test]
+    fn train_sequence_makes_the_training_trace_quiet() {
+        let normal: Vec<u32> = (0..400).map(|i| [3u32, 4, 5, 6, 197, 125][i % 6]).collect();
+        let mut trained = HybridDetector::new();
+        trained.train_sequence(&normal);
+        assert!(trained.train_finish() > 0);
+        let mut untrained = HybridDetector::new();
+
+        let alerts = |d: &mut HybridDetector| -> usize {
+            normal
+                .iter()
+                .filter(|nr| d.detect(&syscall(7, "", **nr)).threat_level > 0)
+                .count()
+        };
+        let quiet = alerts(&mut trained);
+        let noisy = alerts(&mut untrained);
+        assert_eq!(quiet, 0, "every n-gram of the training trace is known");
+        assert!(
+            noisy > normal.len() / 2,
+            "an empty database flags almost everything ({noisy})"
+        );
+
+        // An unseen pattern still raises after training.
+        let odd: Vec<u32> = vec![101, 165, 161, 155, 101, 165, 161, 155, 101, 165];
+        let raised = odd
+            .iter()
+            .filter(|nr| trained.detect(&syscall(8, "", **nr)).threat_level > 0)
+            .count();
+        assert!(raised > 0);
     }
 
     #[test]

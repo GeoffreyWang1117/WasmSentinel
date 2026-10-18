@@ -41,6 +41,7 @@ var (
 	replayFile    string
 	replayEPS     int
 	replayLoop    bool
+	ruleTrainDir  string
 )
 
 // rootCmd 代表基本命令
@@ -79,6 +80,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&replayFile, "replay-file", "", "collector=replay 时的轨迹文件或目录 (ADFA-LD 格式: 空格分隔的 syscall 号)")
 	rootCmd.PersistentFlags().IntVar(&replayEPS, "replay-eps", 0, "回放速率 (事件/秒, 0 = 尽快)")
 	rootCmd.PersistentFlags().BoolVar(&replayLoop, "replay-loop", false, "轨迹播完后循环")
+	rootCmd.PersistentFlags().StringVar(&ruleTrainDir, "rule-train-dir", "", "启动时用这个目录里的正常 syscall 轨迹 (ADFA-LD 格式) 训练导出 train_sequence 的规则 (如 ml_detector 的 STIDE 正常库)")
 	rootCmd.PersistentFlags().StringVar(&ebpfHooks, "ebpf-hooks", "all", "eBPF 钩子列表, 逗号分隔: exec,exit,open,connect,accept,syscall 或 all")
 	rootCmd.PersistentFlags().StringVar(&eventEncoding, "event-encoding", "json", "交给规则的事件编码: json 或 binary (binary 仅对 eBPF 事件且规则导出 detect_raw 时生效, 否则回退 json)")
 
@@ -95,6 +97,7 @@ func init() {
 	viper.BindPFlag("replay-file", rootCmd.PersistentFlags().Lookup("replay-file"))
 	viper.BindPFlag("replay-eps", rootCmd.PersistentFlags().Lookup("replay-eps"))
 	viper.BindPFlag("replay-loop", rootCmd.PersistentFlags().Lookup("replay-loop"))
+	viper.BindPFlag("rule-train-dir", rootCmd.PersistentFlags().Lookup("rule-train-dir"))
 	viper.BindPFlag("ebpf-hooks", rootCmd.PersistentFlags().Lookup("ebpf-hooks"))
 	viper.BindPFlag("event-encoding", rootCmd.PersistentFlags().Lookup("event-encoding"))
 }
@@ -161,6 +164,11 @@ func run() {
 	rulesPath := viper.GetString("rules")
 	if err := loadRules(wasmEngine, rulesPath, logger); err != nil {
 		logger.Fatalf("Failed to load rules: %v", err)
+	}
+	if dir := viper.GetString("rule-train-dir"); dir != "" {
+		if err := trainRules(wasmEngine, dir, logger); err != nil {
+			logger.Fatalf("Failed to train rules: %v", err)
+		}
 	}
 
 	// 创建输出处理器
@@ -295,6 +303,43 @@ func loadRules(wasmEngine engine.ThreatEngine, rulesPath string, logger *logrus.
 	rules := wasmEngine.GetLoadedRules()
 	logger.Infof("Loaded %d rules: %v", len(rules), rules)
 
+	return nil
+}
+
+// trainRules 把目录里的正常 syscall 轨迹喂给每条导出 train_sequence 的规则，
+// 最后调用 train_finish。轨迹是 ADFA-LD 格式（空格分隔的 syscall 号），每条轨迹
+// 一次调用，载荷是小端 u32 数组。
+func trainRules(wasmEngine *engine.Engine, dir string, logger *logrus.Logger) error {
+	traces, err := collector.LoadTraces(dir)
+	if err != nil {
+		return err
+	}
+	for _, name := range wasmEngine.GetLoadedRules() {
+		if !wasmEngine.HasExport(name, "train_sequence") {
+			continue
+		}
+		start := time.Now()
+		syscalls := 0
+		for _, trace := range traces {
+			buf := make([]byte, 4*len(trace))
+			for i, n := range trace {
+				buf[4*i], buf[4*i+1], buf[4*i+2], buf[4*i+3] = byte(n), byte(n>>8), byte(n>>16), byte(n>>24)
+			}
+			if _, err := wasmEngine.InvokeExport(name, "train_sequence", buf); err != nil {
+				return fmt.Errorf("rule %s: train_sequence: %w", name, err)
+			}
+			syscalls += len(trace)
+		}
+		ngrams := int32(0)
+		if wasmEngine.HasExport(name, "train_finish") {
+			if ngrams, err = wasmEngine.InvokeExport(name, "train_finish", nil); err != nil {
+				return fmt.Errorf("rule %s: train_finish: %w", name, err)
+			}
+		}
+		logger.WithFields(logrus.Fields{
+			"rule": name, "traces": len(traces), "syscalls": syscalls, "normal_ngrams": ngrams, "elapsed": time.Since(start).String(),
+		}).Info("Trained rule on normal traces")
+	}
 	return nil
 }
 

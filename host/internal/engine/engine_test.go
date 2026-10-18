@@ -681,3 +681,60 @@ func TestObserverSeesEveryInvocation(t *testing.T) {
 		t.Errorf("observer saw %v errs=%d fuel=%d", obs.calls, obs.errs, obs.fuel)
 	}
 }
+
+// Training STIDE through the generic export path: the normal trace that was
+// trained on no longer alerts, an untrained instance alerts on most of it.
+func TestInvokeExportTrainsSTIDE(t *testing.T) {
+	path := realModule(t, "ml_detector.wasm")
+	nums, err := collector.LoadTrace(filepath.Join("..", "pipeline", "testdata", "adfa_normal_utd0472.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	trace := make([]byte, 4*len(nums))
+	for i, n := range nums {
+		trace[4*i], trace[4*i+1], trace[4*i+2], trace[4*i+3] = byte(n), byte(n>>8), byte(n>>16), byte(n>>24)
+	}
+	e := newEngine(t, DefaultLimits())
+	for _, name := range []string{"trained", "untrained"} {
+		if err := e.LoadRule(name, path); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if !e.HasExport("trained", "train_sequence") || e.HasExport("trained", "no_such_export") {
+		t.Fatal("HasExport wrong")
+	}
+	if n, err := e.InvokeExport("trained", "train_sequence", trace); err != nil || int(n) != len(nums) {
+		t.Fatalf("train_sequence: %d, %v", n, err)
+	}
+	if ngrams, err := e.InvokeExport("trained", "train_finish", nil); err != nil || ngrams == 0 {
+		t.Fatalf("train_finish: %d, %v", ngrams, err)
+	}
+	if _, err := e.InvokeExport("trained", "no_such_export", nil); err == nil {
+		t.Error("missing export accepted")
+	} else {
+		ruleErr(t, err, TrapABI)
+	}
+
+	var names collector.NameCache
+	alerts := map[string]int{}
+	for i, n := range nums {
+		ev := &ebpf.Event{Type: ebpf.EventSyscall, TypeName: "syscall", PID: 77, PPID: 1, Comm: "replay", SyscallNr: n, MonotonicNs: uint64(i)}
+		js, _ := collector.EventFromEBPF(ev, &names).ToJSON()
+		for _, name := range []string{"trained", "untrained"} {
+			level, err := e.Invoke(name, js)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if level > 0 {
+				alerts[name]++
+			}
+		}
+	}
+	if alerts["trained"] != 0 {
+		t.Errorf("trained instance still alerts %d/%d times on its own training trace", alerts["trained"], len(nums))
+	}
+	if alerts["untrained"] < len(nums)/2 {
+		t.Errorf("untrained instance alerted only %d/%d times; the comparison is not meaningful", alerts["untrained"], len(nums))
+	}
+	t.Logf("alerts on the training trace: trained=%d untrained=%d of %d", alerts["trained"], alerts["untrained"], len(nums))
+}

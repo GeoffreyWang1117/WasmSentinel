@@ -74,6 +74,7 @@ type rule struct {
 // instance is one store plus the exports the host needs from it.
 type instance struct {
 	store     *wasmtime.Store
+	wi        *wasmtime.Instance
 	memory    *wasmtime.Memory
 	alloc     *wasmtime.Func
 	dealloc   *wasmtime.Func
@@ -256,7 +257,7 @@ func (e *Engine) instantiate(r *rule) (*instance, error) {
 		return nil, &RuleError{Rule: r.name, Kind: e.classify(nil, nil, err), Err: fmt.Errorf("instantiate: %w", err)}
 	}
 
-	in := &instance{store: store}
+	in := &instance{store: store, wi: wi}
 	if ext := wi.GetExport(store, "memory"); ext != nil {
 		in.memory = ext.Memory()
 	}
@@ -370,6 +371,119 @@ func (e *Engine) Invoke(name string, payload []byte) (int32, error) {
 		return 0, fmt.Errorf("rule %q not loaded", name)
 	}
 	return e.invoke(r, payload, false)
+}
+
+// HasExport reports whether a loaded rule exports a function of that name.
+func (e *Engine) HasExport(name, export string) bool {
+	e.mu.RLock()
+	r, ok := e.rules[name]
+	e.mu.RUnlock()
+	if !ok {
+		return false
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.inst == nil {
+		inst, err := e.instantiate(r)
+		if err != nil {
+			return false
+		}
+		r.inst = inst
+		r.stats.Reinstantiations++
+	}
+	return r.inst.wi.GetFunc(r.inst.store, export) != nil
+}
+
+// InvokeExport calls an arbitrary exported function of a rule under the same
+// limits and accounting as detect: a `(ptr, len) -> i32` export receives the
+// payload through the rule's buffer, a `() -> i32` export is called without
+// arguments (payload ignored). Rules use this for out-of-band work such as
+// training (`train_sequence`, `train_finish`). Missing or differently typed
+// exports return a TrapABI error and keep the instance.
+func (e *Engine) InvokeExport(name, export string, payload []byte) (int32, error) {
+	e.mu.RLock()
+	r, ok := e.rules[name]
+	e.mu.RUnlock()
+	if !ok {
+		return 0, fmt.Errorf("rule %q not loaded", name)
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
+	start := time.Now()
+	level, fuel, err := e.invokeExportLocked(r, export, payload)
+	d := time.Since(start)
+	st := &r.stats
+	st.Calls++
+	st.LatencyLast = d
+	st.LatencyTotal += d
+	if d > st.LatencyMax {
+		st.LatencyMax = d
+	}
+	st.FuelLast = fuel
+	st.FuelTotal += fuel
+	if r.inst != nil {
+		st.MemoryBytes = int64(r.inst.memory.DataSize(r.inst.store))
+	}
+	if err != nil {
+		st.Errors++
+		var re *RuleError
+		if errors.As(err, &re) && re.Kind != TrapABI {
+			st.TrapsOther++
+		}
+		return 0, err
+	}
+	return level, nil
+}
+
+func (e *Engine) invokeExportLocked(r *rule, export string, payload []byte) (int32, uint64, error) {
+	if len(payload) > math.MaxInt32 {
+		return 0, 0, &RuleError{Rule: r.name, Kind: TrapABI, Err: fmt.Errorf("payload of %d bytes is too large", len(payload))}
+	}
+	if r.inst == nil {
+		inst, err := e.instantiate(r)
+		if err != nil {
+			return 0, 0, err
+		}
+		r.inst = inst
+		r.stats.Reinstantiations++
+	}
+	in := r.inst
+	fn := in.wi.GetFunc(in.store, export)
+	if fn == nil {
+		return 0, 0, &RuleError{Rule: r.name, Kind: TrapABI, Err: fmt.Errorf("module does not export %q", export)}
+	}
+	nparams := len(fn.Type(in.store).Params())
+	if nparams != 0 && nparams != 2 {
+		return 0, 0, &RuleError{Rule: r.name, Kind: TrapABI, Err: fmt.Errorf("export %q takes %d params, want 0 or 2", export, nparams)}
+	}
+	fail := func(stage string, err error) (int32, uint64, error) {
+		kind := e.classify(in.memory, in.store, err)
+		r.inst = nil
+		return 0, e.fuelUsed(in.store), &RuleError{Rule: r.name, Kind: kind, Err: fmt.Errorf("%s: %w", stage, err)}
+	}
+	var res interface{}
+	var err error
+	if nparams == 2 {
+		if err := in.reserve(e, len(payload)); err != nil {
+			return fail("event buffer", err)
+		}
+		mem := in.memory.UnsafeData(in.store)
+		copy(mem[in.bufPtr:int(in.bufPtr)+len(payload)], payload)
+		e.arm(in.store)
+		res, err = fn.Call(in.store, in.bufPtr, int32(len(payload)))
+	} else {
+		e.arm(in.store)
+		res, err = fn.Call(in.store)
+	}
+	if err != nil {
+		return fail(export, err)
+	}
+	level, ok := res.(int32)
+	if !ok {
+		return fail(export, fmt.Errorf("returned %T, want i32", res))
+	}
+	return level, e.fuelUsed(in.store), nil
 }
 
 // InvokeRaw runs one rule's detect_raw export on a binary payload (package

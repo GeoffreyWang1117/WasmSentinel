@@ -355,6 +355,45 @@ pub extern "C" fn train(data_ptr: *const u8, data_len: usize) -> i32 {
     events.len() as i32
 }
 
+/// Feed one normal syscall trace to STIDE: `len` bytes of little-endian u32
+/// syscall numbers (no alignment requirement). Returns the number of syscalls
+/// consumed. The host calls this once per trace, then `train_finish`.
+#[no_mangle]
+pub extern "C" fn train_sequence(data_ptr: *const u8, len: usize) -> i32 {
+    if data_ptr.is_null() && len > 0 {
+        return -1;
+    }
+    let bytes: &[u8] = if len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(data_ptr, len) }
+    };
+    let seq: Vec<u32> = bytes
+        .chunks_exact(4)
+        .map(|c| u32::from_le_bytes([c[0], c[1], c[2], c[3]]))
+        .collect();
+    let detector = unsafe {
+        if DETECTOR.is_none() {
+            DETECTOR = Some(HybridDetector::new());
+        }
+        DETECTOR.as_mut().unwrap()
+    };
+    detector.train_sequence(&seq);
+    seq.len() as i32
+}
+
+/// Finalize STIDE training; returns the number of normal n-grams.
+#[no_mangle]
+pub extern "C" fn train_finish() -> i32 {
+    let detector = unsafe {
+        if DETECTOR.is_none() {
+            DETECTOR = Some(HybridDetector::new());
+        }
+        DETECTOR.as_mut().unwrap()
+    };
+    detector.train_finish() as i32
+}
+
 /// Get detector statistics
 #[no_mangle]
 pub extern "C" fn get_stats(stats_len: *mut usize) -> *const u8 {

@@ -45,10 +45,11 @@ conda run -n wasmsentinel python3 train/verify_wasm_parity.py --write-golden tra
 | `mlp_score(ptr,len)` | syscall 号序列 → 嵌入模型分数（评估与一致性检查用，绕过 STIDE 与进程状态） |
 | `mlp_features(ptr,len,out)` | 同上，输出 64 维特征 |
 | `model_info(out_len)` | 结构、参数量、阈值、来源、sha256 |
-| `init` / `train` / `get_stats` / `free_result` / `alloc` / `dealloc` | 配置、STIDE 训练、统计、内存 |
+| `train_sequence(ptr,len)` / `train_finish()` | 用正常 syscall 号轨迹（小端 u32 字节串）训练 STIDE；返回消费的 syscall 数 / 正常 n-gram 数 |
+| `init` / `train` / `get_stats` / `free_result` / `alloc` / `dealloc` | 配置、JSON 事件训练、统计、内存 |
 
 ## 已知限制（给 E1）
 
 - 训练用整条轨迹，线上按进程维护 100 长的 syscall 窗口：分布不一致，离线评估按整轨迹做，在线窗口是部署选择。
-- STIDE 的正常 n-gram 库需要通过 `train` 或 `init` 配置加载；宿主目前不加载，空库会让所有 n-gram 走 MLP 深路径。
+- STIDE 的正常 n-gram 库通过 `train_sequence` / `train_finish` 导出加载（宿主 `--rule-train-dir`，或评估脚本直接调用）；不加载时库为空，所有 n-gram 走 MLP 深路径。`StideConfig.max_database_size` 默认 100,000，整套 ADFA 训练集可能超过它，E1 要先核对。
 - STIDE 滑动窗口是全局的，多进程交错时会混在一起；ADFA 回放是单轨迹顺序，不受影响。
