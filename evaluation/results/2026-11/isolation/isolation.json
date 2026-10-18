@@ -1,0 +1,152 @@
+{
+  "cases": [
+    {
+      "module": "clock",
+      "attempt": "read the wall clock (permitted capability)",
+      "expect": "level==1",
+      "outcome": "level 1",
+      "contained": true,
+      "elapsed_ms": 0.016,
+      "memory_mib_after": 1.125,
+      "fuel_used": 182,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true
+    },
+    {
+      "module": "cpu_spin",
+      "attempt": "infinite loop (fuel budget 5e7)",
+      "expect": "trap:fuel",
+      "outcome": "trap fuel",
+      "contained": true,
+      "elapsed_ms": 4.791,
+      "memory_mib_after": 0,
+      "fuel_used": 50000000,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true,
+      "error": "detect: error while executing at wasm backtrace:"
+    },
+    {
+      "module": "cpu_spin",
+      "attempt": "infinite loop (fuel off, 100 ms deadline)",
+      "expect": "trap:timeout",
+      "outcome": "trap timeout",
+      "contained": true,
+      "elapsed_ms": 102.653,
+      "memory_mib_after": 0,
+      "fuel_used": 0,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true,
+      "error": "detect: error while executing at wasm backtrace:"
+    },
+    {
+      "module": "env_leak",
+      "attempt": "enumerate environment variables and argv",
+      "expect": "level==0",
+      "outcome": "level 0",
+      "contained": true,
+      "elapsed_ms": 0.021,
+      "memory_mib_after": 1.125,
+      "fuel_used": 248,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true
+    },
+    {
+      "module": "fs_read",
+      "attempt": "read /etc/passwd, list /, write /tmp via WASI",
+      "expect": "level==0",
+      "outcome": "level 0",
+      "contained": true,
+      "elapsed_ms": 0.028,
+      "memory_mib_after": 1.125,
+      "fuel_used": 1075,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true
+    },
+    {
+      "module": "mem_bomb_abort",
+      "attempt": "allocate and touch 1 GiB at once (refused before growing)",
+      "expect": "trap:memory|trap",
+      "outcome": "trap trap",
+      "contained": true,
+      "elapsed_ms": 0.087,
+      "memory_mib_after": 0,
+      "fuel_used": 1604,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true,
+      "error": "detect: error while executing at wasm backtrace:"
+    },
+    {
+      "module": "mem_bomb_graceful",
+      "attempt": "grow memory 16 MiB at a time until refused",
+      "expect": "level\u003c=64",
+      "outcome": "level 32",
+      "contained": true,
+      "elapsed_ms": 21.225,
+      "memory_mib_after": 49.125,
+      "fuel_used": 1738,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true
+    },
+    {
+      "module": "net_connect",
+      "attempt": "TCP connect to 127.0.0.1:22 via std::net",
+      "expect": "level==0",
+      "outcome": "level 0",
+      "contained": true,
+      "elapsed_ms": 0.004,
+      "memory_mib_after": 1.125,
+      "fuel_used": 12,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true
+    },
+    {
+      "module": "proc_exit",
+      "attempt": "proc_exit(3)",
+      "expect": "trap:exit",
+      "outcome": "trap exit",
+      "contained": true,
+      "elapsed_ms": 0.038,
+      "memory_mib_after": 0,
+      "fuel_used": 117,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true,
+      "error": "detect: error while executing at wasm backtrace:"
+    },
+    {
+      "module": "stack_overflow",
+      "attempt": "unbounded recursion",
+      "expect": "trap:trap",
+      "outcome": "trap trap",
+      "contained": true,
+      "elapsed_ms": 2.147,
+      "memory_mib_after": 0,
+      "fuel_used": 117836,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true,
+      "error": "detect: error while executing at wasm backtrace:"
+    },
+    {
+      "module": "stdout_flood",
+      "attempt": "write 8 MiB to stdout and stderr",
+      "expect": "level==0",
+      "outcome": "level 0",
+      "contained": true,
+      "elapsed_ms": 1.577,
+      "memory_mib_after": 1.125,
+      "fuel_used": 22969640,
+      "recovered_next_call": true,
+      "neighbour_unaffected": true
+    }
+  ],
+  "contained": 11,
+  "generated": "2026-10-18T10:13:19Z",
+  "limits": {
+    "fuel": 50000000,
+    "memory_bytes": 67108864,
+    "timeout": "100ms"
+  },
+  "modules": "rules/adversarial",
+  "test": "host/internal/engine/adversarial_test.go",
+  "total": 11,
+  "wasmtime": "wasmtime-go/v17"
+}

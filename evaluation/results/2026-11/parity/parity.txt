@@ -1,0 +1,5 @@
+wasm model: {'feature_set': 'v1', 'hidden_sizes': [128, 64, 32, 16], 'input_size': 64, 'num_parameters': 19201, 'sha256': '1ee0c5d26f35193655abc52559ccfcdc1cf3734baf5ec232ec0ebf67277b3832', 'source': 'best_model_weights.json', 'threshold': 0.699999988079071}
+inputs: 1400 (1000 synthetic, 400 ADFA-LD traces)
+max |feature diff| = 0.000e+00
+max |score diff|   = 1.967e-06  (worst case #32, len 100, ref 0.371615 wasm 0.371613)
+PASS: within 1e-05
