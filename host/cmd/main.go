@@ -15,9 +15,9 @@ import (
 	"github.com/spf13/viper"
 	"github.com/wasm-threat-detector/host/internal/collector"
 	"github.com/wasm-threat-detector/host/internal/engine"
-	"github.com/wasm-threat-detector/host/internal/events"
 	"github.com/wasm-threat-detector/host/internal/metrics"
 	"github.com/wasm-threat-detector/host/internal/output"
+	"github.com/wasm-threat-detector/host/internal/pipeline"
 )
 
 // wasmtimeVersion is the wasmtime-go major version linked into this binary.
@@ -38,6 +38,9 @@ var (
 	collectorMode string
 	ebpfHooks     string
 	eventEncoding string
+	replayFile    string
+	replayEPS     int
+	replayLoop    bool
 )
 
 // rootCmd 代表基本命令
@@ -72,7 +75,10 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&ruleMemoryMB, "rule-memory-mb", int(engine.DefaultMaxMemoryBytes>>20), "每条规则的线性内存上限 (MiB)")
 	rootCmd.PersistentFlags().Uint64Var(&ruleFuel, "rule-fuel", engine.DefaultFuel, "每次检测调用的 fuel 预算 (0 = 不限制)")
 	rootCmd.PersistentFlags().DurationVar(&ruleTimeout, "rule-timeout", engine.DefaultTimeout, "每次检测调用的墙钟超时 (0 = 不限制)")
-	rootCmd.PersistentFlags().StringVar(&collectorMode, "collector", "proc", "事件采集器: proc (/proc 轮询, 无需特权) 或 ebpf (内核钩子, 需要 root)")
+	rootCmd.PersistentFlags().StringVar(&collectorMode, "collector", "proc", "事件采集器: proc (/proc 轮询, 无需特权), ebpf (内核钩子, 需要 root) 或 replay (回放 syscall 轨迹)")
+	rootCmd.PersistentFlags().StringVar(&replayFile, "replay-file", "", "collector=replay 时的轨迹文件或目录 (ADFA-LD 格式: 空格分隔的 syscall 号)")
+	rootCmd.PersistentFlags().IntVar(&replayEPS, "replay-eps", 0, "回放速率 (事件/秒, 0 = 尽快)")
+	rootCmd.PersistentFlags().BoolVar(&replayLoop, "replay-loop", false, "轨迹播完后循环")
 	rootCmd.PersistentFlags().StringVar(&ebpfHooks, "ebpf-hooks", "all", "eBPF 钩子列表, 逗号分隔: exec,exit,open,connect,accept,syscall 或 all")
 	rootCmd.PersistentFlags().StringVar(&eventEncoding, "event-encoding", "json", "交给规则的事件编码: json 或 binary (binary 仅对 eBPF 事件且规则导出 detect_raw 时生效, 否则回退 json)")
 
@@ -86,6 +92,9 @@ func init() {
 	viper.BindPFlag("rule-fuel", rootCmd.PersistentFlags().Lookup("rule-fuel"))
 	viper.BindPFlag("rule-timeout", rootCmd.PersistentFlags().Lookup("rule-timeout"))
 	viper.BindPFlag("collector", rootCmd.PersistentFlags().Lookup("collector"))
+	viper.BindPFlag("replay-file", rootCmd.PersistentFlags().Lookup("replay-file"))
+	viper.BindPFlag("replay-eps", rootCmd.PersistentFlags().Lookup("replay-eps"))
+	viper.BindPFlag("replay-loop", rootCmd.PersistentFlags().Lookup("replay-loop"))
 	viper.BindPFlag("ebpf-hooks", rootCmd.PersistentFlags().Lookup("ebpf-hooks"))
 	viper.BindPFlag("event-encoding", rootCmd.PersistentFlags().Lookup("event-encoding"))
 }
@@ -180,21 +189,35 @@ func run() {
 	// 启动 Prometheus 指标服务器
 	go startMetricsServer(logger, m)
 
-	// 处理事件
-	go processEvents(ctx, wasmEngine, collectors, outputHandler, m, logger)
+	// 处理事件：采集器全部关闭（回放结束）或收到信号时结束
+	done := make(chan pipeline.Stats, 1)
+	go func() {
+		done <- pipeline.Run(ctx, pipeline.Config{
+			Engine: wasmEngine, Collectors: collectors, Output: outputHandler, Metrics: m, Logger: logger,
+		})
+	}()
 
 	logger.Info("WASM-ThreatDetector started successfully")
 
-	// 等待信号
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
-	<-sigChan
-	logger.Info("Shutting down WASM-ThreatDetector")
-	cancel()
+	select {
+	case <-sigChan:
+		logger.Info("Shutting down WASM-ThreatDetector")
+		cancel()
+		select {
+		case st := <-done:
+			logPipelineStats(logger, st)
+		case <-time.After(5 * time.Second):
+			logger.Warn("Pipeline did not stop within 5s")
+		}
+	case st := <-done:
+		logger.Info("Pipeline finished: all collectors closed")
+		logPipelineStats(logger, st)
+		cancel()
+	}
 
-	// 等待一段时间让组件正常关闭
-	time.Sleep(2 * time.Second)
 	for name, st := range wasmEngine.Stats() {
 		logger.WithFields(logrus.Fields{
 			"rule":             name,
@@ -314,56 +337,37 @@ func createCollectors(logger *logrus.Logger) []collector.Collector {
 			collector.NewProcessCollector(logger),
 			collector.NewNetworkCollector(logger),
 		}
+	case "replay":
+		c, err := collector.NewReplayCollector(logger, collector.ReplayConfig{
+			Path:            viper.GetString("replay-file"),
+			EventsPerSecond: viper.GetInt("replay-eps"),
+			Loop:            viper.GetBool("replay-loop"),
+			Binary:          true,
+		})
+		if err != nil {
+			logger.Fatalf("replay collector: %v", err)
+		}
+		return []collector.Collector{c}
 	default:
-		logger.Fatalf("unknown --collector %q (use proc or ebpf)", mode)
+		logger.Fatalf("unknown --collector %q (use proc, ebpf or replay)", mode)
 		return nil
 	}
 }
 
-// processEvents 处理事件
-func processEvents(ctx context.Context, wasmEngine engine.ThreatEngine, collectors []collector.Collector, outputHandler output.OutputHandler, m *metrics.Metrics, logger *logrus.Logger) {
-	// 合并所有收集器的事件通道
-	eventChan := make(chan *events.Event, 1000)
-
-	// 启动事件合并 goroutine
-	for _, col := range collectors {
-		go func(c collector.Collector) {
-			for event := range c.EventChannel() {
-				select {
-				case eventChan <- event:
-				case <-ctx.Done():
-					return
-				default:
-					m.ObserveDrop()
-					logger.Debug("Event channel full, dropping event")
-				}
-			}
-		}(col)
+// logPipelineStats 输出一次运行的汇总
+func logPipelineStats(logger *logrus.Logger, st pipeline.Stats) {
+	eps := 0.0
+	if st.Elapsed > 0 {
+		eps = float64(st.Events) / st.Elapsed.Seconds()
 	}
-
-	// 处理事件
-	for {
-		select {
-		case <-ctx.Done():
-			return
-		case event := <-eventChan:
-			// 使用 Wasm 引擎检测威胁
-			start := time.Now()
-			results, err := wasmEngine.DetectThreat(ctx, event)
-			m.ObserveEvent(event.Type, time.Since(start))
-			if err != nil {
-				logger.Warnf("Threat detection failed: %v", err)
-				continue
-			}
-
-			// 处理检测结果
-			for _, result := range results {
-				if err := outputHandler.Handle(result); err != nil {
-					logger.Warnf("Failed to handle detection result: %v", err)
-				}
-			}
-		}
-	}
+	logger.WithFields(logrus.Fields{
+		"events":        st.Events,
+		"alerts":        st.Alerts,
+		"detect_errors": st.DetectErrors,
+		"output_errors": st.OutputErrors,
+		"elapsed":       st.Elapsed.String(),
+		"events_per_s":  fmt.Sprintf("%.0f", eps),
+	}).Info("Pipeline statistics")
 }
 
 // startMetricsServer 启动 Prometheus 指标与健康检查服务

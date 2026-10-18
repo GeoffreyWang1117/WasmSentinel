@@ -47,7 +47,6 @@ func TestCountersFollowThePipeline(t *testing.T) {
 	m.ObserveInvoke("ml", false, time.Microsecond, 0, errors.New("plain error"))
 	m.ObserveEvent(events.EventTypeProcess, 12*time.Microsecond)
 	m.ObserveEvent(events.EventTypeFile, 8*time.Microsecond)
-	m.ObserveDrop()
 
 	body := scrape(t, m)
 	for _, want := range []string{
@@ -61,7 +60,6 @@ func TestCountersFollowThePipeline(t *testing.T) {
 		`wasmsentinel_rule_latency_seconds_count{rule="shell"} 3`,
 		`wasmsentinel_events_total{type="process"} 1`,
 		`wasmsentinel_events_total{type="file"} 1`,
-		`wasmsentinel_events_dropped_total 1`,
 		`wasmsentinel_detect_latency_seconds_count 2`,
 		`wasmsentinel_rule_memory_bytes{rule="shell"} 1.179648e+06`,
 		`wasmsentinel_rule_reinstantiations_total{rule="shell"} 2`,

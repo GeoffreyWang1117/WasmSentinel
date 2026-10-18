@@ -24,7 +24,6 @@ type Metrics struct {
 
 	threats       *prometheus.CounterVec
 	eventsTotal   *prometheus.CounterVec
-	eventsDropped prometheus.Counter
 	detectLatency prometheus.Histogram
 
 	ruleCalls   *prometheus.CounterVec
@@ -46,10 +45,6 @@ func New() *Metrics {
 		Namespace: namespace, Name: "events_total",
 		Help: "Events handed to the rule engine, by event type.",
 	}, []string{"type"})
-	m.eventsDropped = prometheus.NewCounter(prometheus.CounterOpts{
-		Namespace: namespace, Name: "events_dropped_total",
-		Help: "Events dropped because the pipeline queue was full.",
-	})
 	m.detectLatency = prometheus.NewHistogram(prometheus.HistogramOpts{
 		Namespace: namespace, Name: "detect_latency_seconds",
 		Help:    "Wall time of DetectThreat per event (all rules).",
@@ -78,7 +73,7 @@ func New() *Metrics {
 	}, []string{"collector", "encoding", "wasmtime"})
 
 	m.reg.MustRegister(
-		m.threats, m.eventsTotal, m.eventsDropped, m.detectLatency,
+		m.threats, m.eventsTotal, m.detectLatency,
 		m.ruleCalls, m.ruleErrors, m.ruleFuel, m.ruleLatency, m.buildInfo,
 		collectors.NewGoCollector(),
 		collectors.NewProcessCollector(collectors.ProcessCollectorOpts{}),
@@ -134,9 +129,6 @@ func (m *Metrics) ObserveEvent(t events.EventType, d time.Duration) {
 	m.eventsTotal.WithLabelValues(string(t)).Inc()
 	m.detectLatency.Observe(d.Seconds())
 }
-
-// ObserveDrop records an event dropped before detection.
-func (m *Metrics) ObserveDrop() { m.eventsDropped.Inc() }
 
 // RuleStatser is what RegisterEngine needs from the engine.
 type RuleStatser interface {
