@@ -7,6 +7,7 @@
 #   make e1          E1: ADFA-LD accuracy, inference in Wasm   -> $(RESULTS)/e1/
 #   make e2          E2: NumPy / native / Wasm consistency + latency -> $(RESULTS)/e2/
 #   make e3          E3: end-to-end latency & throughput (replay)  -> $(RESULTS)/e3/
+#   make e4          E4: nginx/redis/postgres overhead under monitors -> $(RESULTS)/e4/
 #   make reproduce   every experiment that exists so far, into $(RESULTS)/
 #
 # RESULTS defaults to evaluation/results/2026-11 (the directory the AsiaCCS
@@ -62,7 +63,12 @@ e3: build
 	mkdir -p $(RESULTS)/e3
 	$(PY) evaluation/scripts/e3_throughput.py --out $(RESULTS)/e3
 
-reproduce: isolation parity e1 e2 e3
+# E4 needs docker (privileged containers for the monitors) and an idle machine.
+e4: build
+	mkdir -p $(RESULTS)/e4
+	$(PY) evaluation/scripts/e4_overhead.py --out $(RESULTS)/e4
+
+reproduce: isolation parity e1 e2 e3 e4
 	@echo "results in $(RESULTS)/"
 
 clean:

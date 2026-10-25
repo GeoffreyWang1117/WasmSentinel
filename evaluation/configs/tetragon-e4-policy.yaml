@@ -1,0 +1,19 @@
+# Tetragon tracing policy used in E4/E5 so that Tetragon observes roughly the
+# same event classes as WasmSentinel's eBPF collector (exec is built in):
+# file opens and TCP connects.
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: wasmsentinel-e4
+spec:
+  kprobes:
+  - call: "security_file_open"
+    syscall: false
+    args:
+    - index: 0
+      type: "file"
+  - call: "tcp_connect"
+    syscall: false
+    args:
+    - index: 0
+      type: "sock"
