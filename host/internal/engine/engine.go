@@ -19,7 +19,9 @@
 //	detect(ptr: i32, len: i32) -> i32   threat level 0..10 (0 = benign)
 //
 // and may export init(ptr: i32, len: i32) -> i32, which is called once per
-// instance with (0, 0) right after instantiation.
+// instance right after instantiation: with (0, 0), or with the rule's
+// configuration bytes (SetRuleConfig) written into a buffer from alloc. A
+// non-zero return from init is a load error.
 package engine
 
 import (
@@ -48,11 +50,12 @@ type Engine struct {
 	engine *wasmtime.Engine
 	logger *logrus.Logger
 
-	mu     sync.RWMutex
-	rules  map[string]*rule
-	names  []string // sorted; fixes the evaluation order
-	closed bool
-	enc    Encoding
+	mu      sync.RWMutex
+	rules   map[string]*rule
+	names   []string          // sorted; fixes the evaluation order
+	configs map[string][]byte // init payload per rule name, set before load
+	closed  bool
+	enc     Encoding
 
 	observer atomic.Pointer[observerBox]
 
@@ -64,6 +67,7 @@ type rule struct {
 	name   string
 	path   string
 	module *wasmtime.Module
+	config []byte // passed to init on every instantiation; nil means init(0, 0)
 
 	mu     sync.Mutex // serializes invocations and guards inst and stats
 	inst   *instance  // nil after a trap until the next invocation
@@ -105,6 +109,7 @@ func New(logger *logrus.Logger, limits Limits) *Engine {
 		engine:    wasmtime.NewEngineWithConfig(cfg),
 		logger:    logger,
 		rules:     make(map[string]*rule),
+		configs:   make(map[string][]byte),
 		stopEpoch: make(chan struct{}),
 		enc:       EncodingJSON,
 	}
@@ -117,6 +122,27 @@ func New(logger *logrus.Logger, limits Limits) *Engine {
 
 // Limits returns the effective limits (zero fields replaced by defaults).
 func (e *Engine) Limits() Limits { return e.cfg }
+
+// SetRuleConfig sets the bytes handed to the init export of the rule called
+// name on every instantiation, including re-instantiation after a trap. It
+// takes effect for rules loaded afterwards; nil or empty restores init(0, 0).
+// The rules in this repository take a JSON object (for ml_detector, e.g.
+// {"model":"rf"} selects the embedded random forest).
+func (e *Engine) SetRuleConfig(name string, config []byte) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	if len(config) == 0 {
+		delete(e.configs, name)
+		return
+	}
+	e.configs[name] = append([]byte(nil), config...)
+}
+
+func (e *Engine) ruleConfig(name string) []byte {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.configs[name]
+}
 
 // SetEncoding selects the event encoding DetectThreat prefers.
 func (e *Engine) SetEncoding(enc Encoding) {
@@ -207,8 +233,8 @@ func (e *Engine) load(name, path string, wasm []byte) error {
 	if err != nil {
 		return fmt.Errorf("compile rule %s (%s): %w", name, path, err)
 	}
-	r := &rule{name: name, path: path, module: module}
-	inst, err := e.instantiate(r) // surfaces ABI and limit problems at load time
+	r := &rule{name: name, path: path, module: module, config: e.ruleConfig(name)}
+	inst, err := e.instantiate(r) // surfaces ABI, config and limit problems at load time
 	if err != nil {
 		return err
 	}
@@ -278,18 +304,56 @@ func (e *Engine) instantiate(r *rule) (*instance, error) {
 	if initFn := wi.GetFunc(store, "init"); initFn != nil {
 		if n := len(initFn.Type(store).Params()); n != 2 {
 			e.logger.WithField("rule", r.name).Warnf("init export takes %d params, expected 2; not calling it", n)
-		} else {
-			e.arm(store)
-			if _, err := initFn.Call(store, int32(0), int32(0)); err != nil {
-				return nil, &RuleError{Rule: r.name, Kind: e.classify(in.memory, store, err), Err: fmt.Errorf("init: %w", err)}
-			}
+		} else if err := in.callInit(e, initFn, r.config); err != nil {
+			return nil, &RuleError{Rule: r.name, Kind: e.classify(in.memory, store, err), Err: fmt.Errorf("init: %w", err)}
 		}
+	} else if len(r.config) > 0 {
+		return nil, &RuleError{Rule: r.name, Kind: TrapABI, Err: errors.New("a config was given but the module does not export init")}
 	}
 
 	if err := in.reserve(e, e.cfg.EventBuffer); err != nil {
 		return nil, &RuleError{Rule: r.name, Kind: e.classify(in.memory, store, err), Err: fmt.Errorf("event buffer: %w", err)}
 	}
 	return in, nil
+}
+
+// callInit runs the module's init export, with cfg copied into a guest buffer
+// from alloc (released afterwards) or with (0, 0) when cfg is empty. A
+// non-zero return means the module rejected the configuration.
+func (in *instance) callInit(e *Engine, initFn *wasmtime.Func, cfg []byte) error {
+	var ptr, n int32
+	if len(cfg) > 0 {
+		if len(cfg) > math.MaxInt32 {
+			return fmt.Errorf("config of %d bytes is too large", len(cfg))
+		}
+		n = int32(len(cfg))
+		e.arm(in.store)
+		res, err := in.alloc.Call(in.store, n)
+		if err != nil {
+			return fmt.Errorf("alloc(%d) for the config: %w", n, err)
+		}
+		p, ok := res.(int32)
+		if !ok || p <= 0 || uint64(p)+uint64(n) > uint64(in.memory.DataSize(in.store)) {
+			return fmt.Errorf("alloc(%d) for the config returned %v, outside linear memory", n, res)
+		}
+		ptr = p
+		copy(in.memory.UnsafeData(in.store)[ptr:int(ptr)+len(cfg)], cfg)
+	}
+	e.arm(in.store)
+	res, err := initFn.Call(in.store, ptr, n)
+	if err != nil {
+		return err
+	}
+	if rc, ok := res.(int32); ok && rc != 0 {
+		return fmt.Errorf("returned %d for the %d-byte config", rc, n)
+	}
+	if n > 0 {
+		e.arm(in.store)
+		if _, err := in.dealloc.Call(in.store, ptr, n); err != nil {
+			return fmt.Errorf("dealloc(%d, %d) after init: %w", ptr, n, err)
+		}
+	}
+	return nil
 }
 
 func abiError(rule, export string) error {

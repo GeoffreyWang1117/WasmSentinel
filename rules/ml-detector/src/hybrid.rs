@@ -108,6 +108,8 @@ pub struct HybridDetector {
 
 #[derive(Debug, Default, Clone, Serialize, Deserialize)]
 pub struct HybridStats {
+    /// Deep-path model in use: "mlp" or "rf"
+    pub model: String,
     pub total_events: u64,
     pub stide_only_detections: u64,
     pub mlp_only_detections: u64,
@@ -148,9 +150,19 @@ impl HybridDetector {
         }
     }
 
-    pub fn from_config(config_json: &Value) -> Self {
-        let config: HybridConfig = serde_json::from_value(config_json.clone()).unwrap_or_default();
-        Self::with_config(config)
+    /// Build a detector from a (partial) JSON config. Errors, instead of
+    /// falling back to the defaults, when the JSON does not match
+    /// `HybridConfig` or names a model other than "mlp" or "rf".
+    pub fn from_config(config_json: &Value) -> Result<Self, String> {
+        let config: HybridConfig =
+            serde_json::from_value(config_json.clone()).map_err(|e| format!("config: {}", e))?;
+        if config.model != "mlp" && config.model != "rf" {
+            return Err(format!(
+                "config: unknown model {:?} (expected \"mlp\" or \"rf\")",
+                config.model
+            ));
+        }
+        Ok(Self::with_config(config))
     }
 
     /// Detect on a JSON event (host shape or flat record).
@@ -507,6 +519,7 @@ impl HybridDetector {
 
     pub fn get_stats(&self) -> HybridStats {
         HybridStats {
+            model: self.model_name().to_string(),
             total_events: self.stats.total_events,
             stide_only_detections: self.stats.stide_only_detections,
             mlp_only_detections: self.stats.mlp_only_detections,

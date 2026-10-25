@@ -89,6 +89,7 @@ make reproduce          # experiments -> evaluation/results/2026-11/ (isolation 
 | `--ebpf-hooks` | `all` (default) or a comma list of `exec,exit,open,connect,accept,syscall` | one BPF program per hook; drop `open` on busy hosts, it dominates the volume |
 | `--collector=replay` with `--replay-file`, `--replay-eps`, `--replay-loop` | a trace file or directory (ADFA-LD format: whitespace-separated syscall numbers) | replays recorded syscalls as events, paced at `--replay-eps` (0 = as fast as possible); the process exits when the trace ends unless `--replay-loop` |
 | `--rule-train-dir` | directory of normal traces (same format) | at startup, feeds every rule that exports `train_sequence` (the ml_detector's STIDE normal database), then calls `train_finish` |
+| `--rule-config` | `name=file` (repeatable or comma-separated) | hands the file's bytes to that rule's `init` export on every instantiation, including re-instantiation after a trap; a non-zero return fails the load instead of running the rule with defaults. `ml_detector=rf.json` with `{"model":"rf"}` switches the ml_detector's deep path from the MLP to the embedded random forest |
 
 ```bash
 sudo ./wasmsentinel --collector=ebpf --rules ./rules/wasm            # all hooks

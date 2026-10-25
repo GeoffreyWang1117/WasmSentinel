@@ -43,6 +43,7 @@ var (
 	replayLoop    bool
 	replayMax     uint64
 	ruleTrainDir  string
+	ruleConfigs   []string
 	alertLog      bool
 )
 
@@ -87,6 +88,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&ruleTrainDir, "rule-train-dir", "", "启动时用这个目录里的正常 syscall 轨迹 (ADFA-LD 格式) 训练导出 train_sequence 的规则 (如 ml_detector 的 STIDE 正常库)")
 	rootCmd.PersistentFlags().StringVar(&ebpfHooks, "ebpf-hooks", "all", "eBPF 钩子列表, 逗号分隔: exec,exit,open,connect,accept,syscall 或 all")
 	rootCmd.PersistentFlags().StringVar(&eventEncoding, "event-encoding", "json", "交给规则的事件编码: json 或 binary (binary 仅对 eBPF 事件且规则导出 detect_raw 时生效, 否则回退 json)")
+	rootCmd.PersistentFlags().StringSliceVar(&ruleConfigs, "rule-config", nil, "规则初始化配置, 形如 name=file (可重复或逗号分隔): 加载规则时把文件内容交给它的 init 导出, 模块拒绝 (返回非 0) 则启动失败; 例如 ml_detector=rf.json 且文件内容 {\"model\":\"rf\"} 选择嵌入的随机森林")
 
 	// 绑定标志到 viper
 	viper.BindPFlag("rules", rootCmd.PersistentFlags().Lookup("rules"))
@@ -106,6 +108,7 @@ func init() {
 	viper.BindPFlag("rule-train-dir", rootCmd.PersistentFlags().Lookup("rule-train-dir"))
 	viper.BindPFlag("ebpf-hooks", rootCmd.PersistentFlags().Lookup("ebpf-hooks"))
 	viper.BindPFlag("event-encoding", rootCmd.PersistentFlags().Lookup("event-encoding"))
+	viper.BindPFlag("rule-config", rootCmd.PersistentFlags().Lookup("rule-config"))
 }
 
 // initConfig 读取配置文件和环境变量
@@ -165,6 +168,20 @@ func run() {
 	m.SetBuildInfo(viper.GetString("collector"), string(encoding), wasmtimeVersion)
 	wasmEngine.SetObserver(m)
 	m.RegisterEngine(wasmEngine)
+
+	// 规则初始化配置：在加载前登记，加载（以及陷阱后的重新实例化）时交给 init
+	for _, spec := range viper.GetStringSlice("rule-config") {
+		name, file, ok := strings.Cut(spec, "=")
+		if !ok || name == "" || file == "" {
+			logger.Fatalf("--rule-config %q: expected name=file", spec)
+		}
+		cfg, err := os.ReadFile(file)
+		if err != nil {
+			logger.Fatalf("--rule-config %s: %v", spec, err)
+		}
+		wasmEngine.SetRuleConfig(name, cfg)
+		logger.WithFields(logrus.Fields{"rule": name, "file": file, "bytes": len(cfg)}).Info("Rule init config")
+	}
 
 	// 加载规则
 	rulesPath := viper.GetString("rules")

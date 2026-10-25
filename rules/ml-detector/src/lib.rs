@@ -153,14 +153,19 @@ pub unsafe extern "C" fn dealloc(ptr: *mut u8, size: usize) {
     }
 }
 
-/// Initialize the detector with optional model data
+/// Initialize the detector, optionally from a configuration JSON (a partial
+/// `HybridConfig`: only the named fields change; `{"model": "rf"}` selects the
+/// embedded random forest for the deep path).
 ///
 /// # Arguments
-/// * `config_ptr` - Pointer to configuration JSON
+/// * `config_ptr` - Pointer to configuration JSON; null or empty means defaults
 /// * `config_len` - Length of configuration data
 ///
 /// # Returns
-/// * 0 on success, negative on error
+/// * 0 on success; -1 when the configuration is not valid JSON, does not
+///   match `HybridConfig`, or names an unknown model. A bad configuration is
+///   never silently replaced by the defaults: the host treats -1 as a load
+///   error.
 #[no_mangle]
 pub extern "C" fn init(config_ptr: *const u8, config_len: usize) -> i32 {
     let config_data = if config_ptr.is_null() || config_len == 0 {
@@ -171,8 +176,11 @@ pub extern "C" fn init(config_ptr: *const u8, config_len: usize) -> i32 {
 
     let detector = match config_data {
         Some(data) => match serde_json::from_slice::<Value>(data) {
-            Ok(config) => HybridDetector::from_config(&config),
-            Err(_) => HybridDetector::new(),
+            Ok(config) => match HybridDetector::from_config(&config) {
+                Ok(d) => d,
+                Err(_) => return -1,
+            },
+            Err(_) => return -1,
         },
         None => HybridDetector::new(),
     };
@@ -539,7 +547,29 @@ mod tests {
 
     #[test]
     fn test_init() {
+        // One test touches the global detector, in sequence: defaults, a
+        // valid config, then configs that must be rejected rather than
+        // silently replaced by the defaults.
         assert_eq!(init(std::ptr::null(), 0), 0);
+        let ok = br#"{"model": "rf", "syscall_window": 50}"#;
+        assert_eq!(init(ok.as_ptr(), ok.len()), 0);
+        let unknown_model = br#"{"model": "forest"}"#;
+        assert_eq!(init(unknown_model.as_ptr(), unknown_model.len()), -1);
+        let wrong_type = br#"{"syscall_window": "ten"}"#;
+        assert_eq!(init(wrong_type.as_ptr(), wrong_type.len()), -1);
+        let junk = b"not json";
+        assert_eq!(init(junk.as_ptr(), junk.len()), -1);
+    }
+
+    #[test]
+    fn config_selects_the_deep_path_model() {
+        let d = HybridDetector::from_config(&serde_json::json!({"model": "rf"})).unwrap();
+        assert_eq!(d.model_name(), "rf");
+        assert_eq!(d.get_stats().model, "rf");
+        let d = HybridDetector::from_config(&serde_json::json!({})).unwrap();
+        assert_eq!(d.model_name(), "mlp");
+        assert!(HybridDetector::from_config(&serde_json::json!({"model": "forest"})).is_err());
+        assert!(HybridDetector::from_config(&serde_json::json!({"model": 3})).is_err());
     }
 
     #[test]

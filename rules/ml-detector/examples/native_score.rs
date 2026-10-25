@@ -1,14 +1,14 @@
-//! E2 helper: score syscall traces with the embedded model compiled natively
+//! E2 helper: score syscall traces with an embedded model compiled natively
 //! (same crate, same code as the Wasm module) and time it.
 //!
-//!   cargo run --release --example native_score -- --repeat 200 trace1.txt trace2.txt ...
+//!   cargo run --release --example native_score -- [--model mlp|rf] --repeat 200 trace1.txt ...
 //!
 //! Prints one JSON object per trace: {"path", "len", "score", "ns_per_call"}
 //! (median of `repeat` timed calls), then a summary line.
 
 use std::time::Instant;
 
-use ml_detector::{adfa_features, MlpDetector};
+use ml_detector::{adfa_features, Forest, MlpDetector};
 
 fn load_trace(path: &str) -> Vec<u32> {
     std::fs::read_to_string(path)
@@ -25,7 +25,21 @@ fn main() {
         repeat = args[i + 1].parse().expect("--repeat N");
         args.drain(i..=i + 1);
     }
+    let mut model = "mlp".to_string();
+    if let Some(i) = args.iter().position(|a| a == "--model") {
+        model = args[i + 1].clone();
+        args.drain(i..=i + 1);
+    }
     let mlp = MlpDetector::with_embedded_weights();
+    let forest = Forest::embedded();
+    let score_fn = |seq: &[u32]| -> f32 {
+        let f = adfa_features(seq);
+        match model.as_str() {
+            "rf" => forest.score(&f),
+            "mlp" => mlp.score(&f),
+            other => panic!("--model {other}: expected mlp or rf"),
+        }
+    };
     let mut all_ns: Vec<f64> = Vec::new();
     for path in &args {
         let seq = load_trace(path);
@@ -33,7 +47,7 @@ fn main() {
         let mut samples = Vec::with_capacity(repeat);
         for _ in 0..repeat {
             let t = Instant::now();
-            score = mlp.score(&adfa_features(std::hint::black_box(&seq)));
+            score = score_fn(std::hint::black_box(&seq));
             samples.push(t.elapsed().as_nanos() as f64);
         }
         samples.sort_by(|a, b| a.partial_cmp(b).unwrap());

@@ -436,6 +436,62 @@ func TestRealMLDetectorLoadsAndRuns(t *testing.T) {
 	}
 }
 
+// The real module accepts {"model":"rf"} (deep path on the embedded forest)
+// and rejects a config naming an unknown model instead of silently falling
+// back to the defaults.
+func TestRealMLDetectorInitConfig(t *testing.T) {
+	path := realModule(t, "ml_detector.wasm")
+	e := newEngine(t, DefaultLimits())
+	e.SetRuleConfig("ml_detector", []byte(`{"model":"rf"}`))
+	if err := e.LoadRule("ml_detector", path); err != nil {
+		t.Fatal(err)
+	}
+	ev := &events.Event{ID: "s1", Type: "syscall", Timestamp: time.Now(), Source: "test",
+		Data: map[string]interface{}{"pid": 1, "syscall_nr": 11, "syscall_name": "execve"}}
+	if _, err := e.DetectThreat(context.Background(), ev); err != nil {
+		t.Fatal(err)
+	}
+	if st := e.Stats()["ml_detector"]; st.Errors != 0 || st.Calls != 1 {
+		t.Errorf("stats = %+v", st)
+	}
+	e.SetRuleConfig("ml_detector_bad", []byte(`{"model":"forest"}`))
+	err := e.LoadRule("ml_detector_bad", path)
+	if err == nil || !strings.Contains(err.Error(), "init: returned -1") {
+		t.Fatalf("unknown model accepted: %v", err)
+	}
+}
+
+func TestRuleConfigReachesInit(t *testing.T) {
+	e := newEngine(t, quick)
+	// Without a config init is called with (0, 0): the module records 0.
+	load(t, e, "plain", "init_config.wat")
+	if level, err := e.Invoke("plain", []byte("payload")); err != nil || level != 0 {
+		t.Fatalf("plain: level %d, err %v", level, err)
+	}
+	// With a config the bytes arrive in init: the module records '7'.
+	e.SetRuleConfig("cfg", []byte("7 is the level"))
+	load(t, e, "cfg", "init_config.wat")
+	if level, err := e.Invoke("cfg", []byte("payload")); err != nil || level != 7 {
+		t.Fatalf("cfg: level %d, err %v (config did not reach init)", level, err)
+	}
+	// A rejected config is a load error, not a rule running with defaults.
+	e.SetRuleConfig("bad", []byte("x"))
+	if err := e.LoadRuleBytes("bad", wat(t, "init_config.wat")); err == nil || !strings.Contains(err.Error(), "init: returned -1") {
+		t.Fatalf("rejected config loaded: %v", err)
+	}
+	// A config for a module without init is a contract error.
+	e.SetRuleConfig("noinit", []byte("1"))
+	if err := e.LoadRuleBytes("noinit", wat(t, "echo_level.wat")); err == nil || !strings.Contains(err.Error(), "does not export init") {
+		t.Fatalf("config accepted by a module without init: %v", err)
+	}
+	// Clearing the config restores init(0, 0).
+	e.SetRuleConfig("cfg", nil)
+	load(t, e, "cfg2", "init_config.wat")
+	if level, err := e.Invoke("cfg2", []byte("payload")); err != nil || level != 0 {
+		t.Fatalf("cfg2: level %d, err %v", level, err)
+	}
+}
+
 func BenchmarkInvokeEcho(b *testing.B) {
 	lg := logrus.New()
 	lg.SetOutput(io.Discard)

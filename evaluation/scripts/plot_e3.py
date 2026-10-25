@@ -25,7 +25,10 @@ def main():
     d = json.loads((args.results / "e3_results.json").read_text())
     cells = {}
     for key, v in d["summary"].items():
-        enc, eps = key.split("@")
+        parts = key.split("@")
+        if len(parts) > 2:
+            continue  # ml_detector on the forest ("enc@eps@rf"): in the table, not the figure
+        enc, eps = parts
         cells.setdefault(enc, {})[int(eps)] = v
     rates = sorted({eps for c in cells.values() for eps in c})
 
