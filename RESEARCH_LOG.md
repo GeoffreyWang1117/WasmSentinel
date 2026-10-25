@@ -2,6 +2,129 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-25 · E5 完成：同一三种检测在 WasmSentinel / Falco / Tetragon 上的检出、延迟与资源
+
+`make e5`（06:22–06:24；commit ba7af70），`evaluation/results/2026-11/e5/{e5_results.json, e5_summary.md}`。三个场景（读 `/etc/shadow`；把 `/bin/true` 拷到 `/tmp` 下执行；TCP 连 127.0.0.1:4444，harness 自己监听）各 20 次；WasmSentinel 用 suspicious_shell（eBPF 采集、JSON 编码），Falco 用三条自定义规则叠默认规则集（`evaluation/configs/falco-e5-rules.yaml`），Tetragon 用 `__x64_sys_openat` 入口 + `tcp_connect` dport 4444 + exec 按 `/tmp` 前缀（`tetragon-e5-policy.yaml`）。告警归到其之前最近的一次动作；延迟 = 动作前墙钟 → 首条告警。
+
+| 系统 | 场景 | 检出 | 延迟中位 (ms) | p90 | RSS 峰值 (MiB) | 试验期间 CPU % |
+|---|---|---|---|---|---|---|
+| wasmsentinel | shadow / tmpexec / connect | 20/20 · 20/20 · 20/20 | 2.9 · 0.8 · 2.3 | 3.2 · 0.9 · 2.7 | 97 | 7.1 |
+| falco | 同上 | 20/20 · 20/20 · 20/20 | 2.8 · 0.7 · 1.8 | 3.0 · 0.7 · 1.9 | 371 | 1.2 |
+| tetragon | 同上 | 20/20 · 20/20 · 20/20 | 2.7 · 0.8 · 1.7 | 3.0 · 0.8 · 1.8 | 154 | 0.8 |
+
+**解读**
+
+- 三套系统三场景全部 20/20，告警延迟同量级（0.7–2.9 ms，差别在零点几毫秒，其中 WasmSentinel 的 connect 场景 2.3 ms 比另两家多 0.5 ms）。E5 回答的是"看得见同样的东西吗"——是；它不是性能实验。
+- 资源：WasmSentinel RSS 97 MiB（Falco 371，Tetragon 154）；但空闲系统上的 CPU 7.1% 对 1.2% / 0.8%，原因与 E3/E4 一致：主机上每个 openat 与允许名单内 syscall 都进两条 Wasm 规则（ml_detector 的逐事件特征重算是大头），而 Falco/Tetragon 在内核侧先过滤。这是 Discussion 的设计杠杆，不是沙箱成本。
+- Tetragon 语义差别：`security_file_open` 对被权限检查拒绝的打开（非 root 读 shadow 的 EACCES）不触发，所以策略挂在 `__x64_sys_openat` 入口；论文把这个写成三者的真实差异之一。
+- 机器状态：E5 期间 1 分钟负载 15 → 5（E4 刚结束、其他容器陆续退出）；检出率与毫秒级延迟对此不敏感。
+
+**CLAIMS**：C1.5 ✅。**Phase 2 的 E1–E6 至此全部有真实 JSON**；E7/E8 仍可砍。
+
+## 2026-10-25 · E4 完成：nginx / redis / postgres 在四种监控臂下的吞吐与监控进程开销
+
+`make e4`（05:59–06:22；commit ba7af70），`evaluation/results/2026-11/e4/{e4_results.json, e4_summary.md}`。nginx（wrk -t8 -c128）、redis（redis-benchmark SET/GET，pipeline 16）、postgres（pgbench -c16 -j8，客户端在容器内）× {none, wasmsentinel, falco, tetragon}，每格 5 次交错重复、每次 20 s；监控进程 CPU%/RSS 与整机 CPU 每 0.25 s 采样；Δ 为与 none 臂的配对差、95% CI。WasmSentinel 走 eBPF 采集器、两条规则、JSON 编码（默认）；Falco modern eBPF 默认规则集；Tetragon 带 file-open + tcp-connect 策略（`evaluation/configs/tetragon-e4-policy.yaml`）。版本见 JSON provenance。
+
+| 负载 | 臂 | 吞吐（均值 ± 标准差） | Δ vs none | 95% CI | 监控 CPU % | 监控 RSS (MiB) |
+|---|---|---|---|---|---|---|
+| nginx | none | 178,007 ± 2,706 req/s | — | — | — | — |
+| nginx | wasmsentinel | 170,071 ± 1,989 | **−4.4%** | [−7.2, −1.7] | 18.4 | 111 |
+| nginx | falco | 161,597 ± 3,918 | −9.2% | [−11.8, −6.6] | 82.0 | 368 |
+| nginx | tetragon | 148,390 ± 2,112 | −16.6% | [−18.1, −15.2] | 282.1 | 195 |
+| redis | none | 960,059 ± 11,272 ops/s | — | — | — | — |
+| redis | wasmsentinel | 927,451 ± 9,860 | −3.4% | [−5.0, −1.8] | 8.1 | 97 |
+| redis | falco | 919,601 ± 19,853 | −4.2% | [−7.2, −1.2] | 7.4 | 369 |
+| redis | tetragon | 945,367 ± 10,336 | −1.5% | [−3.5, +0.5] | 11.9 | 96 |
+| postgres | none | 26,450 ± 1,082 tps | — | — | — | — |
+| postgres | wasmsentinel | 23,799 ± 1,001 | −10.0% | [−14.4, −5.5] | **149.6** | 161 |
+| postgres | falco | 23,712 ± 284 | −10.2% | [−15.3, −5.1] | 80.7 | 365 |
+| postgres | tetragon | 25,907 ± 350 | −1.9% | [−7.9, +4.1] | 14.2 | 104 |
+
+**解读**
+
+- 吞吐下降：WasmSentinel 与 Falco 同量级（nginx 上更低：−4.4% vs −9.2%；postgres 上相同 ≈ −10%；redis 都在 −3 到 −4%）。Tetragon 在 redis/postgres 上几乎无开销（CI 含 0），但在 nginx 上 −16.6%、监控进程 CPU 282%——这是在我们这份策略（file-open + tcp-connect 钩子，事件全部导出）下的观测，论文要写清配置，不能当作 Tetragon 的一般结论。
+- 监控进程自身：WasmSentinel RSS 97–161 MiB，Falco 固定 ≈ 365 MiB。CPU 上 WasmSentinel 在 postgres 臂到 **150%**（Falco 81%）：pgbench 16 个客户端产生大量 openat 与允许名单内 syscall，每个事件都进两条 Wasm 规则且 ml_detector 走逐事件特征重算（E3 已量化 70–105 µs/事件）。与 E5 quick 看到的现象一致，是论文 Discussion 要讲的设计杠杆（内核侧预过滤、规则声明所需钩子、增量特征）。
+- **机器状态**：E4 期间有别的 autogen 代码执行容器与 vLLM 服务在跑，1 分钟负载中位 15、最高 49（`scratchpad/background_load.log`，36 个采样）。交错重复与配对差能抵消慢漂移，但不能抵消突发；绝对吞吐（尤其 nginx 178K req/s）带噪，Δ 的 CI 已经反映了部分噪声。投稿前若机器能空出来，`make e4` 重跑一次（25 分钟）替换这组数字。
+- 系统整体 CPU（整机）各臂差别不大（nginx ≈ 91%，redis ≈ 20%，postgres ≈ 60%），说明监控进程的 CPU 主要是"挤占"而非"叠加"。
+
+**CLAIMS**：C1.4 ✅（带噪声标注）。
+
+## 2026-10-25 · E3 完成：端到端延迟与吞吐（回放，JSON vs 二进制）
+
+`make e3`（05:43–05:59；commit ba7af70），`evaluation/results/2026-11/e3/{e3_results.json, e3_summary.md}`。ADFA-LD Attack_Data_Master 全部轨迹按 syscall 事件回放进完整管道（eBPF 事件形状 → 背压队列 → 两条规则 → 输出链，`--alert-log=false`、`--metrics-port 0`），启动时用 Training_Data_Master 训练 STIDE 库；1K / 10K / 50K eps × {json, binary} × 3 次，每次 30 s 的事件量。延迟为"事件产生 → 告警处理完"。
+
+| 编码 | 提供 eps | 实际 eps | e2e p50 (µs) | p99 | p999 | detect p50 | detect p99 | RSS (MiB) |
+|---|---|---|---|---|---|---|---|---|
+| json | 1,000 | 964 | 118 | 183 | 325 | 105 | 149 | 90 |
+| binary | 1,000 | 961 | 101 | 144 | 240 | 89 | 119 | 92 |
+| json | 10,000 | 9,689 | 378 | 1,853 | 4,686 | 81 | 131 | 99 |
+| binary | 10,000 | 9,688 | 304 | 1,246 | 3,585 | 70 | 112 | 100 |
+| json | 50,000 | **14,996** | 334,813 | 425,654 | 445,640 | 82 | 117 | 178 |
+| binary | 50,000 | **18,466** | 270,773 | 352,795 | 366,660 | 71 | 95 | 189 |
+
+**解读**
+
+- 1K 与 10K eps 两种编码都跟得上（实际 ≈ 96–97% 是回放节拍的粒度，不是丢事件；管道不丢事件，背压阻塞）。10K 时 e2e p50 0.3–0.4 ms、p99 1.2–1.9 ms、p999 3.6–4.7 ms（3 次里 rep 1 的 p999 到 7 ms，取均值）。
+- 50K eps 是饱和点：单管道可持续约 **15.0K eps（JSON）/ 18.5K eps（二进制）**，之后延迟就是队列深度（p50 270–335 ms），论文里这一格报"可持续吞吐"，不把延迟当延迟数字。二进制比 JSON 多 23% 吞吐、低 15–20% 延迟。
+- **瓶颈不在引擎**：detect p50 70–105 µs（两条规则合计），而 E2 的引擎空调用 2.1 µs、进程事件二进制路径 4.6 µs。差别在于回放的是 syscall 事件：ml_detector 对每个 syscall 事件都在 100 长窗口上重算 v1 特征（HashMap 计数）再过 MLP。增量更新特征是明确的优化杠杆（Discussion）。1K 时 detect 反而比 10K 慢（105 vs 81 µs），是低负载下核心降频/缓存冷，论文要注一句。
+- RSS 90–100 MiB，饱和时 180–190 MiB（队列）。
+- 机器状态同 E2（vLLM 常驻 ~2.5 核，1 分钟负载 4–5）。
+
+**CLAIMS**：C1.3 ✅。
+
+## 2026-10-25 · 论文：Evaluation（E1/E2/E6）与 Related Work 成文；参考文献审计
+
+- `evaluation/scripts/paper_numbers.py` 除宏外直接生成四个表体 `paper-asiaccs/tables/{e1_table,e1_family_table,e2_table,isolation_table}.tex`，正文 `\input`；新增 `\provCpu`/`\provKernel`（取自 JSON provenance）、`\eTwoTraceLen`、按家族 recall 的宏（共 101 个，E3–E5 的 3 个占位仍是 `??`）。`make -C paper-asiaccs figures` 把 `e1_pr_curves.pdf` 拷进 `figures/`。
+- `sections/evaluation.tex`：四个问题、Setup（硬件/内核来自宏，注明机器上有用户的 vLLM 常驻）、E2、E6、E1 成文；E3–E5 留位。`sections/related-work.tex` 成文：syscall HIDS、eBPF 监控（规则在这些系统里是受信代码）、Wasm 隔离基底、Wasm+eBPF 的最近工作。全文不写 "first"。
+- **参考文献审计**：DIMVA 稿沿用的 `falco`（"FPGA '23"）、`tetragon`（"LPC '22"）、`tracee`（"Cloud Native Security Conference 2021"）三条是不存在的论文，改为项目引用；`transformer-sec`、`gnn-sec` 查无实据，删除。新增 wasm-bpf（arXiv 2408.04856）、Abbadini et al. ASIACCS '23 poster（DOI 10.1145/3579856.3592831）、Heinrich et al. ICISSP '24（DOI 10.5220/0012252800003648）、RLBox（USENIX Security '20）、Proxy-Wasm 规范。其余 24 条按标题/场合判断是真实的，投稿前逐条核 DOI（已列入 Phase 3 W1）。
+- **先验检索结论**（web search；asta 连接时断时续）：没有找到"eBPF 采集 + Wasm 沙箱运行检测规则"的已发表系统；最近的是反方向的三篇（eBPF 加固 Wasm 运行时的 hostcall；Wasm 打包 eBPF 程序；对 Wasm 应用本身做异常检测）。Related Work 据此只列最近工作并说明差别。
+- 教训：`conda run` 不转发 stdin，heredoc 喂给它的 Python 静默不执行；文本改动一律用 `/usr/bin/python3` 跑脚本文件。并行 Bash 调用共享 cwd，相对路径写文件会落错目录——全部用绝对路径。
+
+## 2026-10-25 · E2 完成：同一模型三种实现的一致性与每次调用成本
+
+`make e2`（05:43 起 23 s；commit ba7af70，`ml_detector.wasm` sha256 8e4238a2…，权重 sha256 1ee0c5d2…），输出 `evaluation/results/2026-11/e2/{e2_results.json, e2_summary.md}`。
+
+- **一致性**：全部 5,951 条 ADFA-LD 轨迹，NumPy vs Wasm 最大差 1.91×10⁻⁶，NumPy vs 原生 Rust 1.90×10⁻⁶，原生 vs Wasm 5.0×10⁻⁹；0.7 阈值下判决 5,951/5,951 一致（与 quick 相同）。
+- **整条轨迹一次打分**（662 条轨迹，中位长度 343 个 syscall，每条 30 次重复取中位）：NumPy 164.6 µs，原生 Rust 26.0 µs，Wasm（wasmtime-py，含 Python 侧调用与内存拷贝）126.3 µs；p90 分别 414 / 54 / 193 µs。Python 那一列度量的是 wasmtime-py 的调用路径，不是引擎；论文引擎成本只用下面三行。
+- **Go 引擎**（`go test -bench`）：空规则一次调用 2.1 µs（`BenchmarkInvokeEcho`）；真实 ml_detector 处理一个进程事件 JSON 10.2 µs、二进制 4.6 µs。单位不同于上一条（一个事件 vs 一整条轨迹），表格里要分开。
+- **机器状态**：E1 结束后静置 60 s 才跑；用户自己的 vLLM 服务常驻（两个 TP worker 各占约一核），整机 32 逻辑核、1 分钟负载 8。这些是单线程微基准，受影响有限，但 CI 不重跑计时部分。
+
+**CLAIMS**：C1.1、C1.2 ✅。
+
+## 2026-10-25 · E1 完成：ADFA-LD 5 折 × 3 种子，推理全部在 Wasm 模块内
+
+**运行**：`e1_adfa_eval.py --device cpu`（`make e1` 的脚本部分）01:43 启动、05:42 结束，共 14,341 s，其中 LSTM 在 CPU 上训练占 14,239 s（GPU 被别的任务占满，`pick_device` 回退）。commit ba7af70，`ml_detector.wasm` sha256 8e4238a2…。输出 `evaluation/results/2026-11/e1/{e1_results.json, e1_summary.md, e1_pr_curves.{json,png,pdf}}`（图由 `plot_e1.py` 单独生成）。每折训练 4,760 / 测试 1,191 条轨迹。MLP 每折在 NumPy 里训练（上限 200 轮、25 轮早停，实际最佳轮次 44–165），权重经 `load_mlp_weights` 装进编译好的模块，**全部测试分数来自模块的 `mlp_score`**；15 折里 Wasm 与 NumPy 的分数最大差 1.1×10⁻⁶。
+
+| 模型 | AUPRC | ROC-AUC | recall@5%FPR | recall@1%FPR | F1 @FPR5 工作点 | F1 @训练折 F1 最优 |
+|---|---|---|---|---|---|---|
+| WasmSentinel MLP（Wasm，v1 特征） | **0.730 ± 0.056** | 0.946 ± 0.011 | 0.718 | 0.345 | 0.691 | 0.700 |
+| STIDE 6-gram 新颖率（仅正常） | 0.437 ± 0.043 | 0.787 ± 0.024 | 0.377 | 0.157 | 0.344 | 0.345 |
+| Isolation Forest（仅正常，v1 特征） | 0.218 ± 0.007 | 0.745 ± 0.013 | 0.046 | 0.002 | 0.060 | 0.360 |
+| Random Forest（监督，v1 特征） | **0.897 ± 0.028** | 0.982 ± 0.004 | 0.908 | 0.700 | 0.636 | 0.724 |
+| LSTM（原始序列，监督，早停） | 0.825 ± 0.061 | 0.965 ± 0.012 | 0.858 | 0.488 | 0.760 | 0.792 |
+
+配对 AUPRC 差（WasmSentinel − 基线，15 次 (seed, fold)，t-CI + Wilcoxon）：STIDE +0.293 [+0.257, +0.328]；IF +0.512 [+0.480, +0.544]；**RF −0.167 [−0.199, −0.135]**；LSTM −0.095 [−0.126, −0.064]；p 全部 ≤ 1.9×10⁻⁴。折间共享数据，CI 偏乐观（JSON `notes` 已写）。
+
+按攻击家族、FPR-5 工作点的 recall（均值）：
+
+| 模型 | Adduser | Hydra_FTP | Hydra_SSH | Java_Meterpreter | Meterpreter | Web_Shell |
+|---|---|---|---|---|---|---|
+| MLP (Wasm) | 0.79 | 0.80 | 0.87 | 0.80 | 0.71 | 0.66 |
+| STIDE | 0.78 | 0.85 | 0.84 | 0.85 | 0.68 | 0.78 |
+| IF | 0.04 | 0.00 | 0.03 | 0.05 | 0.13 | 0.06 |
+| RF | 0.96 | 0.99 | 0.99 | 0.99 | 0.97 | 0.95 |
+| LSTM | 0.83 | 0.91 | 0.92 | 0.91 | 0.87 | 0.76 |
+
+**解读**
+
+- MLP 对两种无监督基线有显著优势，对两种监督基线显著落后；1% FPR 下差距更大（recall 0.345 vs RF 0.700 / LSTM 0.488）。MLP 最弱的家族是 Web_Shell 与 Meterpreter。STIDE 在固定工作点上对 Hydra / Java_Meterpreter 的 recall 不输 MLP，它输在整体排序（AUPRC 0.44）。
+- quick 模式（20 轮）看到的 0.38–0.42 是训练不足；训满后 0.73。折间方差不小：0.59–0.83（最低 seed 2 fold 1）。
+- **论文怎么写**：C3 的主张是"部署模块输出的就是训练模型的分数"（E2 三路一致）加一张诚实的准确率表——**同一组 v1 特征上 RF 明显更好**，"轻量 MLP 的准确率"不是卖点；Isolation Forest 在这组特征上几乎不可用（recall@1%FPR 0.002）。
+- **待用户拍板的产品决定**：把 RF（或深度受限的树集成）编进 Wasm 规则，以 `rf_wasm` 臂重跑 E1。估 1–2 人日：sklearn 树导出为扁平节点数组 → Rust 遍历 → 与 sklearn 的逐位一致性测试 → E1 加臂。做了之后论文可以说"规则语言不绑定模型族，RF 在沙箱内复现 0.90"；不做则只能在 Discussion 里讲。
+- **标注**：`provenance.git_dirty = true` 是 `git status --porcelain` 把未跟踪文件（`paper-asiaccs/main.pdf`、输出目录自身）算了进来；运行期间跟踪文件与 ba7af70 一致（之后没有新提交）。脚本已改为 `--untracked-files=no`，已生成的 JSON 不追改。
+
+**CLAIMS**：C3.2、C3.3 ✅。
+
 ## 2026-10-25 · 论文骨架 `paper-asiaccs/`
 
 acmart sigconf + anonymous + review，AsiaCCS '27 会议信息占位；九个章节文件只含对应计划 §2 三条主张（C1 成本、C2 隔离、C3 等价与诚实的准确率）的提纲注释，Open Science 附录单独成文件；`CLAIMS.md` 是主张 → 实验 → JSON 的台账；正文数字一律走 `tables/numbers.tex` 宏（`make numbers` 由 `evaluation/scripts/paper_numbers.py` 从结果 JSON 生成）。`make lint` 会抓 "first system / zero-copy / 5x / 485" 这些不许再出现的词。参考文献沿用 DIMVA 稿的 29 条（是 CCS 稿 24 条的超集）。骨架可编译。
