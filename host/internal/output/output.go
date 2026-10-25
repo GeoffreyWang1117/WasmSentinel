@@ -22,9 +22,17 @@ type OutputHandler interface {
 
 // LogOutputHandler 日志输出处理器
 type LogOutputHandler struct {
-	logger *logrus.Logger
-	file   *os.File
-	mu     sync.Mutex
+	logger  *logrus.Logger
+	file    *os.File
+	console bool // 每条告警是否打到控制台日志（基准测试时关闭）
+	mu      sync.Mutex
+}
+
+// SetConsole 控制是否把每条告警写进控制台日志；文件输出不受影响。
+func (l *LogOutputHandler) SetConsole(on bool) {
+	l.mu.Lock()
+	l.console = on
+	l.mu.Unlock()
 }
 
 // NewLogOutputHandler 创建日志输出处理器
@@ -40,8 +48,9 @@ func NewLogOutputHandler(logger *logrus.Logger, logFile string) (*LogOutputHandl
 	}
 
 	return &LogOutputHandler{
-		logger: logger,
-		file:   file,
+		logger:  logger,
+		file:    file,
+		console: true,
 	}, nil
 }
 
@@ -97,12 +106,14 @@ func (l *LogOutputHandler) Handle(result *events.DetectionResult) error {
 	}
 
 	// 同时输出到控制台
-	l.logger.WithFields(logrus.Fields{
-		"rule":       result.RuleName,
-		"severity":   result.Severity,
-		"confidence": result.Confidence,
-		"event_type": result.Event.Type,
-	}).Warn(result.Description)
+	if l.console {
+		l.logger.WithFields(logrus.Fields{
+			"rule":       result.RuleName,
+			"severity":   result.Severity,
+			"confidence": result.Confidence,
+			"event_type": result.Event.Type,
+		}).Warn(result.Description)
+	}
 
 	return nil
 }

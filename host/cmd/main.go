@@ -43,6 +43,7 @@ var (
 	replayLoop    bool
 	replayMax     uint64
 	ruleTrainDir  string
+	alertLog      bool
 )
 
 // rootCmd 代表基本命令
@@ -82,6 +83,7 @@ func init() {
 	rootCmd.PersistentFlags().IntVar(&replayEPS, "replay-eps", 0, "回放速率 (事件/秒, 0 = 尽快)")
 	rootCmd.PersistentFlags().BoolVar(&replayLoop, "replay-loop", false, "轨迹播完后循环")
 	rootCmd.PersistentFlags().Uint64Var(&replayMax, "replay-max-events", 0, "回放最多这么多事件后结束 (0 = 不限)")
+	rootCmd.PersistentFlags().BoolVar(&alertLog, "alert-log", true, "每条告警写控制台日志 (基准测试时用 --alert-log=false 关闭; 文件与 webhook 输出不受影响)")
 	rootCmd.PersistentFlags().StringVar(&ruleTrainDir, "rule-train-dir", "", "启动时用这个目录里的正常 syscall 轨迹 (ADFA-LD 格式) 训练导出 train_sequence 的规则 (如 ml_detector 的 STIDE 正常库)")
 	rootCmd.PersistentFlags().StringVar(&ebpfHooks, "ebpf-hooks", "all", "eBPF 钩子列表, 逗号分隔: exec,exit,open,connect,accept,syscall 或 all")
 	rootCmd.PersistentFlags().StringVar(&eventEncoding, "event-encoding", "json", "交给规则的事件编码: json 或 binary (binary 仅对 eBPF 事件且规则导出 detect_raw 时生效, 否则回退 json)")
@@ -100,6 +102,7 @@ func init() {
 	viper.BindPFlag("replay-eps", rootCmd.PersistentFlags().Lookup("replay-eps"))
 	viper.BindPFlag("replay-loop", rootCmd.PersistentFlags().Lookup("replay-loop"))
 	viper.BindPFlag("replay-max-events", rootCmd.PersistentFlags().Lookup("replay-max-events"))
+	viper.BindPFlag("alert-log", rootCmd.PersistentFlags().Lookup("alert-log"))
 	viper.BindPFlag("rule-train-dir", rootCmd.PersistentFlags().Lookup("rule-train-dir"))
 	viper.BindPFlag("ebpf-hooks", rootCmd.PersistentFlags().Lookup("ebpf-hooks"))
 	viper.BindPFlag("event-encoding", rootCmd.PersistentFlags().Lookup("event-encoding"))
@@ -357,6 +360,7 @@ func createOutputHandler(logger *logrus.Logger, m *metrics.Metrics) (output.Outp
 	if err != nil {
 		return nil, err
 	}
+	logHandler.SetConsole(viper.GetBool("alert-log"))
 	handlers = append(handlers, logHandler)
 
 	// Webhook 输出处理器
