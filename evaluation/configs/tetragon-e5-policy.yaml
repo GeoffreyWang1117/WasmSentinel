@@ -1,0 +1,33 @@
+# E5: the same three scenarios for Tetragon. Exec from /tmp uses the built-in
+# process_exec events (filtered by binary prefix in the harness).
+apiVersion: cilium.io/v1alpha1
+kind: TracingPolicy
+metadata:
+  name: wasmsentinel-e5
+spec:
+  kprobes:
+  # Entry of openat, so an attempt that fails with EACCES is still seen, like
+  # WasmSentinel's sys_enter_openat tracepoint and Falco's syscall exit event.
+  # (security_file_open would only observe opens that passed permission checks.)
+  - call: "__x64_sys_openat"
+    syscall: true
+    args:
+    - index: 1
+      type: "string"
+    selectors:
+    - matchArgs:
+      - index: 1
+        operator: "Equal"
+        values:
+        - "/etc/shadow"
+  - call: "tcp_connect"
+    syscall: false
+    args:
+    - index: 0
+      type: "sock"
+    selectors:
+    - matchArgs:
+      - index: 0
+        operator: "DPort"
+        values:
+        - "4444"

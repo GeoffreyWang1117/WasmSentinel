@@ -1,0 +1,23 @@
+# E5: the three detection scenarios expressed as Falco rules. Loaded from
+# /etc/falco/rules.d/ on top of the default ruleset; outputs carry E5_ tags so
+# the harness can count them. (Falco >= 0.45 drops enter events, so no evt.dir.)
+- rule: E5 shadow read
+  desc: any process opens /etc/shadow
+  condition: evt.type in (open, openat, openat2) and fd.name=/etc/shadow
+  output: "E5_SHADOW pid=%proc.pid proc=%proc.name file=%fd.name"
+  priority: WARNING
+  tags: [e5]
+
+- rule: E5 exec from tmp
+  desc: a binary under /tmp is executed
+  condition: evt.type in (execve, execveat) and proc.exepath startswith /tmp/
+  output: "E5_TMPEXEC pid=%proc.pid exe=%proc.exepath"
+  priority: WARNING
+  tags: [e5]
+
+- rule: E5 connect 4444
+  desc: outbound TCP connect to port 4444
+  condition: evt.type=connect and (fd.sport=4444 or fd.rport=4444 or fd.name endswith ":4444" or evt.arg.tuple endswith ":4444")
+  output: "E5_CONNECT4444 pid=%proc.pid proc=%proc.name conn=%fd.name"
+  priority: WARNING
+  tags: [e5]

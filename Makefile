@@ -8,6 +8,7 @@
 #   make e2          E2: NumPy / native / Wasm consistency + latency -> $(RESULTS)/e2/
 #   make e3          E3: end-to-end latency & throughput (replay)  -> $(RESULTS)/e3/
 #   make e4          E4: nginx/redis/postgres overhead under monitors -> $(RESULTS)/e4/
+#   make e5          E5: same three detections in WasmSentinel/Falco/Tetragon -> $(RESULTS)/e5/
 #   make reproduce   every experiment that exists so far, into $(RESULTS)/
 #
 # RESULTS defaults to evaluation/results/2026-11 (the directory the AsiaCCS
@@ -68,7 +69,11 @@ e4: build
 	mkdir -p $(RESULTS)/e4
 	$(PY) evaluation/scripts/e4_overhead.py --out $(RESULTS)/e4
 
-reproduce: isolation parity e1 e2 e3 e4
+e5: build
+	mkdir -p $(RESULTS)/e5
+	$(PY) evaluation/scripts/e5_fair_comparison.py --out $(RESULTS)/e5
+
+reproduce: isolation parity e1 e2 e3 e4 e5
 	@echo "results in $(RESULTS)/"
 
 clean:

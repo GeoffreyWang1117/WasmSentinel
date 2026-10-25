@@ -114,7 +114,7 @@ class FalcoMonitor(Monitor):
                 "falcosecurity/falco:latest", "falco", "-o", "engine.kind=modern_ebpf", "-o", "json_output=true", "-o", "stdout_output.enabled=true"])
         if r.returncode:
             raise RuntimeError(r.stderr)
-        wait_log(self.container, "Falco initialized", 120)
+        wait_log(self.container, "One ring buffer every", 120)
         time.sleep(2)
 
     def pid(self):

@@ -61,7 +61,8 @@ func (l *LogOutputHandler) Handle(result *events.DetectionResult) error {
 
 	// 格式化输出
 	logEntry := map[string]interface{}{
-		"timestamp":   time.Now().Format(time.RFC3339),
+		"timestamp":   time.Now().Format(time.RFC3339Nano),
+		"event_time":  result.Event.Timestamp.Format(time.RFC3339Nano),
 		"rule_name":   result.RuleName,
 		"severity":    result.Severity,
 		"threat":      result.Threat,
