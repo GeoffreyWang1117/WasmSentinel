@@ -1,0 +1,189 @@
+{
+ "experiment": "E5 same detections in WasmSentinel, Falco, Tetragon",
+ "provenance": {
+  "git_commit": "ba7af70ee77e0cec2139fb05d64428c19612565d",
+  "kernel": "7.0.0-34-generic",
+  "cpu": "AMD Ryzen 9 5950X 16-Core Processor",
+  "timestamp": "2026-10-25T13:24:43Z",
+  "falco_image": "sha256:788f1129c542",
+  "tetragon_image": "quay.io/cilium/tetragon:v1.7.1",
+  "args": {
+   "systems": "wasmsentinel,falco,tetragon",
+   "trials": "20",
+   "gap": "0.5",
+   "settle": "3.0",
+   "out": "evaluation/results/2026-11/e5",
+   "dump_alerts": "False",
+   "quick": "False"
+  }
+ },
+ "scenarios": {
+  "shadow": "open /etc/shadow (EACCES)",
+  "tmpexec": "copy /bin/true under /tmp and run it",
+  "connect": "TCP connect to 127.0.0.1:4444"
+ },
+ "results": {
+  "wasmsentinel": {
+   "scenarios": {
+    "shadow": {
+     "trials": 20,
+     "detected": 20,
+     "rate": 1.0,
+     "alerts_matching": 40,
+     "latency_ms": {
+      "median": 2.923250198364258,
+      "p90": 3.23486328125,
+      "max": 3.478527069091797
+     },
+     "event_to_alert_ms_median": -0.0050067901611328125
+    },
+    "tmpexec": {
+     "trials": 20,
+     "detected": 20,
+     "rate": 1.0,
+     "alerts_matching": 40,
+     "latency_ms": {
+      "median": 0.8167028427124023,
+      "p90": 0.9045600891113281,
+      "max": 0.9806156158447266
+     },
+     "event_to_alert_ms_median": 0.02956390380859375
+    },
+    "connect": {
+     "trials": 20,
+     "detected": 20,
+     "rate": 1.0,
+     "alerts_matching": 40,
+     "latency_ms": {
+      "median": 2.255558967590332,
+      "p90": 2.6636123657226562,
+      "max": 2.78472900390625
+     },
+     "event_to_alert_ms_median": 0.40459632873535156
+    }
+   },
+   "total_alerts": 6658,
+   "resources": {
+    "samples": 132,
+    "cpu_pct_mean": 7.141273474085591,
+    "cpu_pct_max": 67.91023675142529,
+    "rss_kb_mean": 97418.42424242424,
+    "rss_kb_max": 99544,
+    "sys_cpu_pct_mean": 9.527932340906778,
+    "sys_cpu_pct_max": 15.162907268170422
+   },
+   "monitor": {}
+  },
+  "falco": {
+   "scenarios": {
+    "shadow": {
+     "trials": 20,
+     "detected": 20,
+     "rate": 1.0,
+     "alerts_matching": 20,
+     "latency_ms": {
+      "median": 2.8312206268310547,
+      "p90": 3.0014514923095703,
+      "max": 3.086566925048828
+     },
+     "event_to_alert_ms_median": null
+    },
+    "tmpexec": {
+     "trials": 20,
+     "detected": 20,
+     "rate": 1.0,
+     "alerts_matching": 20,
+     "latency_ms": {
+      "median": 0.7234811782836914,
+      "p90": 0.7486343383789062,
+      "max": 0.7610321044921875
+     },
+     "event_to_alert_ms_median": null
+    },
+    "connect": {
+     "trials": 20,
+     "detected": 20,
+     "rate": 1.0,
+     "alerts_matching": 20,
+     "latency_ms": {
+      "median": 1.8076896667480469,
+      "p90": 1.9459724426269531,
+      "max": 2.0999908447265625
+     },
+     "event_to_alert_ms_median": null
+    }
+   },
+   "total_alerts": 60,
+   "resources": {
+    "samples": 132,
+    "cpu_pct_mean": 1.2407398785320811,
+    "cpu_pct_max": 23.9715151711433,
+    "rss_kb_mean": 368304.8181818182,
+    "rss_kb_max": 379608,
+    "sys_cpu_pct_mean": 9.65272760674521,
+    "sys_cpu_pct_max": 19.298245614035093
+   },
+   "monitor": {
+    "alerts": 60
+   }
+  },
+  "tetragon": {
+   "scenarios": {
+    "shadow": {
+     "trials": 20,
+     "detected": 20,
+     "rate": 1.0,
+     "alerts_matching": 20,
+     "latency_ms": {
+      "median": 2.742886543273926,
+      "p90": 3.0412673950195312,
+      "max": 3.2453536987304688
+     },
+     "event_to_alert_ms_median": null
+    },
+    "tmpexec": {
+     "trials": 20,
+     "detected": 20,
+     "rate": 1.0,
+     "alerts_matching": 20,
+     "latency_ms": {
+      "median": 0.7654428482055664,
+      "p90": 0.8132457733154297,
+      "max": 0.8592605590820312
+     },
+     "event_to_alert_ms_median": null
+    },
+    "connect": {
+     "trials": 20,
+     "detected": 20,
+     "rate": 1.0,
+     "alerts_matching": 20,
+     "latency_ms": {
+      "median": 1.6677379608154297,
+      "p90": 1.7969608306884766,
+      "max": 1.8720626831054688
+     },
+     "event_to_alert_ms_median": null
+    }
+   },
+   "total_alerts": 2660,
+   "resources": {
+    "samples": 132,
+    "cpu_pct_mean": 0.7867530733484134,
+    "cpu_pct_max": 11.983588758985611,
+    "rss_kb_mean": 126929.24242424243,
+    "rss_kb_max": 157236,
+    "sys_cpu_pct_mean": 10.493045176951794,
+    "sys_cpu_pct_max": 23.875
+   },
+   "monitor": {
+    "exported_events": 2671
+   }
+  }
+ },
+ "notes": [
+  "Detection latency is wall clock from just before the action to the first matching alert; Falco/Tetragon timestamps are their own, WasmSentinel's is the alert-file write time.",
+  "WasmSentinel event_to_alert is kernel event timestamp -> alert written, from its own records.",
+  "Tetragon exports every exec; exec-from-/tmp is a filter on that export, not a policy rule."
+ ]
+}
