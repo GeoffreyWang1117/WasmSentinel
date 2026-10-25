@@ -63,6 +63,7 @@ e2: build
 e3: build
 	mkdir -p $(RESULTS)/e3
 	$(PY) evaluation/scripts/e3_throughput.py --out $(RESULTS)/e3
+	$(PY) evaluation/scripts/plot_e3.py --results $(RESULTS)/e3
 
 # E4 needs docker (privileged containers for the monitors) and an idle machine.
 e4: build
