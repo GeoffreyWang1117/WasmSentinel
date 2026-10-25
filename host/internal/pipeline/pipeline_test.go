@@ -110,6 +110,9 @@ func TestRunDeliversEveryEventAndStopsWhenCollectorsClose(t *testing.T) {
 		if st.Events != n || st.Alerts != n || st.DetectErrors != 0 || st.OutputErrors != 0 {
 			t.Fatalf("stats %+v", st)
 		}
+		if st.Detect.Samples != n || st.EndToEnd.Samples != n || st.EndToEnd.P50 < st.Detect.P50 || st.EndToEnd.Max == 0 {
+			t.Errorf("latency percentiles %+v / %+v", st.EndToEnd, st.Detect)
+		}
 	case <-time.After(10 * time.Second):
 		t.Fatal("pipeline did not stop after the collectors closed")
 	}

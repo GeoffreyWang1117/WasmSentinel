@@ -41,6 +41,7 @@ var (
 	replayFile    string
 	replayEPS     int
 	replayLoop    bool
+	replayMax     uint64
 	ruleTrainDir  string
 )
 
@@ -80,6 +81,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&replayFile, "replay-file", "", "collector=replay 时的轨迹文件或目录 (ADFA-LD 格式: 空格分隔的 syscall 号)")
 	rootCmd.PersistentFlags().IntVar(&replayEPS, "replay-eps", 0, "回放速率 (事件/秒, 0 = 尽快)")
 	rootCmd.PersistentFlags().BoolVar(&replayLoop, "replay-loop", false, "轨迹播完后循环")
+	rootCmd.PersistentFlags().Uint64Var(&replayMax, "replay-max-events", 0, "回放最多这么多事件后结束 (0 = 不限)")
 	rootCmd.PersistentFlags().StringVar(&ruleTrainDir, "rule-train-dir", "", "启动时用这个目录里的正常 syscall 轨迹 (ADFA-LD 格式) 训练导出 train_sequence 的规则 (如 ml_detector 的 STIDE 正常库)")
 	rootCmd.PersistentFlags().StringVar(&ebpfHooks, "ebpf-hooks", "all", "eBPF 钩子列表, 逗号分隔: exec,exit,open,connect,accept,syscall 或 all")
 	rootCmd.PersistentFlags().StringVar(&eventEncoding, "event-encoding", "json", "交给规则的事件编码: json 或 binary (binary 仅对 eBPF 事件且规则导出 detect_raw 时生效, 否则回退 json)")
@@ -97,6 +99,7 @@ func init() {
 	viper.BindPFlag("replay-file", rootCmd.PersistentFlags().Lookup("replay-file"))
 	viper.BindPFlag("replay-eps", rootCmd.PersistentFlags().Lookup("replay-eps"))
 	viper.BindPFlag("replay-loop", rootCmd.PersistentFlags().Lookup("replay-loop"))
+	viper.BindPFlag("replay-max-events", rootCmd.PersistentFlags().Lookup("replay-max-events"))
 	viper.BindPFlag("rule-train-dir", rootCmd.PersistentFlags().Lookup("rule-train-dir"))
 	viper.BindPFlag("ebpf-hooks", rootCmd.PersistentFlags().Lookup("ebpf-hooks"))
 	viper.BindPFlag("event-encoding", rootCmd.PersistentFlags().Lookup("event-encoding"))
@@ -194,8 +197,10 @@ func run() {
 		defer col.Stop()
 	}
 
-	// 启动 Prometheus 指标服务器
-	go startMetricsServer(logger, m)
+	// 启动 Prometheus 指标服务器（端口 0 = 不启动，基准测试用）
+	if viper.GetInt("metrics-port") > 0 {
+		go startMetricsServer(logger, m)
+	}
 
 	// 处理事件：采集器全部关闭（回放结束）或收到信号时结束
 	done := make(chan pipeline.Stats, 1)
@@ -387,6 +392,7 @@ func createCollectors(logger *logrus.Logger) []collector.Collector {
 			Path:            viper.GetString("replay-file"),
 			EventsPerSecond: viper.GetInt("replay-eps"),
 			Loop:            viper.GetBool("replay-loop"),
+			MaxEvents:       viper.GetUint64("replay-max-events"),
 			Binary:          true,
 		})
 		if err != nil {
@@ -405,14 +411,28 @@ func logPipelineStats(logger *logrus.Logger, st pipeline.Stats) {
 	if st.Elapsed > 0 {
 		eps = float64(st.Events) / st.Elapsed.Seconds()
 	}
+	var ru syscall.Rusage
+	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &ru)
 	logger.WithFields(logrus.Fields{
 		"events":        st.Events,
 		"alerts":        st.Alerts,
 		"detect_errors": st.DetectErrors,
 		"output_errors": st.OutputErrors,
 		"elapsed":       st.Elapsed.String(),
+		"elapsed_s":     st.Elapsed.Seconds(),
 		"events_per_s":  fmt.Sprintf("%.0f", eps),
+		"max_rss_kb":    ru.Maxrss,
+		"e2e_us":        pct(st.EndToEnd),
+		"detect_us":     pct(st.Detect),
 	}).Info("Pipeline statistics")
+}
+
+// pct renders a latency distribution in microseconds for the JSON log.
+func pct(p pipeline.Percentiles) map[string]int64 {
+	return map[string]int64{
+		"samples": int64(p.Samples), "p50": p.P50.Microseconds(), "p90": p.P90.Microseconds(),
+		"p99": p.P99.Microseconds(), "p999": p.P999.Microseconds(), "max": p.Max.Microseconds(), "mean": p.Mean.Microseconds(),
+	}
 }
 
 // startMetricsServer 启动 Prometheus 指标与健康检查服务

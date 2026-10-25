@@ -7,6 +7,7 @@ package pipeline
 
 import (
 	"context"
+	"sort"
 	"sync"
 	"time"
 
@@ -35,6 +36,44 @@ type Stats struct {
 	DetectErrors uint64 // DetectThreat returned an error (event-level, not rule-level)
 	OutputErrors uint64
 	Elapsed      time.Duration
+
+	// EndToEnd is the distribution of event timestamp -> output handled
+	// (queue wait + detection + output), from up to MaxLatencySamples events.
+	EndToEnd Percentiles
+	// Detect is the distribution of DetectThreat alone.
+	Detect Percentiles
+}
+
+// Percentiles of a latency sample.
+type Percentiles struct {
+	Samples             int
+	P50, P90, P99, P999 time.Duration
+	Max                 time.Duration
+	Mean                time.Duration
+}
+
+// MaxLatencySamples bounds the memory used for latency recording (4 B each).
+const MaxLatencySamples = 4_000_000
+
+func percentiles(us []int32) Percentiles {
+	if len(us) == 0 {
+		return Percentiles{}
+	}
+	sorted := append([]int32(nil), us...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i] < sorted[j] })
+	q := func(f float64) time.Duration {
+		i := int(f * float64(len(sorted)-1))
+		return time.Duration(sorted[i]) * time.Microsecond
+	}
+	var sum int64
+	for _, v := range sorted {
+		sum += int64(v)
+	}
+	return Percentiles{
+		Samples: len(sorted), P50: q(0.50), P90: q(0.90), P99: q(0.99), P999: q(0.999),
+		Max:  time.Duration(sorted[len(sorted)-1]) * time.Microsecond,
+		Mean: time.Duration(sum/int64(len(sorted))) * time.Microsecond,
+	}
 }
 
 // Run drives the pipeline until ctx is done or all collectors closed their
@@ -72,7 +111,13 @@ func Run(ctx context.Context, cfg Config) (st Stats) {
 		close(queue)
 	}()
 
-	defer func() { st.Elapsed = time.Since(start) }()
+	e2e := make([]int32, 0, 1<<16)
+	det := make([]int32, 0, 1<<16)
+	defer func() {
+		st.Elapsed = time.Since(start)
+		st.EndToEnd = percentiles(e2e)
+		st.Detect = percentiles(det)
+	}()
 	for {
 		select {
 		case <-ctx.Done():
@@ -84,8 +129,9 @@ func Run(ctx context.Context, cfg Config) (st Stats) {
 			st.Events++
 			t0 := time.Now()
 			results, err := cfg.Engine.DetectThreat(ctx, ev)
+			dDetect := time.Since(t0)
 			if cfg.Metrics != nil {
-				cfg.Metrics.ObserveEvent(ev.Type, time.Since(t0))
+				cfg.Metrics.ObserveEvent(ev.Type, dDetect)
 			}
 			if err != nil {
 				st.DetectErrors++
@@ -97,6 +143,14 @@ func Run(ctx context.Context, cfg Config) (st Stats) {
 				if err := cfg.Output.Handle(r); err != nil {
 					st.OutputErrors++
 					logger.WithError(err).Warn("Failed to handle detection result")
+				}
+			}
+			if len(det) < MaxLatencySamples {
+				det = append(det, int32(dDetect.Microseconds()))
+				if !ev.Timestamp.IsZero() {
+					if d := time.Since(ev.Timestamp); d >= 0 && d < 1<<31*time.Microsecond {
+						e2e = append(e2e, int32(d.Microseconds()))
+					}
 				}
 			}
 		}

@@ -34,6 +34,9 @@ type ReplayConfig struct {
 	PID uint32
 	// ChanSize is the output channel capacity; 0 means 4096.
 	ChanSize int
+	// MaxEvents stops the replay after that many events (0 = whole trace set,
+	// or forever with Loop).
+	MaxEvents uint64
 }
 
 // ReplayCollector feeds recorded syscall traces through the pipeline as
@@ -92,7 +95,7 @@ func (c *ReplayCollector) Start(ctx context.Context) error {
 	go c.run(ctx)
 	nTraces, nEvents := c.Traces()
 	c.logger.WithFields(logrus.Fields{
-		"traces": nTraces, "events": nEvents, "eps": c.cfg.EventsPerSecond, "loop": c.cfg.Loop, "binary": c.cfg.Binary,
+		"traces": nTraces, "events": nEvents, "eps": c.cfg.EventsPerSecond, "loop": c.cfg.Loop, "binary": c.cfg.Binary, "max_events": c.cfg.MaxEvents,
 	}).Info("Replay collector started")
 	return nil
 }
@@ -133,6 +136,9 @@ func (c *ReplayCollector) run(ctx context.Context) {
 					}
 				}
 				for ; budget > 0; budget-- {
+					if c.cfg.MaxEvents > 0 && seq >= c.cfg.MaxEvents {
+						return
+					}
 					seq++
 					ev := c.event(pid, trace[i], seq)
 					select {
