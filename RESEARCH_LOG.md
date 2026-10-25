@@ -2,6 +2,16 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-25 · E4 / E5 驱动器就位（功能验证通过，正式数字等机器空闲）
+
+**E4（`e4_overhead.py`，`make e4`）**：nginx（wrk -t8 -c128）、redis（redis-benchmark SET/GET，pipeline 16）、postgres（pgbench -c16 -j8，客户端在容器里跑，宿主只有 Debian 的 pg_wrapper）三种负载 × {none, wasmsentinel, falco, tetragon} 四臂，容器只发布到 127.0.0.1；每格 5 次交错重复；监控进程的 CPU%/RSS 与整机 CPU 每 0.25 s 采样；输出吞吐 Δ% 与配对 95% CI。`monitors.py` 负责以 root 拉起三套系统（WasmSentinel 走特权容器 chroot 回主机；Falco modern eBPF；Tetragon 带 file-open + tcp-connect 策略）。原稿里 `real_workload_test.py` 的 `monitoring='simulated'` 分支由这个脚本取代。
+
+**E5（`e5_fair_comparison.py`，`make e5`）**：三种场景（读 /etc/shadow、把 /bin/true 拷到 /tmp 下执行、TCP 连 127.0.0.1:4444——harness 自己在 4444 监听并立即关闭）各跑 N 次，三套系统用等价规则：WasmSentinel 的 suspicious_shell；Falco 自定义三条规则叠在默认规则集上；Tetragon 策略 hook `__x64_sys_openat` 入口（`security_file_open` 看不到被权限检查拒绝的尝试，这是三者语义上的一个真实差别，论文要写）与 `tcp_connect` dport 4444，exec 用内建事件按 /tmp 前缀过滤。每条告警归到它之前最近的那次动作；报检出率、告警延迟（动作前的墙钟到首条告警）、RSS、CPU。
+
+**调试里学到的（都写进代码注释）**：Falco 0.45 丢弃 enter 事件，`evt.dir=<` 是废弃项；"Falco initialized" 早于探针挂载，就绪要等 "One ring buffer every" 那行；Falco 输出要 `-U` 否则有缓冲；Tetragon 的 `security_file_open` 对 EACCES 的打开不触发。
+
+**quick 一瞥（3 次、负载机器）**：三套系统三场景都 3/3，告警延迟 1–6 ms 量级。WasmSentinel 在试验期间 CPU 15.6%、RSS 97 MiB；Falco 4.5% / 363 MiB；Tetragon 1.6% / 76 MiB。WasmSentinel 高 CPU 的原因明确：每个 openat 都进两条 Wasm 规则且 ml_detector 走深路径，而 Falco/Tetragon 在内核侧先过滤——这是 E4 要量化、论文 Discussion 要讲的设计杠杆（规则驱动的钩子选择 / 内核侧预过滤）。
+
 ## 2026-10-25 · Phase 2 开工：E1 在跑，E2 一致性已出，E3 脚手架就位
 
 **E1（`evaluation/scripts/e1_adfa_eval.py`，`make e1`）**：5,205 正常 + 746 攻击轨迹，分层 5 折 × 3 种子。WasmSentinel 的 MLP 每折在 NumPy 里训练（向量化重写的 `SimpleMLP`，内部 10% 验证集早停），权重用新导出 `load_mlp_weights` 装进编译好的模块，每个测试分数都来自模块的 `mlp_score`（特征与推理都在 Wasm 内）。基线：STIDE 6-gram 新颖率（仅正常）、Isolation Forest（仅正常，v1 特征）、Random Forest（监督，v1 特征）、LSTM（原始序列，早停；GPU 被别的任务占满，走 CPU）。指标：AUPRC、ROC-AUC、FPR≤5%/1% 下的 recall、两个在训练折上固定的工作点（训练正常分数 95 分位；训练折 F1 最优阈值）、按攻击家族的 recall、与 WasmSentinel 的配对 AUPRC 差（t-CI + Wilcoxon）。JSON 带 commit、wasm sha256、库版本、CPU。全量运行已在后台启动（01:43），quick 模式（1 种子 2 折，MLP 20 轮）先看到的数字：MLP AUPRC 0.38–0.42，STIDE 0.35–0.47，IF 0.21，**RF 0.85–0.88**，LSTM（3 轮）0.53。RF 在同一组特征上远好于 MLP——论文不能再讲"轻量 MLP 准确率"，这正是 §2 改为系统论文的理由；也提示下一个产品决定：把树模型编进 Wasm 规则（E1 收尾后评估）。
