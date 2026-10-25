@@ -1,0 +1,58 @@
+{
+ "experiment": "E2 same model, three implementations: consistency and single-call latency",
+ "provenance": {
+  "git_commit": "ba7af70ee77e0cec2139fb05d64428c19612565d",
+  "wasm_sha256": "8e4238a2355b6a21af6b91ee1639cc3e68f86ef7d73f884023f923f64ae5179f",
+  "weights_sha256": "1ee0c5d26f35193655abc52559ccfcdc1cf3734baf5ec232ec0ebf67277b3832",
+  "kernel": "7.0.0-34-generic",
+  "cpu": "AMD Ryzen 9 5950X 16-Core Processor",
+  "numpy": "2.2.6",
+  "timestamp": "2026-10-25T12:43:42Z",
+  "args": {
+   "adfa_dir": "/home/coder-gw/Engineering/WasmSentinel/evaluation/datasets/raw/ADFA-LD/ADFA-LD",
+   "wasm": "/home/coder-gw/Engineering/WasmSentinel/rules/wasm/ml_detector.wasm",
+   "weights": "/home/coder-gw/Engineering/WasmSentinel/rules/ml-detector/train/best_model_weights.json",
+   "out": "evaluation/results/2026-11/e2",
+   "repeat": "30",
+   "timing_traces": "600",
+   "skip_timing": "False"
+  }
+ },
+ "consistency": {
+  "traces": 5951,
+  "max_abs_diff_numpy_vs_wasm": 1.9073486328125e-06,
+  "max_abs_diff_numpy_vs_native": 1.904117889361956e-06,
+  "max_abs_diff_native_vs_wasm": 4.99854929745646e-09,
+  "decisions_agree_at_0.7": {
+   "numpy_vs_wasm": 5951,
+   "numpy_vs_native": 5951
+  }
+ },
+ "timing": {
+  "traces_timed": 662,
+  "repeat": 30,
+  "trace_len_median": 343,
+  "ns_per_call_median": {
+   "numpy": 164603.0,
+   "native_rust": 25950.5,
+   "wasm_wasmtime_py": 126317.5
+  },
+  "ns_per_call_p90": {
+   "numpy": 413898.9499999997,
+   "native_rust": 54446.0,
+   "wasm_wasmtime_py": 193160.94999999998
+  },
+  "calls_per_s_median": {
+   "numpy": 6075.223416341136,
+   "native_rust": 38534.90298838173,
+   "wasm_wasmtime_py": 7916.559463257268
+  },
+  "go_engine_ns_per_call": {
+   "BenchmarkInvokeEcho": 2145.0,
+   "BenchmarkRealMLDetectorJSON": 10212.0,
+   "BenchmarkRealMLDetectorRaw": 4602.0
+  },
+  "note": "wasm_wasmtime_py includes the Python-side call and memory copy; go_engine_ns_per_call BenchmarkInvokeEcho is the host engine's own per-call overhead with a trivial guest, RealMLDetector* the full rule on one process event (JSON / raw payload)."
+ },
+ "elapsed_seconds": 18.9
+}
