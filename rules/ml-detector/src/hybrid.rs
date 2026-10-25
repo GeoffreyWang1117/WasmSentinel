@@ -1,10 +1,12 @@
 //! Hybrid detection engine.
 //!
 //! Syscall events go through STIDE (fast path, n-gram membership) and, when
-//! STIDE flags the n-gram, through the embedded MLP (deep path, feature set v1
-//! over the process's recent syscall numbers). Process, network and file events
-//! are scored by small keyword / port / path rules only: the MLP was trained on
-//! syscall traces and has nothing to say about them.
+//! STIDE flags the n-gram, through the deep-path model (feature set v1 over the
+//! process's recent syscall numbers): the embedded MLP by default, or the
+//! embedded random forest when the config says `"model": "rf"`. Process,
+//! network and file events are scored by small keyword / port / path rules
+//! only: the models were trained on syscall traces and have nothing to say
+//! about them.
 //!
 //! All event access goes through `sentinel_abi::EventFields`, so the JSON path
 //! and the binary path run exactly the same code.
@@ -16,6 +18,7 @@ use std::collections::{HashMap, VecDeque};
 use sentinel_abi::{EventFields, JsonEvent};
 
 use crate::features::adfa_features;
+use crate::forest::Forest;
 use crate::mlp::MlpDetector;
 use crate::stide::{StideConfig, StideDetector};
 use crate::DetectionResult;
@@ -31,14 +34,17 @@ pub struct HybridConfig {
     pub mlp_threshold: Option<f32>,
     /// Use STIDE for the fast path
     pub use_stide: bool,
-    /// Use the MLP for the deep path
+    /// Run the deep-path model (MLP or forest) when STIDE flags an event
     pub use_mlp: bool,
-    /// STIDE score at or above which the MLP runs
+    /// Deep-path model: "mlp" (embedded MLP, the default) or "rf" (embedded
+    /// random forest). Both are trained on feature set v1.
+    pub model: String,
+    /// STIDE score at or above which the deep path runs
     pub stide_mlp_threshold: f32,
     /// Weights for combining the two scores
     pub stide_weight: f32,
     pub mlp_weight: f32,
-    /// Syscall numbers kept per process for MLP features
+    /// Syscall numbers kept per process for the model's features
     pub syscall_window: usize,
     /// Upper bound on tracked processes; the least recently seen is evicted
     pub max_processes: usize,
@@ -51,6 +57,7 @@ impl Default for HybridConfig {
             mlp_threshold: None,
             use_stide: true,
             use_mlp: true,
+            model: "mlp".to_string(),
             stide_mlp_threshold: 0.5,
             stide_weight: 0.4,
             mlp_weight: 0.6,
@@ -91,6 +98,9 @@ pub struct HybridDetector {
     config: HybridConfig,
     stide: StideDetector,
     mlp: MlpDetector,
+    /// The deep path uses this forest when set (config `"model": "rf"`, or
+    /// `load_forest`), the MLP otherwise.
+    forest: Option<Forest>,
     process_states: HashMap<u32, ProcessState>,
     clock: u64,
     stats: HybridStats,
@@ -115,15 +125,22 @@ impl HybridDetector {
     }
 
     /// Build a detector. The MLP always carries the embedded, trained weights;
-    /// the config can only move its threshold.
+    /// the config can only move its threshold. `"model": "rf"` makes the deep
+    /// path the embedded random forest instead; any other value means MLP.
     pub fn with_config(config: HybridConfig) -> Self {
         let mut mlp = MlpDetector::with_embedded_weights();
         if let Some(t) = config.mlp_threshold {
             mlp.set_threshold(t);
         }
+        let forest = if config.model == "rf" {
+            Some(Forest::embedded())
+        } else {
+            None
+        };
         Self {
             stide: StideDetector::with_config(config.stide.clone()),
             mlp,
+            forest,
             config,
             process_states: HashMap::new(),
             clock: 0,
@@ -231,17 +248,22 @@ impl HybridDetector {
             };
         }
 
-        // Deep path: MLP on feature set v1 over the process window
-        let mlp_score = if self.config.use_mlp && !numbers.is_empty() {
-            self.mlp.detect(&adfa_features(&numbers))
+        // Deep path: the configured model (MLP or random forest) on feature
+        // set v1 over the process window
+        let deep_score = if self.config.use_mlp && !numbers.is_empty() {
+            let features = adfa_features(&numbers);
+            match &self.forest {
+                Some(forest) => forest.score(&features),
+                None => self.mlp.detect(&features),
+            }
         } else {
             0.0
         };
 
         let combined_score =
-            stide_score * self.config.stide_weight + mlp_score * self.config.mlp_weight;
+            stide_score * self.config.stide_weight + deep_score * self.config.mlp_weight;
         let threat_level = self.score_to_threat_level(combined_score);
-        let detection_method = if stide_score > 0.0 && mlp_score > 0.0 {
+        let detection_method = if stide_score > 0.0 && deep_score > 0.0 {
             self.stats.hybrid_detections += 1;
             "hybrid"
         } else if stide_score > 0.0 {
@@ -249,9 +271,9 @@ impl HybridDetector {
             "stide"
         } else {
             self.stats.mlp_only_detections += 1;
-            "mlp"
+            self.model_name()
         };
-        let confidence = self.calculate_confidence(stide_score, mlp_score);
+        let confidence = self.calculate_confidence(stide_score, deep_score);
 
         DetectionResult {
             threat_level,
@@ -259,9 +281,10 @@ impl HybridDetector {
             detection_method: detection_method.to_string(),
             anomaly_score: combined_score,
             details: format!(
-                "Hybrid detection: STIDE={:.3}, MLP={:.3}, combined={:.3}, window={}",
+                "Hybrid detection: STIDE={:.3}, {}={:.3}, combined={:.3}, window={}",
                 stide_score,
-                mlp_score,
+                self.model_name(),
+                deep_score,
                 combined_score,
                 numbers.len()
             ),
@@ -458,11 +481,28 @@ impl HybridDetector {
     }
 
     /// Replace the MLP at run time (evaluation harnesses, per-fold models);
-    /// deployments use the embedded weights. The threshold is kept.
+    /// deployments use the embedded weights. The threshold is kept. The deep
+    /// path goes back to the MLP if a forest had been loaded.
     pub fn load_mlp_weights(&mut self, weights_json: &str) -> Result<(), String> {
         let threshold = self.mlp.get_config().threshold;
         self.mlp = MlpDetector::from_weights_json(weights_json, threshold)?;
+        self.forest = None;
         Ok(())
+    }
+
+    /// Make `forest` the deep-path model (evaluation harnesses, per-fold
+    /// forests; deployments use the embedded one via the config).
+    pub fn load_forest(&mut self, forest: Forest) {
+        self.forest = Some(forest);
+    }
+
+    /// Name of the deep-path model in use: "rf" or "mlp".
+    pub fn model_name(&self) -> &'static str {
+        if self.forest.is_some() {
+            "rf"
+        } else {
+            "mlp"
+        }
     }
 
     pub fn get_stats(&self) -> HybridStats {

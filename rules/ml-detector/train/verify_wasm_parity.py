@@ -81,6 +81,32 @@ class WasmModel:
         self.model_info = ex["model_info"]
         self.free_result = ex["free_result"]
         self.load_mlp_weights = ex["load_mlp_weights"]
+        # Random-forest exports; modules built before the forest existed lack them.
+        try:
+            self.rf_score_fn = ex["rf_score"]
+            self.load_rf_model = ex["load_rf_model"]
+        except KeyError:
+            self.rf_score_fn = self.load_rf_model = None
+
+    def has_forest(self) -> bool:
+        return self.rf_score_fn is not None
+
+    def load_forest(self, blob: bytes) -> None:
+        """Replace the module's random forest with a WSRF image (per-fold forests in E1)."""
+        if self.load_rf_model is None:
+            raise RuntimeError("module has no load_rf_model export")
+        ptr = self.alloc(self.store, len(blob))
+        try:
+            self.memory.write(self.store, blob, ptr)
+            rc = self.load_rf_model(self.store, ptr, len(blob))
+            if rc != 0:
+                raise RuntimeError(f"load_rf_model returned {rc}")
+        finally:
+            self.dealloc(self.store, ptr, len(blob))
+
+    def score_rf(self, seq) -> float:
+        """Random-forest score (features + traversal inside the module)."""
+        return float(self._with_sequence(seq, lambda p, n: self.rf_score_fn(self.store, p, n)))
 
     def info(self) -> dict:
         lenp = self.alloc(self.store, 4)
@@ -187,6 +213,20 @@ def main() -> int:
     if max_score > args.tolerance:
         print(f"FAIL: score difference exceeds {args.tolerance:g}")
         return 1
+
+    # Random forest: the module's rf_score against the scikit-learn
+    # probabilities train_rf.py stored with the fixture (no scikit-learn needed here).
+    fixture = HERE / "fixtures" / "forest_golden.json"
+    if wasm.has_forest() and fixture.is_file():
+        golden = json.loads(fixture.read_text())
+        if golden.get("sha256") != info.get("rf", {}).get("sha256"):
+            print(f"FOREST MISMATCH: fixture {golden.get('sha256', '')[:12]} vs module {info.get('rf', {}).get('sha256', '')[:12]}")
+            return 2
+        rf_max = max(abs(wasm.score_rf(c["syscalls"]) - c["prob"]) for c in golden["cases"])
+        print(f"random forest: max |score diff| = {rf_max:.3e} over {len(golden['cases'])} fixture cases (scikit-learn reference)")
+        if rf_max > args.tolerance:
+            print(f"FAIL: forest score difference exceeds {args.tolerance:g}")
+            return 1
     print(f"PASS: within {args.tolerance:g}")
     return 0
 

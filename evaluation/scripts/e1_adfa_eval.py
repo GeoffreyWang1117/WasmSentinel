@@ -9,15 +9,20 @@ Protocol
     early stopping on a 10 % inner validation split), weights loaded into the
     compiled module with load_mlp_weights, every test score produced by the
     module's mlp_score export (features + inference inside Wasm)
+  * WasmSentinel RF: the Random Forest baseline's model (scikit-learn, 300
+    trees, balanced class weights) serialized with forest_export.py, loaded
+    into the module with load_rf_model, every test score produced by the
+    module's rf_score export (features + tree traversal inside Wasm)
   * baselines: STIDE 6-gram novelty rate (normal-only), Isolation Forest
-    (normal-only, v1 features), Random Forest (supervised, v1 features),
-    LSTM on the raw syscall sequence (supervised, early stopping)
+    (normal-only, v1 features), Random Forest (supervised, v1 features; the
+    scikit-learn reference of the WasmSentinel RF arm), LSTM on the raw
+    syscall sequence (supervised, early stopping)
   * metrics per (seed, fold): AUPRC, ROC-AUC, recall at FPR <= 5 % and 1 %,
     precision/recall/F1 at two operating points fixed on the training fold
     (FPR-5 % threshold from training normals; train-optimal-F1 threshold),
     per-family recall at the FPR-5 % point
-  * paired comparison of AUPRC against WasmSentinel over the (seed, fold)
-    runs: mean difference, 95 % t-CI, Wilcoxon signed-rank p
+  * paired comparison of AUPRC against each WasmSentinel arm over the (seed,
+    fold) runs: mean difference, 95 % t-CI, Wilcoxon signed-rank p
 
 Outputs (in --out): e1_results.json (everything, with provenance),
 e1_summary.md, e1_pr_curves.json (mean PR curves for plotting).
@@ -40,6 +45,7 @@ HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[1]
 TRAIN_DIR = REPO / "rules" / "ml-detector" / "train"
 sys.path.insert(0, str(TRAIN_DIR))
+from forest_export import forest_stats, forest_to_bytes  # noqa: E402
 from train_mlp import extract_features, parse_syscall_trace  # noqa: E402
 from verify_wasm_parity import WasmModel  # noqa: E402
 
@@ -210,6 +216,32 @@ def run_wasm_mlp(ctx, tr, te, seed, fold):
     return s_train, s_test, info
 
 
+# ----------------------------------------------------------------------------- WasmSentinel RF
+
+def fit_rf(ctx, tr, seed, fold):
+    """The Random Forest of the 'rf' baseline; the same seed gives the same
+    model for the 'rf' and 'wasmsentinel_rf' arms."""
+    from sklearn.ensemble import RandomForestClassifier
+    return RandomForestClassifier(n_estimators=300, class_weight="balanced", random_state=seed * 1000 + fold, n_jobs=-1).fit(ctx.X[tr], ctx.y[tr])
+
+
+def run_wasm_rf(ctx, tr, te, seed, fold):
+    """Forest serialized (forest_export.py), loaded into the module with
+    load_rf_model, every score from the module's rf_score export."""
+    if not ctx.wasm.has_forest():
+        raise RuntimeError("the Wasm module has no rf_score / load_rf_model exports; rebuild it")
+    m = fit_rf(ctx, tr, seed, fold)
+    blob = forest_to_bytes(m)
+    ctx.wasm.load_forest(blob)
+    s_test = np.array([ctx.wasm.score_rf(ctx.traces[i]["seq"]) for i in te], dtype=np.float64)
+    s_train = np.array([ctx.wasm.score_rf(ctx.traces[i]["seq"]) for i in tr], dtype=np.float64)
+    ref = m.predict_proba(ctx.X[te])[:, 1].astype(np.float64)
+    info = forest_stats(m, blob)
+    info["sha256"] = info["sha256"][:16]
+    info["wasm_vs_sklearn_max_abs_diff"] = float(np.max(np.abs(ref - s_test)))
+    return s_train, s_test, info
+
+
 # ----------------------------------------------------------------------------- baselines
 
 def run_stide(ctx, tr, te, seed, fold, n=6):
@@ -237,8 +269,7 @@ def run_iforest(ctx, tr, te, seed, fold):
 
 
 def run_rf(ctx, tr, te, seed, fold):
-    from sklearn.ensemble import RandomForestClassifier
-    m = RandomForestClassifier(n_estimators=300, class_weight="balanced", random_state=seed * 1000 + fold, n_jobs=-1).fit(ctx.X[tr], ctx.y[tr])
+    m = fit_rf(ctx, tr, seed, fold)
     return m.predict_proba(ctx.X[tr])[:, 1], m.predict_proba(ctx.X[te])[:, 1], {"n_estimators": 300}
 
 
@@ -342,6 +373,7 @@ def run_lstm(ctx, tr, te, seed, fold):
 
 MODELS = {
     "wasmsentinel_mlp": ("WasmSentinel MLP (Wasm, feature set v1)", run_wasm_mlp),
+    "wasmsentinel_rf": ("WasmSentinel RF (Wasm, feature set v1)", run_wasm_rf),
     "stide": ("STIDE 6-gram novelty (normal only)", run_stide),
     "iforest": ("Isolation Forest (normal only, v1 features)", run_iforest),
     "rf": ("Random Forest (supervised, v1 features)", run_rf),
@@ -408,6 +440,9 @@ def main():
 
     from sklearn.model_selection import StratifiedKFold
     t_start = time.time()
+    # Provenance is taken at the start: the commit and module hash the run was
+    # started from, not whatever HEAD is hours later when it finishes.
+    prov = provenance(args, args.wasm)
     traces = load_adfa(args.adfa_dir)
     ctx = Ctx()
     ctx.args, ctx.traces = args, traces
@@ -456,14 +491,17 @@ def main():
         agg["pr_curve_std"] = np.std([r["pr_curve"] for r in rs], axis=0).tolist()
         agg["runs"] = len(rs)
         summary[name] = agg
-    paired = {}
-    if "wasmsentinel_mlp" in models:
-        base = {(r["seed"], r["fold"]): r["auprc"] for r in runs if r["model"] == "wasmsentinel_mlp"}
+    def paired_vs(reference):
+        """AUPRC(reference) - AUPRC(other) over the (seed, fold) runs."""
+        out = {}
+        base = {(r["seed"], r["fold"]): r["auprc"] for r in runs if r["model"] == reference}
         for name in models:
-            if name == "wasmsentinel_mlp":
+            if name == reference:
                 continue
             diffs = np.array([base[(r["seed"], r["fold"])] - r["auprc"] for r in runs if r["model"] == name])
-            if len(diffs) > 1:
+            if len(diffs) > 1 and not np.any(diffs != 0):
+                ci, p = (0.0, 0.0), 1.0  # identical scores (e.g. the forest scored by scikit-learn and by the module)
+            elif len(diffs) > 1:
                 ci = stats.t.interval(0.95, len(diffs) - 1, loc=diffs.mean(), scale=stats.sem(diffs))
                 try:
                     p = float(stats.wilcoxon(diffs).pvalue)
@@ -471,20 +509,27 @@ def main():
                     p = float("nan")
             else:
                 ci, p = (float("nan"), float("nan")), float("nan")
-            paired[name] = {"auprc_diff_mean": float(diffs.mean()), "ci95": [float(ci[0]), float(ci[1])], "wilcoxon_p": p, "n": int(len(diffs))}
+            out[name] = {"auprc_diff_mean": float(diffs.mean()), "ci95": [float(ci[0]), float(ci[1])], "wilcoxon_p": p, "n": int(len(diffs))}
+        return out
+
+    paired = paired_vs("wasmsentinel_mlp") if "wasmsentinel_mlp" in models else {}
+    paired_rf = paired_vs("wasmsentinel_rf") if "wasmsentinel_rf" in models else {}
 
     out = args.out
     out.mkdir(parents=True, exist_ok=True)
+    prov["timestamp_end"] = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     result = {
         "experiment": "E1 ADFA-LD detection accuracy, inference inside the Wasm module",
-        "provenance": provenance(args, args.wasm),
+        "provenance": prov,
         "dataset": {"normal": int((ctx.y == 0).sum()), "attack": int(ctx.y.sum()), "families": FAMILIES,
                     "protocol": f"StratifiedKFold({args.folds}, shuffle) x {args.seeds} seeds; operating points fixed on the training fold"},
         "models": {k: MODELS[k][0] for k in models},
-        "summary": summary, "paired_vs_wasmsentinel_auprc": paired,
+        "summary": summary, "paired_vs_wasmsentinel_auprc": paired, "paired_vs_wasmsentinel_rf_auprc": paired_rf,
         "notes": [
             "The (seed, fold) runs share data across seeds; the paired CI treats them as 15 draws and is optimistic.",
-            "WasmSentinel scores come from the compiled module (mlp_score) after load_mlp_weights; wasm_vs_numpy_max_abs_diff in each run records the parity.",
+            "WasmSentinel MLP scores come from the compiled module (mlp_score) after load_mlp_weights; wasm_vs_numpy_max_abs_diff in each run records the parity.",
+            "WasmSentinel RF scores come from the compiled module (rf_score) after load_rf_model with the 'rf' baseline's forest serialized by forest_export.py; wasm_vs_sklearn_max_abs_diff in each run records the parity against scikit-learn's predict_proba.",
+            "paired_vs_wasmsentinel_auprc is AUPRC(WasmSentinel MLP) - AUPRC(model); paired_vs_wasmsentinel_rf_auprc is AUPRC(WasmSentinel RF) - AUPRC(model).",
             "Operating points: op_fpr5 uses the 95th percentile of the training fold's normal scores; op_train_f1 the F1-optimal threshold on the training fold.",
         ],
         "runs": runs, "elapsed_seconds": round(time.time() - t_start, 1),
@@ -499,10 +544,15 @@ def main():
         a = summary[name]
         lines.append(f"| {MODELS[name][0]} | {a['auprc']['mean']:.3f} ± {a['auprc']['std']:.3f} | {a['roc_auc']['mean']:.3f} ± {a['roc_auc']['std']:.3f} | "
                      f"{a['recall_at_fpr5']['mean']:.3f} | {a['recall_at_fpr1']['mean']:.3f} | {a['op_fpr5_f1']['mean']:.3f} | {a['op_train_f1_f1']['mean']:.3f} |")
-    if paired:
-        lines += ["", "| baseline | AUPRC(WasmSentinel) − AUPRC(baseline) | 95% CI | Wilcoxon p |", "|---|---|---|---|"]
-        for name, pz in paired.items():
-            lines.append(f"| {MODELS[name][0]} | {pz['auprc_diff_mean']:+.3f} | [{pz['ci95'][0]:+.3f}, {pz['ci95'][1]:+.3f}] | {pz['wilcoxon_p']:.3g} |")
+    for ref_name, pz_all in (("WasmSentinel MLP", paired), ("WasmSentinel RF", paired_rf)):
+        if pz_all:
+            lines += ["", f"| model | AUPRC({ref_name}) − AUPRC(model) | 95% CI | Wilcoxon p |", "|---|---|---|---|"]
+            for name, pz in pz_all.items():
+                lines.append(f"| {MODELS[name][0]} | {pz['auprc_diff_mean']:+.3f} | [{pz['ci95'][0]:+.3f}, {pz['ci95'][1]:+.3f}] | {pz['wilcoxon_p']:.3g} |")
+    parity = [(r["model"], r["info"].get("wasm_vs_numpy_max_abs_diff", r["info"].get("wasm_vs_sklearn_max_abs_diff"))) for r in runs if r["model"].startswith("wasmsentinel_")]
+    if parity:
+        lines += ["", "Wasm vs reference implementation, max |score diff| over all runs: " + ", ".join(
+            f"{m} {max(d for mm, d in parity if mm == m):.2e}" for m in dict.fromkeys(m for m, _ in parity))]
     lines += ["", "Per-family recall at the FPR-5 % operating point (mean over runs):", "", "| model | " + " | ".join(FAMILIES) + " |", "|---|" + "---|" * len(FAMILIES)]
     for name in models:
         fam = summary[name]["per_family_recall_at_fpr5"]

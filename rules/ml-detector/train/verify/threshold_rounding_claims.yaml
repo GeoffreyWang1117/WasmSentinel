@@ -1,0 +1,44 @@
+claims:
+  - id: f32_floor_threshold_equivalence
+    statement: >-
+      For every float32 x and every finite float64 t, (x promoted to float64) <= t
+      holds iff x <= roundTowardNegative_f32(t). forest_export.py relies on this to
+      store scikit-learn's float64 thresholds as float32 without changing any split
+      decision on float32 features (the module compares in f32, scikit-learn in f64).
+    smt2: |
+      (set-logic QF_FP)
+      (declare-const x (_ FloatingPoint 8 24))
+      (declare-const t (_ FloatingPoint 11 53))
+      (define-fun t32 () (_ FloatingPoint 8 24) ((_ to_fp 8 24) RTN t))
+      (define-fun x64 () (_ FloatingPoint 11 53) ((_ to_fp 11 53) RNE x))
+      (assert (not (fp.isNaN x)))
+      (assert (not (fp.isNaN t)))
+      (assert (not (fp.isInfinite t)))
+      (assert (not (= (fp.leq x64 t) (fp.leq x t32))))
+      (check-sat)
+    expect: unsat
+  - id: f32_floor_implementation_is_rtn
+    statement: >-
+      forest_export.f32_floor computes round-to-nearest-even to float32, then one
+      nextafter toward -inf when the rounded value exceeds t. For finite t with
+      |t| < 3e38 (inside the float32 range; scikit-learn thresholds are midpoints of
+      feature values in [0, 1] or small counts) this equals round-toward-negative.
+      nextafter is encoded on the IEEE bit pattern (z3's fp.to_ieee_bv).
+    smt2: |
+      (set-logic QF_FPBV)
+      (declare-const t (_ FloatingPoint 11 53))
+      (define-fun tn () (_ FloatingPoint 8 24) ((_ to_fp 8 24) RNE t))
+      (define-fun tn64 () (_ FloatingPoint 11 53) ((_ to_fp 11 53) RNE tn))
+      (define-fun bits () (_ BitVec 32) (fp.to_ieee_bv tn))
+      (define-fun down () (_ FloatingPoint 8 24)
+        (ite (fp.isZero tn) ((_ to_fp 8 24) #x80000001)
+          (ite (fp.isPositive tn) ((_ to_fp 8 24) (bvsub bits #x00000001))
+                                  ((_ to_fp 8 24) (bvadd bits #x00000001)))))
+      (define-fun result () (_ FloatingPoint 8 24) (ite (fp.gt tn64 t) down tn))
+      (define-fun rtn () (_ FloatingPoint 8 24) ((_ to_fp 8 24) RTN t))
+      (assert (not (fp.isNaN t)))
+      (assert (not (fp.isInfinite t)))
+      (assert (fp.lt (fp.abs t) ((_ to_fp 11 53) RNE 3.0e38)))
+      (assert (not (= result rtn)))
+      (check-sat)
+    expect: unsat

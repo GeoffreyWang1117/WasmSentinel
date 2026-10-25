@@ -1,13 +1,17 @@
-//! WasmML: Lightweight ML-based Threat Detection in Wasm Sandbox
+//! ml-detector: ML inference inside the WasmSentinel rule sandbox.
 //!
-//! This module implements a hybrid detection strategy combining:
-//! 1. STIDE (Sequence Time-Delay Embedding) for fast n-gram anomaly detection
-//! 2. Lightweight MLP for deep pattern recognition
-//!
-//! Key Innovation: First system to run ML inference inside Wasm sandbox for
-//! runtime threat detection, maintaining isolation while providing intelligent detection.
+//! Syscall events go through STIDE (n-gram fast path) and, when STIDE flags
+//! them, through a model on feature set v1 over the process's recent syscall
+//! numbers. Two models ship in the module: a small MLP (the default deep path,
+//! `weights.rs`) and a random forest (`forest.rs`, `train/rf_model.bin`);
+//! `init` picks one with `{"model": "mlp" | "rf"}`. Both can be replaced at
+//! run time (`load_mlp_weights`, `load_rf_model`), which is how the E1
+//! evaluation scores every test trace with per-fold models through the same
+//! compiled module that is deployed.
 
 mod features;
+mod forest;
+mod forest_meta;
 mod hybrid;
 mod mlp;
 mod stide;
@@ -21,6 +25,10 @@ use serde_json::Value;
 
 // Re-exports for tests and the parity harness
 pub use features::{adfa_features, ADFA_FEATURE_DIM};
+pub use forest::Forest;
+pub use forest_meta::{
+    RF_MAX_DEPTH, RF_MODEL_SHA256, RF_MODEL_SOURCE, RF_N_NODES, RF_N_TREES, RF_TRAINING,
+};
 pub use hybrid::HybridDetector;
 pub use mlp::MlpDetector;
 pub use stide::StideDetector;
@@ -36,6 +44,16 @@ fn with_scorer<T>(f: impl FnOnce(&MlpDetector) -> T) -> T {
     let mut guard = SCORER.lock().unwrap_or_else(|e| e.into_inner());
     let det = guard.get_or_insert_with(MlpDetector::with_embedded_weights);
     f(det)
+}
+
+/// Forest used by `rf_score`: the embedded one until `load_rf_model`
+/// replaces it.
+static RF_SCORER: Mutex<Option<Forest>> = Mutex::new(None);
+
+fn with_forest<T>(f: impl FnOnce(&Forest) -> T) -> T {
+    let mut guard = RF_SCORER.lock().unwrap_or_else(|e| e.into_inner());
+    let forest = guard.get_or_insert_with(Forest::embedded);
+    f(forest)
 }
 
 /// Global detector instance
@@ -261,6 +279,47 @@ pub extern "C" fn mlp_features(seq_ptr: *const u32, seq_len: usize, out: *mut f3
     f.len() as i32
 }
 
+/// Score of the random forest (embedded, or the one `load_rf_model` loaded)
+/// for a syscall-number sequence (feature set v1). Returns -1.0 on a null
+/// pointer.
+#[no_mangle]
+pub extern "C" fn rf_score(seq_ptr: *const u32, seq_len: usize) -> f32 {
+    if seq_ptr.is_null() && seq_len > 0 {
+        return -1.0;
+    }
+    let seq: &[u32] = if seq_len == 0 {
+        &[]
+    } else {
+        unsafe { std::slice::from_raw_parts(seq_ptr, seq_len) }
+    };
+    with_forest(|f| f.score(&adfa_features(seq)))
+}
+
+/// Replace the random forest at run time with a forest image (WSRF v1,
+/// train/forest_export.py). Affects `rf_score` and switches the hybrid
+/// detector's deep path to the loaded forest; the embedded forest stays the
+/// default for fresh instances. Returns 0, or -1 when the image is invalid.
+#[no_mangle]
+pub extern "C" fn load_rf_model(ptr: *const u8, len: usize) -> i32 {
+    if ptr.is_null() || len == 0 {
+        return -1;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(ptr, len) };
+    let forest = match Forest::from_bytes(bytes) {
+        Ok(f) => f,
+        Err(_) => return -1,
+    };
+    *RF_SCORER.lock().unwrap_or_else(|e| e.into_inner()) = Some(forest.clone());
+    let detector = unsafe {
+        if DETECTOR.is_none() {
+            DETECTOR = Some(HybridDetector::new());
+        }
+        DETECTOR.as_mut().unwrap()
+    };
+    detector.load_forest(forest);
+    0
+}
+
 /// Replace the MLP weights at run time with a weights JSON (training export
 /// format). Affects `mlp_score` and the hybrid detector; the embedded weights
 /// stay the default for fresh instances. Returns 0, or -1 on a parse error.
@@ -292,7 +351,9 @@ pub extern "C" fn load_mlp_weights(json_ptr: *const u8, json_len: usize) -> i32 
     0
 }
 
-/// JSON description of the embedded model (caller frees with `free_result`).
+/// JSON description of the embedded models (caller frees with `free_result`).
+/// The top-level fields describe the MLP as before; `rf` the random forest;
+/// `default_model` the deep path a fresh instance uses.
 #[no_mangle]
 pub extern "C" fn model_info(len_ptr: *mut usize) -> *const u8 {
     let info = serde_json::json!({
@@ -303,6 +364,15 @@ pub extern "C" fn model_info(len_ptr: *mut usize) -> *const u8 {
         "threshold": DEFAULT_THRESHOLD,
         "source": MODEL_SOURCE,
         "sha256": MODEL_SHA256,
+        "default_model": hybrid::HybridConfig::default().model,
+        "rf": {
+            "n_trees": RF_N_TREES,
+            "n_nodes": RF_N_NODES,
+            "max_depth": RF_MAX_DEPTH,
+            "source": RF_MODEL_SOURCE,
+            "sha256": RF_MODEL_SHA256,
+            "training": RF_TRAINING,
+        },
     });
     let json = serde_json::to_vec(&info).unwrap_or_default();
     if !len_ptr.is_null() {

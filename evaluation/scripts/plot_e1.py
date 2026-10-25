@@ -19,14 +19,19 @@ def main():
     summary = json.loads((args.results / "e1_results.json").read_text())["summary"]
 
     fig, ax = plt.subplots(figsize=(4.2, 3.4))
-    styles = {"wasmsentinel_mlp": ("k", "-"), "rf": ("0.35", "--"), "lstm": ("0.35", "-."), "stide": ("0.6", ":"), "iforest": ("0.75", "--")}
+    styles = {"wasmsentinel_rf": ("k", "-"), "wasmsentinel_mlp": ("k", "--"), "rf": ("0.35", "--"), "lstm": ("0.35", "-."),
+              "stide": ("0.6", ":"), "iforest": ("0.75", "--")}
+    labels = {"wasmsentinel_rf": "WasmSentinel RF (Wasm)", "wasmsentinel_mlp": "WasmSentinel MLP (Wasm)", "rf": "Random Forest (scikit-learn)",
+              "lstm": "LSTM", "stide": "STIDE 6-gram", "iforest": "Isolation Forest"}
     for name, c in curves.items():
+        if name == "rf" and "wasmsentinel_rf" in curves:
+            continue  # the same forest scored by scikit-learn; the curves coincide
         color, ls = styles.get(name, ("0.5", "-"))
         r = c["recall"]
         p = c["precision_mean"]
         s = c["precision_std"]
-        ax.plot(r, p, color=color, ls=ls, lw=1.6 if name == "wasmsentinel_mlp" else 1.1,
-                label=f"{name.replace('_', ' ')} (AUPRC {summary[name]['auprc']['mean']:.2f})")
+        ax.plot(r, p, color=color, ls=ls, lw=1.6 if name.startswith("wasmsentinel_") else 1.1,
+                label=f"{labels.get(name, name.replace('_', ' '))} (AUPRC {summary[name]['auprc']['mean']:.2f})")
         ax.fill_between(r, [max(0, a - b) for a, b in zip(p, s)], [min(1, a + b) for a, b in zip(p, s)], color=color, alpha=0.08, lw=0)
     ax.set_xlabel("Recall")
     ax.set_ylabel("Precision")

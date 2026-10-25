@@ -1,0 +1,19 @@
+{
+ "source": "rf_model.bin",
+ "training": "ADFA-LD, 5951 traces (5205 normal, 746 attack), feature set v1; scikit-learn 1.7.2 RandomForestClassifier(n_estimators=300, class_weight=balanced, random_state=0)",
+ "n_trees": 300,
+ "n_nodes": 181838,
+ "n_leaves": 91069,
+ "max_depth": 43,
+ "mean_depth": 28.19333333333333,
+ "n_features": 64,
+ "bytes": 2183280,
+ "sha256": "efd32e502d1e0310fba1d03681cd53ae4473deed313e05eae840cc1d838d1225",
+ "exporter_vs_sklearn_max_abs_diff": 2.5443505080602336e-09,
+ "git_commit": "0a2a488c42f17cbb63a3b6fe78e7982e33e6363d",
+ "sklearn": "1.7.2",
+ "numpy": "2.2.6",
+ "python": "3.10.20",
+ "timestamp": "2026-10-25T17:01:35Z",
+ "seconds": 11.3
+}
