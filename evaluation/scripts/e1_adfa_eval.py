@@ -371,7 +371,7 @@ def provenance(args, wasm_path):
         pass
     import sklearn
     prov = {
-        "git_commit": sh("git rev-parse HEAD"), "git_dirty": bool(sh("git status --porcelain")),
+        "git_commit": sh("git rev-parse HEAD"), "git_dirty": bool(sh("git status --porcelain --untracked-files=no")),
         "kernel": platform.release(), "cpu": cpu, "python": platform.python_version(),
         "numpy": np.__version__, "sklearn": sklearn.__version__,
         "wasm_sha256": hashlib.sha256(Path(wasm_path).read_bytes()).hexdigest(),
