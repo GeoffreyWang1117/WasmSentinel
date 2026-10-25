@@ -2,6 +2,16 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-25 · Phase 2 开工：E1 在跑，E2 一致性已出，E3 脚手架就位
+
+**E1（`evaluation/scripts/e1_adfa_eval.py`，`make e1`）**：5,205 正常 + 746 攻击轨迹，分层 5 折 × 3 种子。WasmSentinel 的 MLP 每折在 NumPy 里训练（向量化重写的 `SimpleMLP`，内部 10% 验证集早停），权重用新导出 `load_mlp_weights` 装进编译好的模块，每个测试分数都来自模块的 `mlp_score`（特征与推理都在 Wasm 内）。基线：STIDE 6-gram 新颖率（仅正常）、Isolation Forest（仅正常，v1 特征）、Random Forest（监督，v1 特征）、LSTM（原始序列，早停；GPU 被别的任务占满，走 CPU）。指标：AUPRC、ROC-AUC、FPR≤5%/1% 下的 recall、两个在训练折上固定的工作点（训练正常分数 95 分位；训练折 F1 最优阈值）、按攻击家族的 recall、与 WasmSentinel 的配对 AUPRC 差（t-CI + Wilcoxon）。JSON 带 commit、wasm sha256、库版本、CPU。全量运行已在后台启动（01:43），quick 模式（1 种子 2 折，MLP 20 轮）先看到的数字：MLP AUPRC 0.38–0.42，STIDE 0.35–0.47，IF 0.21，**RF 0.85–0.88**，LSTM（3 轮）0.53。RF 在同一组特征上远好于 MLP——论文不能再讲"轻量 MLP 准确率"，这正是 §2 改为系统论文的理由；也提示下一个产品决定：把树模型编进 Wasm 规则（E1 收尾后评估）。
+
+**E2（`e2_consistency.py`，`make e2`）**：同一模型三种实现跑完全部 5,951 条轨迹——NumPy vs Wasm 最大差 1.9×10⁻⁶，NumPy vs 原生 Rust 1.9×10⁻⁶，原生 vs Wasm 5×10⁻⁹，0.7 阈值下 5,951/5,951 判决一致。延迟部分（三种实现的 ns/call、Go 引擎调用开销）要等机器空闲再跑（现在 E1 在用 CPU）。原生 scorer 在负载下约 50 µs/轨迹，其中特征提取（HashMap 计数）占大头。
+
+**E3（`e3_throughput.py`，`make e3`）**：管道增加端到端延迟分位数（事件产生 → 告警处理完）、检测分位数、max RSS；回放加 `--replay-max-events`；`--metrics-port 0` 关掉 HTTP；`--alert-log=false` 关掉逐条告警的控制台输出（输出链仍运行）。quick 模式在**负载机器**上的一瞥：1K eps 时 e2e p50 ≈ 150–170 µs；10K eps 时 JSON 臂排队到 p50 11.6 ms / p99 65 ms，binary 臂 0.8 ms / 20 ms，detect p50 ≈ 100 µs——ml_detector 的深路径（每个 syscall 事件对 100 长窗口算 v1 特征 + MLP）是瓶颈，引擎本身只占 ~2 µs。正式数字等机器空闲。
+
+**待办**：E1 跑完 → 写结果；空闲时 `make e2 e3`；E4 需要 Falco/Tetragon 与 nginx/redis/postgres 的负载生成器，先盘点工具。
+
 ## 2026-10-25 · 决策：Track A（全量投 AsiaCCS 2027 Cycle 2）
 
 用户于 2026-10-25 选定 Track A。截稿 2026-12-11 AoE，剩 47 天；Go/No-Go 门禁 11-20 不变。Phase 2 从 E1 开始，顺序 E1 → E2 → E3 → E4 → E5，E7/E8 视时间。
