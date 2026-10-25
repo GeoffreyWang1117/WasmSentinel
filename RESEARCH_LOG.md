@@ -78,6 +78,7 @@
 - `sections/evaluation.tex`：四个问题、Setup（硬件/内核来自宏，注明机器上有用户的 vLLM 常驻）、E2、E6、E1 成文；E3–E5 留位。`sections/related-work.tex` 成文：syscall HIDS、eBPF 监控（规则在这些系统里是受信代码）、Wasm 隔离基底、Wasm+eBPF 的最近工作。全文不写 "first"。
 - **参考文献审计**：DIMVA 稿沿用的 `falco`（"FPGA '23"）、`tetragon`（"LPC '22"）、`tracee`（"Cloud Native Security Conference 2021"）三条是不存在的论文，改为项目引用；`transformer-sec`、`gnn-sec` 查无实据，删除。新增 wasm-bpf（arXiv 2408.04856）、Abbadini et al. ASIACCS '23 poster（DOI 10.1145/3579856.3592831）、Heinrich et al. ICISSP '24（DOI 10.5220/0012252800003648）、RLBox（USENIX Security '20）、Proxy-Wasm 规范。其余 24 条按标题/场合判断是真实的，投稿前逐条核 DOI（已列入 Phase 3 W1）。
 - **先验检索结论**（web search；asta 连接时断时续）：没有找到"eBPF 采集 + Wasm 沙箱运行检测规则"的已发表系统；最近的是反方向的三篇（eBPF 加固 Wasm 运行时的 hostcall；Wasm 打包 eBPF 程序；对 Wasm 应用本身做异常检测）。Related Work 据此只列最近工作并说明差别。
+- **同日晚些时候**：E3–E5 落地后补齐 Evaluation 其余三节，并写完 Introduction、Background、Threat Model、Design（含架构图）、Implementation、Discussion、Conclusion、摘要与两个附录（事件记录布局、v1 特征、基线超参）。`make -C paper-asiaccs numbers figures all`：10 页（正文约 8 页 + 参考文献 + 附录），229 个宏全部有值，0 个 overfull，`make lint` 干净。正文还有约 4 页预算，留给 W2 的贡献打磨与审稿人视角的补充。
 - 教训：`conda run` 不转发 stdin，heredoc 喂给它的 Python 静默不执行；文本改动一律用 `/usr/bin/python3` 跑脚本文件。并行 Bash 调用共享 cwd，相对路径写文件会落错目录——全部用绝对路径。
 
 ## 2026-10-25 · E2 完成：同一模型三种实现的一致性与每次调用成本

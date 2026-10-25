@@ -1,7 +1,29 @@
 \section{Open Science}
-% Mandatory for AsiaCCS 2027 (<= half a page): anonymous artifact link
-% (anonymous.4open.science) with code, rules, evaluation/results/2026-11/*.json,
-% `make reproduce`, prebuilt Wasm modules and the ADFA-LD fetch script; which
-% experiments need root/eBPF and which run anywhere (E1, E2, E6).
 \label{sec:openscience}
-TODO
+% AsiaCCS 2027 requires this appendix (<= half a page). Replace the anonymous
+% link before submission; the repository is public after acceptance.
+
+All code, rules, evaluation scripts and the result files this paper cites
+are available at an anonymised repository:
+\url{https://anonymous.4open.science/r/wasmsentinel-asiaccs27}
+(placeholder; filled in at submission). The repository contains the Go
+daemon and its eBPF programs, the Rust rule crates and the prebuilt
+\texttt{.wasm} modules whose SHA-256 the result files record, the ten
+adversarial modules of \S\ref{sec:eval:e6}, and
+\texttt{evaluation/results/2026-11/}, the directory every table and macro in
+this paper is generated from (\texttt{make -C paper numbers}). Each result
+JSON carries the git commit, kernel, CPU, library versions, module hash and
+timestamp of the run that produced it.
+
+\texttt{make reproduce} re-runs every experiment. E1, E2 and E6 need only a
+Linux machine with Go, Rust (\texttt{wasm32-wasip1} target) and a Python
+environment (NumPy, scikit-learn, PyTorch for the LSTM baseline,
+wasmtime-py); E1 downloads ADFA-LD through a fetch script and takes about
+four hours on a 16-core CPU without a GPU. E3 needs no privileges but is a
+timing experiment and should run on an idle machine. E4 and E5 need root
+(or a privileged container) for eBPF, Docker, and the Falco and Tetragon
+images whose versions the result files name, plus \texttt{wrk},
+\texttt{redis-benchmark} and \texttt{pgbench}. The continuous-integration
+configuration in the repository re-runs the build, the unit and parity
+tests and E6 on every commit and publishes the E6 table in the job summary,
+so the isolation result can be checked without a local setup.

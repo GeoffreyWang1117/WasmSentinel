@@ -1,5 +1,77 @@
 \section{Additional Material}
-% Per-family recall table, full E6 table, event record layout, feature set v1
-% definition (verbatim from code), hyper-parameters of every baseline.
 \label{sec:appendix}
-TODO
+
+\subsection{Event record}
+\label{sec:appendix:record}
+Table~\ref{tab:record} is the \SI{592}{B} record every eBPF program fills
+(\S\ref{sec:design:collector}). Offsets are bytes; every field is naturally
+aligned, so the C and Go definitions carry no packing attributes and the
+binary encoding of \S\ref{sec:design:wire} carries the record verbatim
+after a \SI{16}{B} header (magic \texttt{0x31425357}, version, record
+length, string length) and before the three resolved strings (user, group,
+syscall name).
+
+\begin{table}[h]
+\caption{Event record layout (from \texttt{sentinel.bpf.c}).}
+\label{tab:record}
+\centering\footnotesize
+\begin{tabular}{@{}rlll@{}}
+\toprule
+Offset & Field & Type & Meaning \\
+\midrule
+0 & \texttt{timestamp\_ns} & u64 & \texttt{bpf\_ktime\_get\_ns} \\
+8 & \texttt{retval} & s64 & exit status (exit events) \\
+16 & \texttt{pid}, \texttt{ppid} & u32$\times$2 & thread-group ids \\
+24 & \texttt{uid}, \texttt{gid} & u32$\times$2 & credentials \\
+32 & \texttt{event\_type} & u32 & kind (exec, exit, open, \ldots) \\
+36 & \texttt{syscall\_nr} & u32 & syscall events \\
+40 & \texttt{flags} & u32 & \texttt{open(2)} flags \\
+44 & \texttt{saddr}, \texttt{daddr} & u32$\times$2 & IPv4 (0 for IPv6) \\
+52 & \texttt{sport}, \texttt{dport} & u16$\times$2 & ports \\
+56 & \texttt{family}, \texttt{protocol} & u16$\times$2 & \\
+60 & \texttt{args\_len} & u32 & bytes used in \texttt{args} \\
+64 & \texttt{comm} & char[16] & task name \\
+80 & \texttt{filename} & char[256] & exec path or opened path \\
+336 & \texttt{args} & char[256] & NUL-separated \texttt{argv} prefix \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Feature set v1}
+\label{sec:appendix:features}
+The 64-dimensional vector the MLP consumes is computed from a sequence of
+syscall numbers (the whole trace when training and scoring in E1, the
+per-process window of 100 when deployed) and is a line-by-line port of the
+training script's \texttt{extract\_features}: six category frequencies
+(I/O, file, memory, network, process, ``dangerous''); the relative
+frequencies of the ten most common syscalls, ties broken by first
+occurrence; the first ten syscall numbers scaled by $1/300$; the
+frequencies of the ten most common bigrams; and ten statistics (scaled
+length, distinct ratio, normalised entropy, peak-to-mean count, a dangerous
+flag, repetition and ordering counts). Eighteen of the 64 slots are unused
+and always zero; the category sets mix syscall numberings from different
+ABIs, which we keep verbatim because the trained weights depend on them.
+Both facts are recorded in the module's source and are part of why
+\S\ref{sec:eval:e1} does not present the MLP as a strong detector.
+
+\subsection{Baselines and training (E1)}
+\label{sec:appendix:baselines}
+All models see the same stratified folds. \textbf{\sys MLP}: 128-64-32-16
+hidden units, trained in NumPy by mini-batch gradient descent with
+balanced class weights and gradient clipping at learning rate 0.01, batch
+32, up to 200 epochs with early stopping on AUPRC over a
+\SI{10}{\percent} validation split of the training fold (patience 25);
+weights loaded into the Wasm module for scoring. \textbf{STIDE}: 6-gram
+database over the training fold's normal traces; score is the fraction of
+novel 6-grams in a trace. \textbf{Isolation Forest}: scikit-learn, 300
+trees, fit on the training fold's normal traces' v1 features; score is the
+negated anomaly score. \textbf{Random Forest}: scikit-learn, 300 trees,
+balanced class weights, on v1 features. \textbf{LSTM}: embedding of size
+32, one LSTM layer of 64 units, sequences truncated to 1,000 syscalls,
+Adam at $10^{-3}$, batch 128, up to 40 epochs with patience 5 on the same
+validation split (36,097 parameters). Operating points: the 95th
+percentile of the training fold's normal scores (nominal \SI{5}{\percent}
+FPR) and the F1-optimal threshold on the training fold. Seeds control fold
+assignment and model initialisation; the three seeds re-shuffle the same
+5,951 traces, so the 15 runs are not independent and the confidence
+intervals in Table~\ref{tab:e1} are optimistic.

@@ -1,9 +1,164 @@
 \section{Design}
-% Collector (6 hooks, record layout 592 B) -> pipeline (back-pressure queue)
-% -> engine (one long-lived instance per rule; alloc/dealloc/detect ABI;
-% memory cap, fuel, epoch deadline; trap => reinstantiate; zero-capability
-% WASI) -> outputs. Event encodings: JSON vs binary record (sentinel-abi).
-% Rules: suspicious_shell (keyword/port/path), ml_detector (STIDE fast path +
-% MLP deep path on feature set v1; training path train_sequence).
 \label{sec:design}
-TODO
+
+\sys has four stages (Figure~\ref{fig:arch}): a \emph{collector} that turns
+kernel activity into fixed-layout event records, a \emph{pipeline} that
+queues them, an \emph{engine} that hands each event to every rule inside its
+own WebAssembly instance, and \emph{outputs} that turn verdicts into alerts
+and metrics. The design decisions that matter for the paper's questions are
+where the trust boundary sits (between pipeline and rules), what crosses it
+(the event encoding), and what the engine enforces on the far side.
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[scale=0.95, transform shape, node distance=4mm and 6mm, every node/.style={font=\scriptsize},
+  box/.style={draw, rounded corners=1pt, minimum height=7mm, align=center, inner sep=3pt},
+  arrow/.style={-latex, thick}]
+  \node[box, fill=black!5] (k) {kernel\\6 eBPF hooks\\ring buffer};
+  \node[box, right=of k] (c) {collector\\592 B record\\$\rightarrow$ event};
+  \node[box, right=of c] (q) {pipeline\\bounded queue\\back-pressure};
+  \node[box, right=of q, fill=black!5] (e) {engine\\alloc / copy /\\\texttt{detect}};
+  \node[box, right=of e, dashed] (r1) {rule 1\\instance};
+  \node[box, below=2mm of r1, dashed] (r2) {rule $n$\\instance};
+  \node[box, below=of q] (o) {outputs: alert log, webhook, Prometheus};
+  \draw[arrow] (k) -- (c); \draw[arrow] (c) -- (q); \draw[arrow] (q) -- (e);
+  \draw[arrow] (e) -- (r1); \draw[arrow] (e) -- (r2.west);
+  \draw[arrow] (e.south) |- (o.east);
+  \begin{scope}[on background layer]
+    \node[draw, dotted, inner sep=2pt, fit=(r1)(r2), label={[font=\scriptsize, align=center]below:{trust boundary}}] {};
+  \end{scope}
+\end{tikzpicture}
+\caption{\sys. Everything left of the dotted box is trusted and fixed;
+rules are loaded from files at start-up and run in separate instances under
+a memory cap, a fuel budget and a deadline, with no host imports except a
+clock.}
+\label{fig:arch}
+\end{figure*}
+
+\subsection{Collector: fixed hooks, fixed record}
+\label{sec:design:collector}
+{\sloppy
+The kernel side is deliberately not programmable by rules. Six eBPF programs
+attach to \texttt{sched\_process\_exec} (with the first \SI{256}{B} of
+\texttt{argv}), \texttt{sched\_process\_exit} (thread-group leader only),
+the \texttt{sys\_enter\_openat} tracepoint, a kprobe on
+\texttt{tcp\_connect}, a kretprobe on \texttt{inet\_csk\_accept}, and the
+raw \texttt{sys\_enter} tracepoint filtered to an allow-list of twenty
+privilege- and namespace-related syscalls (\texttt{execve},
+\texttt{ptrace}, \texttt{setuid}, \texttt{mount}, \texttt{unshare},
+\texttt{bpf}, \texttt{init\_module}, \ldots). Every program fills the same
+\SI{592}{B} record: timestamp, pid, ppid, uid, gid, event type, syscall
+number, open flags, IPv4 addresses and ports, \texttt{comm}, a
+\SI{256}{B} path and the argument bytes. Fields are naturally aligned, so
+the C struct and the Go struct have the same layout and user space reads
+the ring buffer without decoding. The collector resolves the three things
+the kernel cannot give cheaply (user and group names, the syscall name)
+through a small cache and attaches them as strings. Dropped records are
+counted per CPU and exported; the collector never blocks the kernel.\par}
+
+A second collector replays recorded syscall traces in the same event
+shape at a chosen rate, which is how E3 (\S\ref{sec:eval:e3}) drives the
+pipeline deterministically, and a third polls \texttt{/proc} for
+environments without eBPF privileges.
+
+\subsection{Pipeline: no silent loss}
+\label{sec:design:pipeline}
+Collectors feed one bounded queue (1,000 events by default). The queue
+applies back-pressure rather than dropping: a slow rule slows the collector
+thread, the ring buffer fills, and the kernel-side drop counter rises. This
+is a choice. A monitor that drops in user space hides its own overload;
+\sys makes overload visible as kernel drops and as queue latency, which is
+what E3 measures when the offered rate exceeds capacity. The pipeline
+records, for every event, the time from its kernel timestamp to the
+completion of its last output handler.
+
+\subsection{Engine: one instance per rule, limits per call}
+\label{sec:design:engine}
+A rule is a WebAssembly module that exports a linear \texttt{memory}, an
+allocator pair \texttt{alloc}/\texttt{dealloc}, and \texttt{detect(ptr,
+len) $\rightarrow$ i32}. Optional exports extend it: \texttt{init} for a
+configuration blob, \texttt{detect\_raw} for the binary encoding
+(\S\ref{sec:design:wire}), and \texttt{train\_sequence}/\texttt{train\_finish}
+for rules that learn from normal traces at start-up. The returned integer
+is a severity level; zero means no alert.
+
+The engine instantiates each rule once and keeps the instance for the
+daemon's lifetime: instantiation is the expensive step, and rules such as
+\texttt{ml\_detector} keep per-process state between calls. A call is: ask
+the guest for a buffer, copy the event in, call \texttt{detect}, read the
+integer, release the buffer. Three limits are attached to the instance's
+store:
+\begin{itemize}
+\item a \emph{memory cap} (\isoMemoryCapMiB{}~MiB by default) enforced by
+  the runtime's resource limiter on every \texttt{memory.grow};
+\item a \emph{fuel budget} per call (\isoFuel{} units, roughly one per
+  simple instruction), reset before each invocation;
+\item a \emph{wall-clock deadline} per call (\isoTimeout{}) enforced with
+  epoch interruption, so a tight loop that fuel would take too long to
+  exhaust is interrupted at the next epoch tick.
+\end{itemize}
+When a call traps, for any reason, the engine classifies the trap (fuel,
+timeout, memory, explicit exit, or other), records it, discards the
+instance, and re-instantiates the rule lazily on its next call; the event
+continues to the other rules. Rules share nothing: no memory, no table, no
+host state. The WASI context each instance receives has no capabilities:
+no pre-opened directories, no inherited descriptors, environment or
+arguments, no sockets. The imports exist so that ordinary standard-library
+code links, but each of them fails or returns nothing when called; the
+clock is the one thing a rule can observe about its host, and
+\S\ref{sec:eval:e6} lists it as such rather than hiding it. An observer
+hook reports every call's duration, fuel use and outcome to the metrics
+layer.
+
+The engine is deliberately dumb about what a rule computes. It does not
+know whether a rule is a pattern matcher or a neural network, and the
+evaluation treats both the same way.
+
+\subsection{What crosses the boundary: two encodings}
+\label{sec:design:wire}
+The event must be copied into the guest's linear memory; the question is in
+what form. The original design serialised each event as JSON, which any
+language can parse and which made rules easy to write. It also meant that
+every rule re-parsed a JSON document per event. \sys keeps JSON as the
+default and adds a second encoding for eBPF events: a \SI{16}{B} header
+(magic, version, record length, string length) followed by the
+\SI{592}{B} kernel record verbatim and the resolved strings. A rule that
+exports \texttt{detect\_raw} receives this form; otherwise the engine falls
+back to JSON. The rule-side library exposes both encodings through one
+trait, \texttt{EventFields}, so a rule's logic is written once. Two
+measurements shaped this: the binary path halves the per-event cost of a
+real rule only when the rule reads fields directly from the record (E2);
+a guest that rebuilds a JSON value from the record first gains nothing.
+We therefore do not call the binary path copy-free---there is a
+copy into the guest, and the gain is in parsing, not copying.
+
+\subsection{Rules}
+\label{sec:design:rules}
+Two rules ship with \sys and are the ones measured in this paper.
+\texttt{suspicious\_shell} is a pattern rule: it scores process events by
+executable path, process name, command-line tokens and user, network
+events by destination port and address, and file events by path and
+operation, and sums the scores into a level. It is what a Falco-style rule
+looks like when written as code rather than as a filter expression.
+\texttt{ml\_detector} is a two-stage syscall detector. For every syscall
+event it updates a per-process window of the last 100 syscall numbers;
+a STIDE 6-gram database~\cite{stide}, trained from normal traces at
+start-up through \texttt{train\_sequence}, provides a cheap novelty check,
+and a 128-64-32-16 MLP over a 64-dimensional feature vector of the window
+(counts, category histograms, transition statistics; ``feature set v1'')
+provides the score. The weights are embedded at build time from the
+training run's checkpoint and the module exports \texttt{mlp\_score} and
+\texttt{load\_mlp\_weights}, which is how \S\ref{sec:eval:e1} scores every
+test trace with the module itself and how \S\ref{sec:eval:e2} checks that
+the module and the reference agree. Per-process state is bounded (4,096
+processes, least-recently-used eviction) and released on process exit.
+
+\subsection{Outputs and metrics}
+\label{sec:design:outputs}
+Verdicts above zero become alerts carrying the rule name, level, event and
+timestamps; handlers write them to a log file, forward them to a webhook
+in batches, and count them in a Prometheus registry that also exposes
+per-rule call, error, fuel, latency and memory series, pipeline queue and
+drop counters, and the daemon's own CPU and resident memory. E4
+(\S\ref{sec:eval:e4}) reads the daemon's resource use from the same
+counters the operator would.

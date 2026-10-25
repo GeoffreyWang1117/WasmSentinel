@@ -1,6 +1,45 @@
 \section{Background}
-% eBPF collection (tracepoints, kprobes, ring buffer); WebAssembly + WASI p1
-% (linear memory, imports as the capability boundary, fuel/epoch); wasmtime
-% store limits. Keep to what the design needs.
 \label{sec:background}
-TODO
+
+\paragraph{eBPF as a sensor.}
+{\sloppy eBPF lets a user-space program attach small verified programs to kernel
+hooks---tracepoints such as \texttt{sched\_process\_exec}, kprobes on
+functions such as \texttt{tcp\_connect}, and the raw system-call entry
+point---and ship data to user space through a ring buffer~\cite{ebpf-intro}.
+The verifier bounds what such a program may do (no unbounded loops, no
+unchecked memory access), which is what makes it safe to run in the kernel
+and also what makes it a poor place for a detector with state, a model, or
+a learned database. Production monitors therefore split the work: eBPF
+collects, user space decides~\cite{falco,tetragon,tracee}. \sys keeps that
+split and changes only what ``user space decides'' runs in.\par}
+
+\paragraph{WebAssembly as a sandbox.}
+A WebAssembly module~\cite{wasm-spec} computes over a single linear memory
+that it cannot address outside of, calls the host only through functions
+the host chose to import, and has no notion of a file, socket or process
+unless an import provides one. WASI~\cite{wasi} is the standard set of such
+imports; a host may link all of it, part of it, or an implementation that
+grants nothing. Runtimes such as Wasmtime~\cite{wasmtime} compile modules
+ahead of time to native code and add two controls the specification does
+not: \emph{fuel}, a per-store instruction budget that traps when exhausted,
+and \emph{epochs}, a counter the host increments on a timer that traps a
+running module when a deadline passes. Together with a resource limiter on
+\texttt{memory.grow}, these give a host three knobs---memory, instructions,
+wall clock---that it can set per instance and per call. The cost of the
+boundary is a copy into linear memory and a native call; prior work has
+pushed that transition toward zero~\cite{wasmboxc} and used the same
+substrate to isolate browser libraries~\cite{rlbox} and proxy
+plugins~\cite{proxy-wasm}. What has not been measured is what it costs
+when the code behind the boundary is a host-intrusion-detection rule fed by
+the kernel at tens of thousands of events per second; that is the gap
+\S\ref{sec:eval} fills.
+
+\paragraph{Syscall-sequence detection.}
+The detector \sys ships is deliberately conventional. STIDE~\cite{stide}
+records every $n$-gram of syscall numbers seen in normal traces and flags
+an $n$-gram it has not seen; it is cheap, needs only normal data, and has
+well-known blind spots. Supervised models on windowed features or on the raw
+sequence~\cite{creech,kim-lstm} do better on ADFA-LD~\cite{adfa-ld}, the
+benchmark we use, at a higher cost. We use STIDE as a cheap first stage
+and a small MLP as the scorer, and compare the result to both families in
+\S\ref{sec:eval:e1} without claiming it is the best choice.

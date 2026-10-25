@@ -1,36 +1,26 @@
 % References for WasmSentinel paper
 
-@inproceedings{falco,
-  author = {Grasso, Leonardo and Tundo, Alessandro and Ferro, Stefano and Ferroni, Matteo and Borrelli, Andrea},
-  title = {Falco: Runtime Security Monitoring through eBPF},
-  booktitle = {Proceedings of the ACM/SIGDA International Symposium on Field-Programmable Gate Arrays},
-  series = {FPGA '23},
-  year = {2023},
-  pages = {1--6},
-  publisher = {ACM},
-  address = {New York, NY, USA}
+@misc{falco,
+  author = {{The Falco Authors}},
+  title = {Falco: Cloud Native Runtime Security},
+  year = {2025},
+  howpublished = {\url{https://falco.org/}},
+  note = {CNCF graduated project; version 0.45 used in this paper}
 }
 
-@inproceedings{tetragon,
-  author = {Borkmann, Daniel and Starovoitov, Alexei and Schroeder, Joe},
-  title = {Tetragon: eBPF-based Security Observability and Runtime Enforcement},
-  booktitle = {Proceedings of the Linux Plumbers Conference},
-  series = {LPC '22},
-  year = {2022},
-  pages = {1--12},
-  publisher = {Linux Foundation},
-  address = {Dublin, Ireland}
+@misc{tetragon,
+  author = {{Cilium Authors}},
+  title = {Tetragon: {eBPF}-based Security Observability and Runtime Enforcement},
+  year = {2025},
+  howpublished = {\url{https://github.com/cilium/tetragon}},
+  note = {Version used in this paper recorded in the result provenance}
 }
 
-@inproceedings{tracee,
-  author = {Itzhaky, Shlomi and Ben-Natan, Nadav and Shavitt, Yuval},
-  title = {Tracee: Runtime Security and Forensics using eBPF},
-  booktitle = {Proceedings of the Cloud Native Security Conference},
-  series = {KubeCon '21},
-  year = {2021},
-  pages = {1--8},
-  publisher = {CNCF},
-  address = {Los Angeles, CA, USA}
+@misc{tracee,
+  author = {{Aqua Security}},
+  title = {Tracee: Runtime Security and Forensics using {eBPF}},
+  year = {2025},
+  howpublished = {\url{https://github.com/aquasecurity/tracee}}
 }
 
 @book{ebpf-intro,
@@ -257,20 +247,7 @@
   publisher = {ACM}
 }
 
-@inproceedings{transformer-sec,
-  author = {Sun, Chen and Zhang, J.},
-  title = {Intrusion Detection based on Transformer and System Call Sequences},
-  booktitle = {Proceedings of the 2021 IEEE International Conference on Cybernetics and Intelligent Systems},
-  year = {2021}
-}
 
-@article{gnn-sec,
-  author = {Wang, Y.},
-  title = {Graph Neural Networks for System Call Anomaly Detection},
-  journal = {Computers \& Security},
-  volume = {108},
-  year = {2021}
-}
 
 @inproceedings{ct-wasm,
   author = {Watt, Conrad and Rossberg, Andreas and Pichon-Pharabod, Jean},
@@ -278,4 +255,47 @@
   booktitle = {Proceedings of the 46th ACM SIGPLAN Symposium on Principles of Programming Languages},
   series = {POPL '19},
   year = {2019}
+}
+
+% ---- added 2026-10-25 (prior-art check for Related Work) ----
+@article{wasm-bpf,
+  author = {Zheng, Yusheng and Yu, Tong and Yang, Yiwei and Quinn, Andrew},
+  title = {Wasm-bpf: Streamlining {eBPF} Deployment in Cloud Environments with {WebAssembly}},
+  journal = {arXiv preprint arXiv:2408.04856},
+  year = {2024}
+}
+
+@inproceedings{abbadini-ebpf-wasm,
+  author = {Abbadini, Marco and Beretta, Michele and Facchinetti, Dario and Oldani, Gianluca and Rossi, Matthew and Paraboschi, Stefano},
+  title = {{POSTER}: Leveraging {eBPF} to Enhance Sandboxing of {WebAssembly} Runtimes},
+  booktitle = {Proceedings of the 18th ACM ASIA Conference on Computer and Communications Security},
+  series = {ASIA CCS '23},
+  year = {2023},
+  doi = {10.1145/3579856.3592831}
+}
+
+@inproceedings{heinrich-wasm-ids,
+  author = {Heinrich, Tiago and Will, Newton C. and Obelheiro, Rafael R. and Maziero, Carlos A.},
+  title = {A Categorical Data Approach for Anomaly Detection in {WebAssembly} Applications},
+  booktitle = {Proceedings of the 10th International Conference on Information Systems Security and Privacy},
+  series = {ICISSP '24},
+  year = {2024},
+  pages = {275--284},
+  doi = {10.5220/0012252800003648}
+}
+
+@inproceedings{rlbox,
+  author = {Narayan, Shravan and Disselkoen, Craig and Garfinkel, Tal and Froyd, Nathan and Rahm, Eric and Lerner, Sorin and Shacham, Hovav and Stefan, Deian},
+  title = {Retrofitting Fine Grain Isolation in the {Firefox} Renderer},
+  booktitle = {Proceedings of the 29th USENIX Security Symposium},
+  series = {USENIX Security '20},
+  year = {2020},
+  pages = {699--716}
+}
+
+@misc{proxy-wasm,
+  author = {{Proxy-Wasm Authors}},
+  title = {{WebAssembly} for Proxies ({Proxy-Wasm}): {ABI} Specification},
+  year = {2024},
+  howpublished = {\url{https://github.com/proxy-wasm/spec}}
 }

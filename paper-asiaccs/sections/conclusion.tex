@@ -1,3 +1,18 @@
 \section{Conclusion}
 \label{sec:conclusion}
-TODO
+Host-based detection rules are code with kernel visibility, and today they
+run as trusted code. \sys runs them in WebAssembly instead and this paper
+measures what that costs and what it buys. The boundary itself is cheap:
+\eTwoEngineOverheadUs{}~\si{\micro\second} per call empty,
+\eTwoMlRawUs{}~\si{\micro\second} for a real rule on a binary-encoded event,
+a sustained \eThreeAchievedBinFiftyK{} syscall events per second through
+the whole pipeline, and an application cost under nginx, redis and
+PostgreSQL in the same range as Falco's. It holds: ten adversarial modules
+in eleven attempts were contained by memory, fuel and deadline limits with
+their neighbours unaffected. And it makes a claim checkable that is
+usually taken on faith: the detector the system runs is, to
+\eTwoMaxDiffNumpyWasm{}, the detector that was evaluated, which is how we
+can report that its accuracy on ADFA-LD is an AUPRC of \eOneAuprcMlp{},
+and that a random forest on the same features does better. The remaining
+cost is in the rules, not the sandbox, and we have named the two levers
+that move it.

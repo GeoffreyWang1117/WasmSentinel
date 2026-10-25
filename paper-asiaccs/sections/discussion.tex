@@ -1,9 +1,78 @@
 \section{Discussion}
-% Honest items: RF beats the MLP on the same features (what that means for a
-% sandboxed detector: the sandbox is model-agnostic; tree models fit too);
-% per-event online alerting vs per-trace scoring; STIDE training; the openat
-% volume and kernel-side pre-filtering as the lever behind the CPU gap to
-% Falco/Tetragon; Tetragon's security_file_open semantics; IPv6; wasmtime
-% version; single dataset (ADFA-LD, i386 numbers) if E8 is cut.
 \label{sec:discussion}
-TODO
+
+\paragraph{Where the CPU goes, and the lever that moves it.}
+Across E3, E4 and E5 the same picture repeats: the sandbox boundary costs
+a few microseconds per call (\eTwoEngineOverheadUs{}~\si{\micro\second}
+empty, \eTwoMlRawUs{}~\si{\micro\second} for a real rule on a process
+event), but \sys spends \eThreeDetectPFiftyBinTenK{}--\eThreeDetectPFiftyJsonOneK{}~\si{\micro\second}
+per syscall event and up to \eFourCpuPgWs{}\% of a core under PostgreSQL,
+where Falco spends \eFourCpuPgFalco{}\% and Tetragon \eFourCpuPgTetragon{}\%.
+Two decisions, neither of them forced by the sandbox, produce that gap.
+First, \sys delivers every collected event to every rule; Falco and
+Tetragon filter in the kernel and most events never reach user space. A
+rule could declare which event types and syscalls it wants, and the
+collector could install that filter in eBPF; the fixed-record design makes
+this a map update rather than a code change. Second,
+\texttt{ml\_detector} recomputes a 64-dimensional feature vector over its
+100-event window on every event. Most of those features are counts and
+bigram frequencies that can be maintained incrementally in $O(1)$ per
+event. We did neither here because this paper's question is what the
+boundary costs, and an optimised rule would have made the boundary look
+cheaper than it is; we report the lever so that the reader can price it.
+
+\paragraph{What the binary encoding buys.}
+The fixed-layout record cuts a real rule's per-event cost by about half
+(E2) and raises the pipeline's saturation throughput by
+\eThreeBinGainPct{}\% (E3). It does so by removing a parse, not a copy:
+the event is still copied into linear memory. We measured a variant of the
+rule that rebuilt a JSON document from the record inside the guest, and
+it gained nothing. Encodings matter only when the rule consumes them
+directly, which argues for giving rule authors a field-access library
+(\texttt{EventFields}) rather than a format.
+
+\paragraph{The sandbox is model-agnostic; the paper's model is not the
+best one.}
+E1 is the result we most expected readers to question, so we state it
+plainly: on the same 64 features, a random forest reaches an AUPRC of
+\eOneAuprcRf{} where the shipped MLP reaches \eOneAuprcMlp{}, and an LSTM
+on the raw sequence reaches \eOneAuprcLstm{}. Nothing in \sys prefers the
+MLP. A tree ensemble is a table of thresholds and child indices, which is
+easier to embed in a Wasm module than a neural network and cheaper to
+evaluate; the same \texttt{load\_mlp\_weights}/\texttt{mlp\_score} protocol
+that let E1 score every test trace inside the module would carry it. The
+reason the MLP is in the paper is that it is what the system shipped, and
+the contribution we claim for E1 is the protocol---the number reported is
+the module's number---rather than the number itself.
+
+\paragraph{Per-event alerting is not an operating point.}
+E1 scores whole traces offline. The deployed rule scores a sliding window
+on every syscall event and raises a level whenever the score crosses a
+threshold, and on normal ADFA-LD traffic that produces an alert on a
+substantial fraction of events. Turning a per-event score into a
+deployable alert needs aggregation over a window or a process lifetime,
+which is a rule-design question we have not evaluated; the E5 detections,
+which are per-event by nature, are unaffected.
+
+\paragraph{Differences that are semantic, not performance.}
+Writing the same detection three times (E5) surfaced hooks that see
+different things: Tetragon's LSM-based file hook misses an open that fails
+its permission check, while a syscall-entry hook sees the attempt. \sys's
+collector takes the syscall-entry view for opens and the kernel-function
+view for TCP, and sees IPv4 addresses only. Such differences decide what a
+rule \emph{can} detect before any question of cost, and a fair comparison
+has to configure each system to the same semantics, as we did.
+
+\paragraph{Limitations.}
+Our accuracy evidence is one dataset, ADFA-LD, recorded on a 2013 Ubuntu
+system with i386 syscall numbers that differ from the x86-64 numbers the
+live collector emits; the feature set we inherited mixes ABIs, and we kept
+it because the trained weights depend on it. The isolation experiment is a
+set of eleven attempts, not a proof; a runtime bug or a side channel is out
+of scope. The timing experiments ran on a shared machine with a background
+load we report but could not remove, so absolute throughputs carry noise
+that the paired intervals only partly capture. Falco and Tetragon were run
+with their default settings and our policies; an expert configuration of
+either would likely lower its cost. Finally, \sys is on wasmtime-go~v17;
+newer runtimes change the constants in E2 but not, we expect, the shape of
+the results.

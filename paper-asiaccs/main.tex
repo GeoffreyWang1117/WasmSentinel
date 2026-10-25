@@ -38,11 +38,28 @@
 \affiliation{\institution{Anonymous Institution}\country{Anonymous Country}}
 
 \begin{abstract}
-% TODO(abstract): rewrite from the three claims once E1--E5 numbers are final.
-% C1 feasibility and cost of sandboxed rules (E2, E3: engine overhead, JSON vs
-%    binary event path); C2 empirically verified isolation (E6); C3 the
-%    deployed Wasm detector is the evaluated model (E1 parity, honest accuracy).
-% Do not claim: "first", "zero-copy", "beats deep learning", "5x".
+Host-based detection rules see everything a machine does and, in the
+eBPF monitors deployed today, run as trusted code inside a privileged
+agent. We ask what it costs, and what it buys, to run them as untrusted
+WebAssembly modules instead. \sys collects process, file and network
+events with a fixed set of eBPF programs and hands each event to every
+rule inside its own Wasm instance under a memory cap, an instruction
+budget and a per-call deadline. We measure the boundary rather than
+assume it. A rule call costs \eTwoEngineOverheadUs{}~\si{\micro\second}
+empty and \eTwoMlRawUs{}~\si{\micro\second} for a real syscall detector;
+the pipeline sustains \eThreeAchievedBinFiftyK{} events per second; and
+under nginx, redis and PostgreSQL the application cost
+(\eFourDeltaNginxWs{}, \eFourDeltaRedisWs{}, \eFourDeltaPgWs{}\%) is in
+the range of Falco's, with a smaller memory footprint and, for
+syscall-heavy workloads, a larger CPU one whose cause we identify. Ten
+adversarial modules that try to read files, open sockets, exhaust memory
+or spin forever are contained in all \isoTotal{} attempts. Because the
+deployed module reproduces the trained model to \eTwoMaxDiffNumpyWasm{},
+we can report its accuracy on ADFA-LD with every score computed inside
+the sandbox: an AUPRC of \eOneAuprcMlp{}, above unsupervised baselines
+and below a random forest on the same features, a result we report
+rather than hide because the sandbox is indifferent to the model. All
+numbers in the paper are generated from released result files.
 \end{abstract}
 
 \begin{CCSXML}

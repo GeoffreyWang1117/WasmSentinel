@@ -1,9 +1,299 @@
 \section{Evaluation}
-% Setup: hardware/kernel from provenance blocks in the JSONs.
-% E2 consistency + single-call cost (table) -> E3 end-to-end latency/throughput,
-% JSON vs binary (figure) -> E4 application overhead vs Falco/Tetragon (table)
-% -> E5 same detections, three systems (table) -> E6 isolation (table)
-% -> E1 accuracy with baselines, PR curves (figure) + per-family recall.
-% Each table caption names the script and JSON that produced it.
 \label{sec:eval}
-TODO
+% Order: setup -> E2 (same model, three implementations; per-call cost)
+% -> E3 end-to-end latency/throughput -> E4 application overhead vs
+% Falco/Tetragon -> E5 same detections on three systems -> E6 isolation
+% -> E1 accuracy with the sandboxed module doing the scoring.
+% Every number is a macro from tables/numbers.tex or a generated table
+% under tables/, both produced by evaluation/scripts/paper_numbers.py from
+% evaluation/results/2026-11/*.json (see CLAIMS.md). Do not type numbers here.
+
+\paragraph{Questions.}
+We ask four questions, one per claim in \S\ref{sec:intro}:
+(Q1)~what does a sandboxed rule invocation cost, in isolation and end to end,
+and how does the event encoding change it (E2, E3);
+(Q2)~what does \sys cost a real application compared with two production
+eBPF monitors, and does it see the same things they see (E4, E5);
+(Q3)~does the sandbox actually contain rules that misbehave (E6);
+(Q4)~what accuracy does the \emph{deployed} module reach on a public
+syscall dataset, measured with the module itself doing the scoring (E1).
+
+\paragraph{Setup.}
+All measurements come from one machine: an \provCpu{} (16 cores, 32 threads,
+\SI{121}{GiB} RAM) running Linux \provKernel{}. The host is Go~1.26 with
+wasmtime-go~v17; rules are Rust compiled to \texttt{wasm32-wasip1}. Every
+result file carries a provenance block (git commit, SHA-256 of the loaded
+module, library versions, timestamp), and each table caption names the
+script that produced it. Timing experiments were run while a user-level LLM
+inference server idled on the same machine (about 2.5 of 32 threads busy);
+we report medians and percentiles over repeated runs rather than best cases.
+
+\subsection{Same model, three implementations (E2)}
+\label{sec:eval:e2}
+The detector that ships in \sys is a 128-64-32-16 MLP over the 64-dimensional
+``v1'' feature set computed from a window of syscall numbers
+(\S\ref{sec:impl}). We built it three times from the same weights: the NumPy
+reference used for training, a native Rust build of the rule crate, and the
+Wasm module the host loads. Scored on all \eTwoTraces{} ADFA-LD traces, the
+largest absolute score difference is \eTwoMaxDiffNumpyWasm{} between NumPy
+and Wasm and \eTwoMaxDiffNativeWasm{} between native and Wasm; at the
+deployed threshold every one of the \eTwoTraces{} decisions agrees. The
+residual is single-precision accumulation order, not a semantic difference.
+
+Table~\ref{tab:e2} gives the per-call cost. The host engine's own overhead,
+measured with a guest that returns immediately, is \eTwoEngineOverheadUs{}~\si{\micro\second}
+per invocation. The real rule on one process event costs
+\eTwoMlJsonUs{}~\si{\micro\second} when the event is serialised to JSON and
+\eTwoMlRawUs{}~\si{\micro\second} when it is passed as the fixed-layout
+binary record (\S\ref{sec:design:wire}); the difference is JSON parsing inside
+the guest. Scoring an entire trace (median \eTwoTraceLen{} syscalls) costs
+\eTwoUsPerCallNative{}~\si{\micro\second} in native Rust; the
+wasmtime-py and NumPy rows are dominated by the Python call path and are
+shown only to make the point that the \emph{model} is cheap everywhere.
+
+\begin{table}[t]
+\caption{E2: per-call cost of the same detector in different hosts. Medians;
+\texttt{go test -bench} for the first three rows, 30 repetitions per trace
+for the rest. Produced by \texttt{e2\_consistency.py} from
+\texttt{e2/e2\_results.json}.}
+\label{tab:e2}
+\centering\footnotesize
+\input{tables/e2_table}
+\end{table}
+
+\subsection{End-to-end latency and throughput (E3)}
+\label{sec:eval:e3}
+E2 prices one call. E3 prices the whole path: an event enters the pipeline,
+waits in the back-pressure queue, is handed to every rule, and the alert, if
+any, is written. We drive the pipeline with the replay collector, which
+turns ADFA-LD attack traces into syscall events of the same shape the eBPF
+collector produces, paced at an offered rate; both rules are loaded, the
+STIDE database is trained at start-up from the ADFA training traces, and
+alerts are counted but not printed. Each cell is three runs of 30 seconds'
+worth of events. Latency is measured from the event's creation timestamp to
+the completion of its last output handler.
+
+Table~\ref{tab:e3} and Figure~\ref{fig:e3} show the result. At
+\num{1000} and \num{10000} events/s both encodings keep up (the
+achieved rate is the pacer's granularity, not loss: the queue blocks rather
+than drops). At \num{10000} events/s the median end-to-end latency is
+\eThreePFiftyBinTenK{}~\si{\micro\second} with the binary record and
+\eThreePFiftyJsonTenK{}~\si{\micro\second} with JSON, with a 99th percentile
+of \eThreePNinetyNineBinTenK{} and \eThreePNinetyNineJsonTenK{}~\si{\micro\second}.
+At an offered \num{50000} events/s the pipeline saturates: it sustains
+\eThreeAchievedBinFiftyK{} events/s with the binary record and
+\eThreeAchievedJsonFiftyK{} with JSON, a \eThreeBinGainPct{}\% difference,
+and the latencies in that row are queue depth rather than processing time.
+
+The detection column explains where the time goes. Per event, the two rules
+together take \eThreeDetectPFiftyBinTenK{}~\si{\micro\second} at the median,
+an order of magnitude more than the \eTwoMlRawUs{}~\si{\micro\second} E2
+measured for a process event. The difference is not the sandbox but the
+rule: for every syscall event \texttt{ml\_detector} recomputes the v1
+feature vector over its 100-event window and runs the MLP, and the feature
+pass dominates. Incremental feature maintenance would remove most of it;
+we return to this in \S\ref{sec:discussion}. Resident memory stays near
+\eThreeRssMiBBinTenK{}~MiB until saturation, where the queue grows it to
+\eThreeRssMiBBinFiftyK{}~MiB.
+
+\begin{table}[t]
+\caption{E3: end-to-end latency and sustained throughput while replaying
+ADFA-LD syscall events through the full pipeline (mean of 3 runs). At
+\num{50000} offered events/s the pipeline is saturated and the latency
+columns measure queueing. Produced by \texttt{e3\_throughput.py} from
+\texttt{e3/e3\_results.json}.}
+\label{tab:e3}
+\centering\scriptsize
+\input{tables/e3_table}
+\end{table}
+
+\begin{figure*}[t]
+\centering
+\includegraphics[width=.85\textwidth]{figures/e3_latency_throughput}
+\caption{E3: end-to-end latency (left, log--log) and achieved throughput
+(right) per offered rate. \texttt{plot\_e3.py} from
+\texttt{e3/e3\_results.json}.}
+\label{fig:e3}
+\end{figure*}
+
+\subsection{Application overhead against Falco and Tetragon (E4)}
+\label{sec:eval:e4}
+E3 drove the pipeline with a synthetic event stream. E4 asks what a real
+application loses when \sys watches it, and how that compares with two
+production eBPF monitors on the same host. Three workloads run in
+containers published only on loopback: nginx under \texttt{wrk}
+(8~threads, 128~connections), redis under \texttt{redis-benchmark}
+(SET/GET, pipeline~16) and PostgreSQL under \texttt{pgbench}
+(16~clients, 8~threads, client inside the container). Each is measured
+under four arms: no monitor; \sys with its eBPF collector, both rules and
+the JSON encoding (the default); Falco with its modern-eBPF driver and
+default rule set~\cite{falco}; and Tetragon with a policy that observes
+file opens and TCP connects~\cite{tetragon}. Arms are interleaved and each
+cell repeated five times for \num{20}~seconds; we report the throughput
+change against the unmonitored arm as a paired difference with a 95\%
+interval, the monitor's own CPU and peak resident memory sampled every
+\num{250}~ms, and whole-machine CPU. Falco and Tetragon are run as their
+maintainers ship them; we did not tune either, and the Tetragon numbers in
+particular reflect our policy, which exports every matching event.
+
+Table~\ref{tab:e4} is the result. Under nginx, \sys costs
+\eFourDeltaNginxWs{}\% of throughput where Falco costs
+\eFourDeltaNginxFalco{}\% and Tetragon \eFourDeltaNginxTetragon{}\%; under
+redis all three are within a few percent of the baseline; under PostgreSQL
+\sys and Falco cost the same \eFourDeltaPgWs{}\% and
+\eFourDeltaPgFalco{}\% while Tetragon's interval includes zero. The
+monitor's own footprint separates the systems more than throughput does.
+\sys's resident memory stays between \eFourRssRedisWs{} and
+\eFourRssPgWs{}~MiB against Falco's roughly \eFourRssPgFalco{}~MiB, but its
+CPU under PostgreSQL reaches \eFourCpuPgWs{}\% of a core, against
+\eFourCpuPgFalco{}\% for Falco and \eFourCpuPgTetragon{}\% for Tetragon.
+The reason is the one E3 exposed: \texttt{pgbench} produces a high rate of
+file opens and allow-listed syscalls, every one of them crosses into both
+rules, and \texttt{ml\_detector} recomputes its features per event. Falco
+and Tetragon filter in the kernel and hand user space a fraction of the
+events. This is a design lever, not a sandbox tax
+(\S\ref{sec:discussion}). These runs shared the machine with other
+containers (one-minute load median 15 on 32 threads); the paired design
+absorbs slow drift but not bursts, and we treat the absolute throughputs
+as indicative and the intervals as the result.
+
+\begin{table*}[t]
+\caption{E4: application throughput under four monitoring arms (mean of 5
+interleaved runs; $\Delta$ is the paired difference to the unmonitored arm
+with a 95\% CI). Monitor CPU is the monitor's own processes, in percent of
+one core; RSS is the peak. Produced by \texttt{e4\_overhead.py} from
+\texttt{e4/e4\_results.json}.}
+\label{tab:e4}
+\centering\footnotesize
+\input{tables/e4_table}
+\end{table*}
+
+\subsection{Same detections on three systems (E5)}
+\label{sec:eval:e5}
+A cheaper monitor that misses what the others catch is not cheaper. E5
+implements three detections in all three systems and triggers each one
+\eFiveTrials{} times: an unprivileged read of \texttt{/etc/shadow}, the
+execution of a binary copied under \texttt{/tmp}, and a TCP connection to
+port~4444 on loopback (the harness listens and closes). \sys uses its
+\texttt{suspicious\_shell} rule unchanged; Falco gets three rules layered
+over its default set; Tetragon gets a policy hooking the \texttt{openat}
+syscall entry, \texttt{tcp\_connect} with the destination port, and process
+execution filtered by path prefix. Each alert is attributed to the nearest
+preceding action, and latency is measured from the wall clock before the
+action to the first alert about it. Writing the three equivalents taught us
+one semantic difference worth recording: Tetragon's default
+\texttt{security\_file\_open} hook does not fire for an open that fails the
+permission check, which is exactly what an unprivileged read of
+\texttt{/etc/shadow} is, so the policy must hook the syscall entry instead.
+
+Table~\ref{tab:e5} shows that all three systems detect all three actions
+in every trial, with median alert latencies between \eFiveLatencyFalcoTmpExec{}
+and \eFiveLatencyWsShadow{}~ms. Over the whole session the monitors' resident
+memory is \eFiveRssWs{}, \eFiveRssFalco{} and \eFiveRssTetragon{}~MiB and
+their CPU on an otherwise idle host \eFiveCpuWs{}, \eFiveCpuFalco{} and
+\eFiveCpuTetragon{}\%, the same ordering and the same cause as in E4.
+
+\begin{table}[t]
+\caption{E5: the same three detections in three systems, \eFiveTrials{}
+trials each. Latency is from the action to its first alert. Produced by
+\texttt{e5\_fair\_comparison.py} from \texttt{e5/e5\_results.json}.}
+\label{tab:e5}
+\centering\scriptsize
+\input{tables/e5_table}
+\end{table}
+
+\subsection{Isolation under adversarial rules (E6)}
+\label{sec:eval:e6}
+A sandbox claim is only as good as the attempts made against it. We wrote
+\isoModules{} rule modules that each try one thing a rule must not be able
+to do, loaded them under the default limits (\isoMemoryCapMiB{}~MiB of
+linear memory, \isoFuel{} fuel units, \isoTimeout{} wall-clock deadline per
+call) next to a well-behaved rule, invoked them, and recorded what the engine
+observed, whether the neighbour kept working, and whether the next call on
+the same rule succeeded (the engine drops a trapped instance and
+re-instantiates it lazily). Table~\ref{tab:isolation} lists all
+\isoTotal{} cases; \isoContained{} of \isoTotal{} were contained. Two rows
+deserve comment. Reading the wall clock succeeds: the clock is a capability
+we deliberately grant, and the table makes that visible rather than hiding
+it. A single \SI{1}{GiB} allocation is refused before linear memory grows at
+all, so the allocator aborts and the engine sees a generic trap rather than a
+memory-limit trap; the module is still contained, but we classify the
+outcome as \emph{trap}, not \emph{memory}, because that is what the runtime
+reports.
+
+\begin{table*}[t]
+\caption{E6: adversarial rule modules under the default limits. ``Level'' is
+the rule's own return value; a trap is reported by the runtime. Every case
+leaves the neighbouring rule unaffected and the next call succeeds.
+Produced by \texttt{go test ./internal/engine -run Adversarial} from
+\texttt{isolation/isolation.json}.}
+\label{tab:isolation}
+\centering\footnotesize
+\input{tables/isolation_table}
+\end{table*}
+
+\subsection{Accuracy of the deployed detector (E1)}
+\label{sec:eval:e1}
+We evaluate on ADFA-LD~\cite{adfa-ld}: \eOneNormal{} normal and
+\eOneAttack{} attack traces from six attack families. The protocol is
+stratified \eOneFolds-fold cross-validation repeated with \eOneSeeds{} seeds.
+For \sys, the MLP is trained per fold in NumPy, its weights are loaded into
+the compiled module through the \texttt{load\_mlp\_weights} export, and
+\emph{every test score is produced by the module's} \texttt{mlp\_score}
+export; the largest Wasm--NumPy score difference across all folds is
+\eOneWasmNumpyMaxDiff{}. Baselines are a STIDE 6-gram novelty detector
+trained on normal traces only~\cite{stide}, an Isolation Forest on the same
+v1 features trained on normal traces only, a Random Forest on the same
+features (supervised), and an LSTM on the raw syscall sequence (supervised,
+early stopping on a held-out part of the training fold)~\cite{kim-lstm}.
+Operating points are fixed on the training fold (the 95th percentile of the
+training normal scores, i.e.\ a nominal \SI{5}{\percent} FPR) and reported
+on the test fold. We report AUPRC because the classes are imbalanced
+(\SI{12.5}{\percent} attacks), and paired AUPRC differences across the 15
+(seed, fold) runs with a $t$-interval and a Wilcoxon test; the runs share
+data across seeds, so the intervals are optimistic.
+
+Table~\ref{tab:e1} and Figure~\ref{fig:e1-pr} give the result. The
+sandboxed MLP reaches an AUPRC of \eOneAuprcMlp{} $\pm$ \eOneAuprcStdMlp{},
+clearly above both unsupervised baselines
+(\eOneDiffStide{} over STIDE, \eOneDiffIForest{} over Isolation Forest) and
+clearly \emph{below} both supervised baselines: the Random Forest on the same
+features is better by \eOneDiffRf{} AUPRC
+(95\% CI [\eOneDiffCiLoRf{}, \eOneDiffCiHiRf{}]) and the LSTM by
+\eOneDiffLstm{} ([\eOneDiffCiLoLstm{}, \eOneDiffCiHiLstm{}]). At a
+\SI{1}{\percent} FPR the gap widens (recall \eOneRecallFprOneMlp{} vs.\
+\eOneRecallFprOneRf{} for the forest). Per-family recall
+(Table~\ref{tab:e1-family}) shows the MLP weakest on \texttt{Web\_Shell} and
+\texttt{Meterpreter}. We draw two conclusions. First, the number a reader
+should attach to \sys's shipped detector is \eOneAuprcMlp{}, and it is the
+number the sandboxed module produces, not a number from a notebook. Second,
+the MLP is not the best model for these features; a tree ensemble is, and
+nothing in the sandbox prefers one over the other
+(\S\ref{sec:discussion}).
+
+\begin{table*}[t]
+\caption{E1: ADFA-LD, \eOneFolds-fold $\times$ \eOneSeeds{} seeds (mean,
+$\pm$ std for AUPRC). R@$x$\% is recall at a nominal $x$\% FPR fixed on the
+training fold. $\Delta$AUPRC is \sys minus the baseline with a 95\% CI over
+the 15 paired runs. Produced by \texttt{e1\_adfa\_eval.py} from
+\texttt{e1/e1\_results.json}.}
+\label{tab:e1}
+\centering\footnotesize
+\input{tables/e1_table}
+\end{table*}
+
+\begin{table}[t]
+\caption{E1: recall per attack family at the FPR-5\% operating point (mean
+over runs). Same source as Table~\ref{tab:e1}.}
+\label{tab:e1-family}
+\centering\scriptsize
+\input{tables/e1_family_table}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=\linewidth]{figures/e1_pr_curves}
+\caption{E1: mean precision--recall curves with the across-run band.
+\texttt{plot\_e1.py} from \texttt{e1/e1\_pr\_curves.json}.}
+\label{fig:e1-pr}
+\end{figure}

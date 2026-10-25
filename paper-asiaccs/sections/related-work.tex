@@ -1,7 +1,61 @@
 \section{Related Work}
-% HIDS on syscalls (STIDE, ADFA-LD line of work); eBPF monitors (Falco,
-% Tetragon, Tracee); Wasm as a sandbox for extensions (Proxy-Wasm, Falco
-% plugins?, wasm-bpf/eunomia, WasmEdge WASI-NN) -- prior-art check before any
-% novelty wording (plan §2).
 \label{sec:related}
-TODO
+% Prior-art check done 2026-10-25 (web search; asta flaky). No priority
+% wording: the nearest work is listed and the difference stated.
+
+\paragraph{Syscall-based host intrusion detection.}
+Modelling a process by its system-call stream goes back to STIDE's fixed-length
+n-gram databases~\cite{stide} and the pH delay-based response that followed
+it~\cite{ph}. ADFA-LD~\cite{adfa-ld} and the semantic pattern models built on
+it~\cite{creech} remain the common benchmark for this line, and sequence
+models from LSTM language models~\cite{kim-lstm} and DeepLog~\cite{deeplog}
+to provenance-graph detectors such as StreamSpot~\cite{streamspot} and
+Unicorn~\cite{unicorn} have raised the ceiling; LID-DS~\cite{lidds} offers a
+more recent recording. \sys contributes no new detector. It takes the standard
+dataset and the standard baselines and reports what the \emph{deployed}
+module scores, which, as \S\ref{sec:eval:e1} shows, is below a random forest
+on the same features. That is the point: the number is the module's own.
+
+\paragraph{eBPF runtime security monitors.}
+Falco~\cite{falco}, Tetragon~\cite{tetragon} and Tracee~\cite{tracee} collect
+process, file and network events with eBPF and evaluate rules against them;
+bpftrace and the BPF tool suite~\cite{bpftrace,ebpf-intro} do the same for
+ad-hoc tracing, and commercial agents such as Sysdig and
+Pixie~\cite{sysdig,pixie} package it for fleets. In all of them the rule logic
+is trusted: Falco rules are a filter language interpreted by the agent and
+its plugins are native shared objects loaded into the agent's address space;
+Tetragon policies are compiled into eBPF programs and a user-space agent that
+run with the agent's privileges. The eBPF verifier is itself a sandbox, but
+one with a history of bypasses~\cite{ebpf-bugs}, and it constrains what a rule
+may compute far more than it constrains what a rule may see. \sys keeps the
+eBPF side minimal (fixed hooks, a fixed record) and moves everything a rule
+author writes into Wasm. We measure against Falco and Tetragon directly
+(\S\ref{sec:eval:e4}, \S\ref{sec:eval:e5}) rather than quoting their published
+figures.
+
+\paragraph{WebAssembly as an isolation boundary.}
+WebAssembly's linear memory and import-only interface~\cite{wasm-spec,wasi}
+have made it a software-fault-isolation substrate well beyond the browser:
+RLBox sandboxes third-party libraries in Firefox~\cite{rlbox},
+Kolosick et al.\ drive the transition cost toward zero~\cite{wasmboxc},
+ERIM reaches similar goals with protection keys instead~\cite{erim},
+Sledge~\cite{sledge} and Lucet~\cite{lucet} run it at the edge, and
+Proxy-Wasm~\cite{proxy-wasm} is the production precedent for untrusted
+plugins inside a network proxy. Wasmtime~\cite{wasmtime} supplies the fuel,
+epoch and memory limits \sys relies on; CT-Wasm~\cite{ct-wasm} addresses a
+side-channel threat we leave out of scope. gVisor and Kata~\cite{gvisor,kata}
+isolate whole workloads at a much higher cost than a per-rule instance. \sys
+applies this substrate to detection rules and asks the two questions these
+systems answer for their own domains: what it costs and whether it holds.
+
+\paragraph{WebAssembly and eBPF together.}
+The closest prior work combines the two technologies in the opposite
+direction. Wasm-bpf~\cite{wasm-bpf} packages eBPF programs and their
+user-space loaders as Wasm modules so that kernel tooling can be deployed like
+cloud artifacts; Abbadini et al.~\cite{abbadini-ebpf-wasm} use eBPF to
+enforce finer file-system policies on a Wasm runtime's host calls; and
+Heinrich et al.~\cite{heinrich-wasm-ids} detect anomalies \emph{in} Wasm
+applications from their WASI call stream. In \sys, eBPF is the sensor and Wasm
+is the sandbox for the detection logic, and the evaluation is about that
+boundary: the per-call cost of crossing it, the end-to-end cost of running a
+host monitor behind it, and whether it contains a rule that misbehaves.

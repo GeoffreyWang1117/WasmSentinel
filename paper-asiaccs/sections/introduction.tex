@@ -1,12 +1,90 @@
 \section{Introduction}
-% OUTLINE (plan §2): host-based detection rules are code that runs with kernel
-% visibility; today they run as trusted plugins (Falco, Tetragon). Question:
-% what does it cost, and what does it buy, to run them inside a Wasm sandbox?
-% Contributions = C1 (cost: engine overhead, event encoding, end-to-end
-% throughput/latency, application overhead vs Falco/Tetragon), C2 (isolation
-% verified with adversarial modules under memory/fuel/deadline limits),
-% C3 (equivalence: the deployed Wasm model is bit-for-bit the evaluated one;
-% accuracy reported honestly against strong baselines).
-% Numbers: only from \input{tables/numbers}. No "first", no "zero-copy", no "5x".
 \label{sec:intro}
-TODO
+
+A host intrusion detection rule is a small program with a large view. It
+sees every process a machine starts, every file it opens and every
+connection it makes, and it decides which of them deserve an alert. In the
+monitors that run on most Linux fleets today the rule is also
+\emph{trusted}: Falco evaluates its rules and loads its plugins inside one
+privileged agent~\cite{falco}, Tetragon compiles its policies into the
+kernel and a privileged agent~\cite{tetragon}, and a mistake in a rule,
+or a rule from a source that should not have been trusted, runs with the
+agent's view and the agent's power. Rules come from many places---vendor
+packs, community repositories, a security team's own detectors, and
+increasingly a model trained by someone else---and they change far more
+often than the agent does.
+
+This paper asks a narrow question about that arrangement. Suppose the
+rules were untrusted and ran inside a WebAssembly sandbox, each in its own
+instance, with no access to the host beyond the event it is handed and
+with a memory cap, an instruction budget and a wall-clock deadline on
+every call. \emph{What does that cost, and what does it buy?} The
+question is narrow on purpose. WebAssembly's isolation properties are
+established~\cite{wasm-spec,rlbox,wasmboxc}; eBPF-based collection is
+established~\cite{falco,tetragon,tracee}; what is missing is a measurement
+of the boundary between them in this particular use, where the sandboxed
+code is fed by the kernel at tens of thousands of events per second and
+the alternative it is compared against is not ``no sandbox'' but two
+production systems.
+
+We built \sys to take that measurement. Six fixed eBPF programs produce a
+fixed \SI{592}{B} record per event; a Go daemon queues the records and
+hands each one to every rule through a five-function ABI; a rule is a Wasm
+module that returns a severity. Two rules ship with it: a pattern rule of
+the kind one writes in Falco's filter language, and a syscall-sequence
+detector that combines a STIDE $n$-gram database~\cite{stide} with a
+small MLP whose weights are embedded at build time. The design choices
+that affect the measurement are few: one long-lived instance per rule,
+limits attached to the instance's store, a trapped rule dropped and
+re-instantiated, and a choice between a JSON encoding of the event and the
+kernel record passed verbatim.
+
+The evaluation makes three claims, each with the experiment that supports
+it.
+
+\begin{enumerate}
+\item \textbf{Cost (E2--E5).} A sandboxed rule call costs
+  \eTwoEngineOverheadUs{}~\si{\micro\second} empty and
+  \eTwoMlRawUs{}~\si{\micro\second} for the real detector on a process
+  event; end to end, the pipeline sustains \eThreeAchievedBinFiftyK{}
+  syscall events per second with the binary encoding
+  (\eThreeAchievedJsonFiftyK{} with JSON) at a median latency of
+  \eThreePFiftyBinTenK{}~\si{\micro\second} at \num{10000}~events/s. Under
+  nginx, redis and PostgreSQL, \sys costs the application
+  \eFourDeltaNginxWs{}, \eFourDeltaRedisWs{} and \eFourDeltaPgWs{}\% of
+  throughput, in the range of Falco's \eFourDeltaNginxFalco{},
+  \eFourDeltaRedisFalco{} and \eFourDeltaPgFalco{}\%, with a smaller
+  resident footprint and, under PostgreSQL, a larger CPU one; the three
+  systems detect the same three actions in every trial with alert
+  latencies within a millisecond of each other. The CPU gap has a named
+  cause---every event reaches every rule, and the ML rule recomputes its
+  features per event---and is a lever on the rule side, not a sandbox
+  tax.
+\item \textbf{Isolation (E6).} \isoModules{} modules written to read
+  files, open sockets, leak the environment, flood output, exhaust
+  memory, spin forever, overflow the stack or exit the process were all
+  contained under the default limits in \isoContained{} of \isoTotal{}
+  attempts, with the neighbouring rule unaffected and the next call
+  succeeding. We report the one capability a rule does have (the clock)
+  and the one case the runtime classifies less precisely than we would
+  like.
+\item \textbf{Equivalence (E1--E2).} The module the daemon loads produces,
+  to within \eTwoMaxDiffNumpyWasm{}, the same score as the reference
+  implementation that was trained, on all \eTwoTraces{} ADFA-LD traces.
+  Because of that, the accuracy we report is the module's own: every test
+  score in a \eOneFolds-fold, \eOneSeeds-seed evaluation is produced
+  inside the sandbox. That accuracy is an AUPRC of \eOneAuprcMlp{},
+  above STIDE and an Isolation Forest and \emph{below} a random forest
+  (\eOneAuprcRf{}) and an LSTM (\eOneAuprcLstm{}) on the same data. We
+  say so because the point of E1 is the protocol, and because nothing in
+  the sandbox prefers the weaker model.
+\end{enumerate}
+
+We do not claim that \sys is the earliest system to combine eBPF and
+WebAssembly, nor that its detector is state of the art, nor that its
+event path is copy-free. The nearest prior work combines the two
+technologies in other directions (\S\ref{sec:related}); the detector is
+deliberately ordinary; and the binary encoding removes a parse, not a
+copy. What the paper contributes is the measurement, taken on the deployed
+artifact, with every number regenerated from the result files we release
+(\S\ref{sec:openscience}).
