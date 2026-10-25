@@ -108,10 +108,15 @@ def write_tables(tables_dir, e1, e2, iso, e3=None, e4=None, e5=None):
             r"\texttt{ml\_detector}, JSON event & one process event & " + us(gb["BenchmarkRealMLDetectorJSON"]) + r" \\",
             r"\texttt{ml\_detector}, binary event & one process event & " + us(gb["BenchmarkRealMLDetectorRaw"]) + r" \\",
             r"\midrule",
-            "Native Rust, whole trace & one trace ({} syscalls) & ".format(t["trace_len_median"]) + us(t["ns_per_call_median"]["native_rust"]) + r" \\",
-            r"Wasm via wasmtime-py (+Python call) & one trace & " + us(t["ns_per_call_median"]["wasm_wasmtime_py"]) + r" \\",
-            r"NumPy reference & one trace & " + us(t["ns_per_call_median"]["numpy"]) + r" \\",
+            "Native Rust, MLP & one trace ({} syscalls) & ".format(t["trace_len_median"]) + us(t["ns_per_call_median"]["native_rust"]) + r" \\",
+            r"Wasm via wasmtime-py (+Python call), MLP & one trace & " + us(t["ns_per_call_median"]["wasm_wasmtime_py"]) + r" \\",
+            r"NumPy reference, MLP & one trace & " + us(t["ns_per_call_median"]["numpy"]) + r" \\",
         ]
+        if "native_rust_rf" in t["ns_per_call_median"]:
+            rows += [
+                r"Native Rust, forest & one trace & " + us(t["ns_per_call_median"]["native_rust_rf"]) + r" \\",
+                r"Wasm via wasmtime-py (+Python call), forest & one trace & " + us(t["ns_per_call_median"]["wasm_rf_wasmtime_py"]) + r" \\",
+            ]
     else:
         rows.append(r"\multicolumn{3}{c}{\textbf{?? E2 results missing}} \\")
     rows += [r"\bottomrule", r"\end{tabular}"]
@@ -309,17 +314,22 @@ def main():
     e3 = load(R / "e3/e3_results.json")
     if e3:
         commits["e3"] = e3["provenance"]["git_commit"][:12]
-        for cell, v in e3["summary"].items():
-            enc, eps, model = (cell.split("@") + ["mlp"])[:3]
-            # ...Rf suffix: ml_detector's deep path on the embedded forest ({"model":"rf"}); no suffix: the MLP default
-            suf = {"json": "Json", "binary": "Bin"}[enc] + {1000: "OneK", 10000: "TenK", 50000: "FiftyK"}.get(int(eps), "X") + ("Rf" if model == "rf" else "")
-            m.add(f"eThreeAchieved{suf}", v["achieved_eps"]["mean"], "{:,.0f}")
-            m.add(f"eThreePFifty{suf}", v["e2e_us"]["p50"]["mean"], "{:,.0f}")
-            m.add(f"eThreePNinetyNine{suf}", v["e2e_us"]["p99"]["mean"], "{:,.0f}")
-            m.add(f"eThreePNineNineNine{suf}", v["e2e_us"]["p999"]["mean"], "{:,.0f}")
-            m.add(f"eThreeRssMiB{suf}", v["max_rss_kb"]["mean"] / 1024, "{:.0f}")
-            m.add(f"eThreeDetectPFifty{suf}", v["detect_us"]["p50"]["mean"], "{:,.0f}")
-            m.add(f"eThreeDetectPNinetyNine{suf}", v["detect_us"]["p99"]["mean"], "{:,.0f}")
+        # One macro set per (encoding, rate, model) of the full grid, so a cell
+        # the results lack still defines its macros (as "??"). ...Rf suffix:
+        # ml_detector's deep path on the embedded forest ({"model":"rf"}); no
+        # suffix: the MLP default.
+        for enc in ("json", "binary"):
+            for eps in (1000, 10000, 50000):
+                for model in ("mlp", "rf"):
+                    v = e3["summary"].get(f"{enc}@{eps}" if model == "mlp" else f"{enc}@{eps}@{model}")
+                    suf = {"json": "Json", "binary": "Bin"}[enc] + {1000: "OneK", 10000: "TenK", 50000: "FiftyK"}[eps] + ("Rf" if model == "rf" else "")
+                    m.add(f"eThreeAchieved{suf}", v and v["achieved_eps"]["mean"], "{:,.0f}")
+                    m.add(f"eThreePFifty{suf}", v and v["e2e_us"]["p50"]["mean"], "{:,.0f}")
+                    m.add(f"eThreePNinetyNine{suf}", v and v["e2e_us"]["p99"]["mean"], "{:,.0f}")
+                    m.add(f"eThreePNineNineNine{suf}", v and v["e2e_us"]["p999"]["mean"], "{:,.0f}")
+                    m.add(f"eThreeRssMiB{suf}", v and v["max_rss_kb"]["mean"] / 1024, "{:.0f}")
+                    m.add(f"eThreeDetectPFifty{suf}", v and v["detect_us"]["p50"]["mean"], "{:,.0f}")
+                    m.add(f"eThreeDetectPNinetyNine{suf}", v and v["detect_us"]["p99"]["mean"], "{:,.0f}")
         sat = {enc: v for enc, v in ((c.split("@")[0], v) for c, v in e3["summary"].items() if c.endswith("@50000"))}
         if "json" in sat and "binary" in sat:
             m.add("eThreeBinGainPct", 100 * (sat["binary"]["achieved_eps"]["mean"] / sat["json"]["achieved_eps"]["mean"] - 1), "{:.0f}")
