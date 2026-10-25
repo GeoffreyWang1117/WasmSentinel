@@ -457,10 +457,12 @@ impl HybridDetector {
         self.stide.database_size()
     }
 
-    /// Load MLP weights at run time (tests, experiments); deployments use the
-    /// embedded weights.
+    /// Replace the MLP at run time (evaluation harnesses, per-fold models);
+    /// deployments use the embedded weights. The threshold is kept.
     pub fn load_mlp_weights(&mut self, weights_json: &str) -> Result<(), String> {
-        self.mlp.load_weights(weights_json)
+        let threshold = self.mlp.get_config().threshold;
+        self.mlp = MlpDetector::from_weights_json(weights_json, threshold)?;
+        Ok(())
     }
 
     pub fn get_stats(&self) -> HybridStats {

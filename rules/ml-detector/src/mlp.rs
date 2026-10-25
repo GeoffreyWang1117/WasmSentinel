@@ -252,6 +252,52 @@ impl Default for MlpDetector {
 }
 
 impl MlpDetector {
+    /// Build a detector from a weights JSON (the training script's export
+    /// format: a list of layers with "weights" and "biases"). The architecture
+    /// is taken from the layer shapes; `threshold` is the decision threshold.
+    pub fn from_weights_json(weights_json: &str, threshold: f32) -> Result<Self, String> {
+        #[derive(Deserialize)]
+        struct LayerWeights {
+            weights: Vec<Vec<f32>>,
+            biases: Vec<f32>,
+        }
+        let layers: Vec<LayerWeights> = serde_json::from_str(weights_json)
+            .map_err(|e| format!("Failed to parse weights: {}", e))?;
+        if layers.is_empty() {
+            return Err("no layers".to_string());
+        }
+        let input_size = layers[0].weights.first().map(|r| r.len()).unwrap_or(0);
+        let mut hidden_sizes: Vec<usize> = layers[..layers.len() - 1]
+            .iter()
+            .map(|l| l.weights.len())
+            .collect();
+        let output_size = layers[layers.len() - 1].weights.len();
+        if input_size == 0 || output_size == 0 {
+            return Err("empty layer".to_string());
+        }
+        for (i, l) in layers.iter().enumerate() {
+            let expect_in = if i == 0 {
+                input_size
+            } else {
+                layers[i - 1].weights.len()
+            };
+            if l.weights.iter().any(|r| r.len() != expect_in) || l.biases.len() != l.weights.len() {
+                return Err(format!("layer {} has inconsistent shapes", i));
+            }
+        }
+        hidden_sizes.shrink_to_fit();
+        let mut det = Self::with_config(MlpConfig {
+            input_size,
+            hidden_sizes,
+            output_size,
+            threshold,
+        });
+        for (layer, lw) in det.layers.iter_mut().zip(layers.into_iter()) {
+            layer.set_weights(lw.weights, lw.biases);
+        }
+        Ok(det)
+    }
+
     /// Create a detector with embedded (pre-trained) weights
     pub fn with_embedded_weights() -> Self {
         let embedded_weights = crate::weights::load_embedded_weights();

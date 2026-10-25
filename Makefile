@@ -4,6 +4,7 @@
 #   make test        Go (race) + Rust tests
 #   make isolation   E6: adversarial modules against the engine -> $(RESULTS)/isolation/
 #   make parity      P1.4: NumPy reference vs Wasm model      -> $(RESULTS)/parity/
+#   make e1          E1: ADFA-LD accuracy, inference in Wasm   -> $(RESULTS)/e1/
 #   make reproduce   every experiment that exists so far, into $(RESULTS)/
 #
 # RESULTS defaults to evaluation/results/2026-11 (the directory the AsiaCCS
@@ -40,7 +41,16 @@ parity: build
 	mkdir -p $(RESULTS)/parity
 	cd rules/ml-detector && $(PY) train/verify_wasm_parity.py --wasm ../wasm/ml_detector.wasm --count 1000 --adfa-count 400 | tee ../../$(RESULTS)/parity/parity.txt
 
-reproduce: isolation parity
+# E1 takes a while (15 MLP + 15 LSTM trainings; LSTM on CPU when the GPUs are busy).
+e1: build
+	mkdir -p $(RESULTS)/e1
+	$(PY) evaluation/scripts/e1_adfa_eval.py --out $(RESULTS)/e1 --wasm rules/wasm/ml_detector.wasm
+	$(PY) evaluation/scripts/plot_e1.py --results $(RESULTS)/e1
+
+e1-quick: build
+	$(PY) evaluation/scripts/e1_adfa_eval.py --quick --device cpu --out /tmp/wasmsentinel-e1-quick
+
+reproduce: isolation parity e1
 	@echo "results in $(RESULTS)/"
 
 clean:

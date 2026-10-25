@@ -13,7 +13,7 @@ mod mlp;
 mod stide;
 mod weights;
 
-use std::sync::OnceLock;
+use std::sync::Mutex;
 
 use sentinel_abi::{EventFields, JsonEvent, RawEvent};
 use serde::{Deserialize, Serialize};
@@ -28,11 +28,14 @@ pub use weights::{
     DEFAULT_THRESHOLD, HIDDEN_SIZES, INPUT_SIZE, MODEL_SHA256, MODEL_SOURCE, NUM_PARAMETERS,
 };
 
-/// Stateless scorer used by `mlp_score`: the embedded model, built once.
-static MLP: OnceLock<MlpDetector> = OnceLock::new();
+/// Scorer used by `mlp_score` / `mlp_features`: the embedded model until
+/// `load_mlp_weights` replaces it (evaluation harnesses load per-fold models).
+static SCORER: Mutex<Option<MlpDetector>> = Mutex::new(None);
 
-fn embedded_mlp() -> &'static MlpDetector {
-    MLP.get_or_init(MlpDetector::with_embedded_weights)
+fn with_scorer<T>(f: impl FnOnce(&MlpDetector) -> T) -> T {
+    let mut guard = SCORER.lock().unwrap_or_else(|e| e.into_inner());
+    let det = guard.get_or_insert_with(MlpDetector::with_embedded_weights);
+    f(det)
 }
 
 /// Global detector instance
@@ -238,7 +241,7 @@ pub extern "C" fn mlp_score(seq_ptr: *const u32, seq_len: usize) -> f32 {
     } else {
         unsafe { std::slice::from_raw_parts(seq_ptr, seq_len) }
     };
-    embedded_mlp().score(&adfa_features(seq))
+    with_scorer(|m| m.score(&adfa_features(seq)))
 }
 
 /// Feature set v1 for a syscall-number sequence, written to `out` (64 f32).
@@ -256,6 +259,37 @@ pub extern "C" fn mlp_features(seq_ptr: *const u32, seq_len: usize, out: *mut f3
     let f = adfa_features(seq);
     unsafe { std::ptr::copy_nonoverlapping(f.as_ptr(), out, f.len()) };
     f.len() as i32
+}
+
+/// Replace the MLP weights at run time with a weights JSON (training export
+/// format). Affects `mlp_score` and the hybrid detector; the embedded weights
+/// stay the default for fresh instances. Returns 0, or -1 on a parse error.
+#[no_mangle]
+pub extern "C" fn load_mlp_weights(json_ptr: *const u8, json_len: usize) -> i32 {
+    if json_ptr.is_null() || json_len == 0 {
+        return -1;
+    }
+    let bytes = unsafe { std::slice::from_raw_parts(json_ptr, json_len) };
+    let json = match std::str::from_utf8(bytes) {
+        Ok(s) => s,
+        Err(_) => return -1,
+    };
+    let threshold = with_scorer(|m| m.get_config().threshold);
+    let scorer = match MlpDetector::from_weights_json(json, threshold) {
+        Ok(m) => m,
+        Err(_) => return -1,
+    };
+    *SCORER.lock().unwrap_or_else(|e| e.into_inner()) = Some(scorer);
+    let detector = unsafe {
+        if DETECTOR.is_none() {
+            DETECTOR = Some(HybridDetector::new());
+        }
+        DETECTOR.as_mut().unwrap()
+    };
+    if detector.load_mlp_weights(json).is_err() {
+        return -1;
+    }
+    0
 }
 
 /// JSON description of the embedded model (caller frees with `free_result`).

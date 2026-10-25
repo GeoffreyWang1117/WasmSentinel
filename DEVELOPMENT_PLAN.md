@@ -125,7 +125,7 @@
 
 | 日期 | 决策 | 判据 |
 |---|---|---|
-| **10-19** | 走 Track A（AsiaCCS 全量）还是 Track B（只做工程收尾 + arXiv 报告） | Phase 0 完成；用户确认可投入 ≥25 人日 |
+| **10-19** → **2026-10-25 已定：Track A** | 走 Track A（AsiaCCS 全量）还是 Track B（只做工程收尾 + arXiv 报告） | Phase 0 完成；用户确认可投入 ≥25 人日 |
 | **11-20** | Go / No-Go | E1、E3、E4、E6 有真实 JSON；`/claim-verify` 对初稿全部可追溯；无任何 `simulated` 残留 |
 | **12-09** | 投 / 不投 | `/submission-preflight AsiaCCS` 返回 PASS 或 CONDITIONAL PASS |
 

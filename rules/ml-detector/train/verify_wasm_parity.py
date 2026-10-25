@@ -80,6 +80,7 @@ class WasmModel:
         self.mlp_features = ex["mlp_features"]
         self.model_info = ex["model_info"]
         self.free_result = ex["free_result"]
+        self.load_mlp_weights = ex["load_mlp_weights"]
 
     def info(self) -> dict:
         lenp = self.alloc(self.store, 4)
@@ -89,6 +90,18 @@ class WasmModel:
         self.free_result(self.store, ptr, n)
         self.dealloc(self.store, lenp, 4)
         return json.loads(data)
+
+    def load_weights(self, weights_json: str) -> None:
+        """Replace the module's MLP with a weights JSON (per-fold models in E1)."""
+        data = weights_json.encode()
+        ptr = self.alloc(self.store, len(data))
+        try:
+            self.memory.write(self.store, data, ptr)
+            rc = self.load_mlp_weights(self.store, ptr, len(data))
+            if rc != 0:
+                raise RuntimeError(f"load_mlp_weights returned {rc}")
+        finally:
+            self.dealloc(self.store, ptr, len(data))
 
     def _with_sequence(self, seq, fn):
         n = len(seq)
