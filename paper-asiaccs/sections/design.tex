@@ -1,0 +1,9 @@
+\section{Design}
+% Collector (6 hooks, record layout 592 B) -> pipeline (back-pressure queue)
+% -> engine (one long-lived instance per rule; alloc/dealloc/detect ABI;
+% memory cap, fuel, epoch deadline; trap => reinstantiate; zero-capability
+% WASI) -> outputs. Event encodings: JSON vs binary record (sentinel-abi).
+% Rules: suspicious_shell (keyword/port/path), ml_detector (STIDE fast path +
+% MLP deep path on feature set v1; training path train_sequence).
+\label{sec:design}
+TODO

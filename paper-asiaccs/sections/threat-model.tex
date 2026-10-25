@@ -1,0 +1,9 @@
+\section{Threat Model}
+% Adversaries: (A1) the monitored workload (attacker on the host) producing
+% events; (A2) a malicious or buggy detection rule (third-party module).
+% Trusted: kernel, eBPF programs, the host process. Out of scope: kernel
+% exploits, side channels in wasmtime, the collector being disabled by root.
+% State exactly which capabilities a rule has (clock) and lacks (fs, net, env,
+% other rules' memory) -- matches E6's table.
+\label{sec:threat}
+TODO

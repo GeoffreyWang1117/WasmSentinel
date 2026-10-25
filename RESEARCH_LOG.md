@@ -2,6 +2,10 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-25 · 论文骨架 `paper-asiaccs/`
+
+acmart sigconf + anonymous + review，AsiaCCS '27 会议信息占位；九个章节文件只含对应计划 §2 三条主张（C1 成本、C2 隔离、C3 等价与诚实的准确率）的提纲注释，Open Science 附录单独成文件；`CLAIMS.md` 是主张 → 实验 → JSON 的台账；正文数字一律走 `tables/numbers.tex` 宏（`make numbers` 由 `evaluation/scripts/paper_numbers.py` 从结果 JSON 生成）。`make lint` 会抓 "first system / zero-copy / 5x / 485" 这些不许再出现的词。参考文献沿用 DIMVA 稿的 29 条（是 CCS 稿 24 条的超集）。骨架可编译。
+
 ## 2026-10-25 · E4 / E5 驱动器就位（功能验证通过，正式数字等机器空闲）
 
 **E4（`e4_overhead.py`，`make e4`）**：nginx（wrk -t8 -c128）、redis（redis-benchmark SET/GET，pipeline 16）、postgres（pgbench -c16 -j8，客户端在容器里跑，宿主只有 Debian 的 pg_wrapper）三种负载 × {none, wasmsentinel, falco, tetragon} 四臂，容器只发布到 127.0.0.1；每格 5 次交错重复；监控进程的 CPU%/RSS 与整机 CPU 每 0.25 s 采样；输出吞吐 Δ% 与配对 95% CI。`monitors.py` 负责以 root 拉起三套系统（WasmSentinel 走特权容器 chroot 回主机；Falco modern eBPF；Tetragon 带 file-open + tcp-connect 策略）。原稿里 `real_workload_test.py` 的 `monitoring='simulated'` 分支由这个脚本取代。
