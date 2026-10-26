@@ -45,9 +45,10 @@ float32, and we checked with an SMT solver (Z3, over all float32 features
 and finite float64 thresholds) that this preserves every comparison, which
 is why the forest in Wasm reproduces scikit-learn to
 \eOneWasmSklearnMaxDiff{} rather than approximately. The forest is now the
-number we attach to \sys (\eOneAuprcRfWasm{}), it costs no more per event
-than the MLP did (Table~\ref{tab:e3}), and the MLP stays in the module as
-the default the E4 and E5 measurements were taken with. What we claim for
+number we attach to \sys (\eOneAuprcRfWasm{}), it costs less per event
+than the MLP did (Table~\ref{tab:e3}), and it is the module's default deep
+path, the one E4 and E5 were measured with; the MLP stays in the module
+behind an init option. What we claim for
 E1 is still the protocol rather than the number: a reader can swap in the
 next model and get the module's own accuracy for it the same way.
 
@@ -55,7 +56,10 @@ next model and get the module's own accuracy for it the same way.
 E1 scores whole traces offline. The deployed rule scores a sliding window
 on every syscall event and raises a level whenever the score crosses a
 threshold, and on normal ADFA-LD traffic that produces an alert on a
-substantial fraction of events. Turning a per-event score into a
+substantial fraction of events; on the live traffic of E4 it was
+\eFourWsAlertPctNginx{}\% of events under nginx and \eFourWsAlertPctPg{}\%
+under \texttt{pgbench}, whose syscall numbers the ADFA-trained STIDE
+database has never seen. Turning a per-event score into a
 deployable alert needs aggregation over a window or a process lifetime,
 which is a rule-design question we have not evaluated; the E5 detections,
 which are per-event by nature, are unaffected.

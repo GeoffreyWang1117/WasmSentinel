@@ -28,7 +28,7 @@ script that produced it. Timing experiments were run while a user-level LLM
 inference server idled on the same machine (about 2.5 of 32 threads busy);
 we report medians and percentiles over repeated runs rather than best cases.
 \texttt{ml\_detector} carries two deep-path models (\S\ref{sec:design:rules});
-E4 and E5 ran it with its default, the MLP, E1, E2 and E3 report both.
+E1, E2 and E3 report both, E4 and E5 ran its default, the forest.
 
 \subsection{Same model, three implementations (E2)}
 \label{sec:eval:e2}
@@ -106,8 +106,8 @@ we return to this in \S\ref{sec:discussion}. Resident memory stays near
 \eThreeRssMiBBinFiftyK{}~MiB.
 
 The rows marked RF run the same pipeline with \texttt{ml\_detector}'s deep
-path switched to the embedded forest by its init configuration
-(\texttt{--rule-config}). The forest costs \eThreeDetectPFiftyBinTenKRf{}~\si{\micro\second}
+path on the embedded forest rather than the MLP, selected through its init
+configuration (\texttt{--rule-config}). The forest costs \eThreeDetectPFiftyBinTenKRf{}~\si{\micro\second}
 per event at the median against the MLP's \eThreeDetectPFiftyBinTenK{}, and
 the pipeline saturates at \eThreeAchievedBinFiftyKRf{} events/s against
 \eThreeAchievedBinFiftyK{}; the \SI{2}{MiB} image shows in resident memory
@@ -117,7 +117,7 @@ detector of \S\ref{sec:eval:e1} is not the more expensive one to run.
 \begin{table}[t]
 \caption{E3: end-to-end latency and sustained throughput while replaying
 ADFA-LD syscall events through the full pipeline (mean of 3 runs). Model is
-\texttt{ml\_detector}'s deep path, the MLP default or the embedded forest.
+\texttt{ml\_detector}'s deep path, selected by its init configuration.
 At \num{50000} offered events/s the pipeline is saturated and the latency
 columns measure queueing. Produced by \texttt{e3\_throughput.py} from
 \texttt{e3/e3\_results.json}.}
@@ -159,8 +159,8 @@ Table~\ref{tab:e4} is the result. Under nginx, \sys costs
 \eFourDeltaNginxWs{}\% of throughput where Falco costs
 \eFourDeltaNginxFalco{}\% and Tetragon \eFourDeltaNginxTetragon{}\%; under
 redis all three are within a few percent of the baseline; under PostgreSQL
-\sys and Falco cost the same \eFourDeltaPgWs{}\% and
-\eFourDeltaPgFalco{}\% while Tetragon's interval includes zero. The
+\sys and Falco cost about the same, \eFourDeltaPgWs{}\% and
+\eFourDeltaPgFalco{}\%, while Tetragon's interval includes zero. The
 monitor's own footprint separates the systems more than throughput does.
 \sys's resident memory stays between \eFourRssRedisWs{} and
 \eFourRssPgWs{}~MiB against Falco's roughly \eFourRssPgFalco{}~MiB, but its
@@ -168,13 +168,21 @@ CPU under PostgreSQL reaches \eFourCpuPgWs{}\% of a core, against
 \eFourCpuPgFalco{}\% for Falco and \eFourCpuPgTetragon{}\% for Tetragon.
 The reason is the one E3 exposed: \texttt{pgbench} produces a high rate of
 file opens and allow-listed syscalls, every one of them crosses into both
-rules, and \texttt{ml\_detector} recomputes its features per event. Falco
-and Tetragon filter in the kernel and hand user space a fraction of the
-events. This is a design lever, not a sandbox tax
-(\S\ref{sec:discussion}). These runs shared the machine with other
-containers (one-minute load median 15 on 32 threads); the paired design
-absorbs slow drift but not bursts, and we treat the absolute throughputs
-as indicative and the intervals as the result.
+rules, and \texttt{ml\_detector} recomputes its features per event. \sys's
+own pipeline counters make the saturation visible: under \texttt{pgbench}
+it processed \eFourWsEpsPg{} events/s with the JSON encoding, its
+collector dropped \eFourWsDroppedPctPg{}\% of the events the kernel
+delivered, and \eFourWsAlertPctPg{}\% of the processed events raised an
+alert; under nginx and redis it dropped \eFourWsDroppedPctNginx{} and
+\eFourWsDroppedPctRedis{}\%. The throughput cost under PostgreSQL is
+therefore the cost of a monitor running at its limit. Falco and Tetragon
+filter in the kernel and hand user space a fraction of the events. This is
+a design lever, not a sandbox tax (\S\ref{sec:discussion}). These runs shared the machine with the resident
+inference server and other containers (one-minute load 4.7 on 32 threads
+before the first run, a median of 16 during the runs with the workloads
+included); the paired design absorbs slow drift but not bursts, and we
+treat the absolute throughputs as indicative and the intervals as the
+result.
 
 \begin{table*}[t]
 \caption{E4: application throughput under four monitoring arms (mean of 5

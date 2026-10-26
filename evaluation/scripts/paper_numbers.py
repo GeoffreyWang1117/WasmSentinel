@@ -357,6 +357,19 @@ def main():
                     m.add(f"eFourDeltaCiHi{suf}", c["throughput_delta_pct_ci95"][1], "{:+.1f}")
                 m.add(f"eFourCpu{suf}", c["monitor_cpu_pct_mean"], "{:.1f}")
                 m.add(f"eFourRss{suf}", c["monitor_rss_mib_max"], "{:.0f}")
+        # WasmSentinel's own pipeline counters (runs[].monitor), mean over the reps:
+        # processed events/s, share of kernel-delivered events the collector dropped,
+        # share of processed events that raised an alert, detect p50.
+        for wl in e4["summary"]:
+            ms = [r["monitor"] for r in e4["runs"] if r["workload"] == wl and r["arm"] == "wasmsentinel" and r.get("monitor")]
+            if not ms:
+                continue
+            suf = wl_suf.get(wl, wl.title())
+            mean = lambda xs: sum(xs) / len(xs)
+            m.add(f"eFourWsEps{suf}", mean([x["events_per_s"] for x in ms]), "{:,.0f}")
+            m.add(f"eFourWsDroppedPct{suf}", mean([100.0 * x["collector_dropped"] / max(x["collector_received"], 1) for x in ms]), "{:.1f}")
+            m.add(f"eFourWsAlertPct{suf}", mean([100.0 * x["alerts"] / max(x["events"], 1) for x in ms]), "{:.0f}")
+            m.add(f"eFourWsDetectPFifty{suf}", mean([x["detect_us"]["p50"] for x in ms]), "{:.0f}")
     else:
         m.add("eFourDeltaNginxWs", None)
 

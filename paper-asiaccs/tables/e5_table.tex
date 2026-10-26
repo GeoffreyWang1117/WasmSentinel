@@ -4,16 +4,16 @@
 \toprule
 System & Detection & Detected & Med.\ ms & p90 ms & RSS MiB & CPU \% \\
 \midrule
-\sys & read \texttt{/etc/shadow} & 20/20 & 2.9 & 3.2 & 97 & 7.1 \\
+\sys & read \texttt{/etc/shadow} & 20/20 & 2.9 & 3.1 & 104 & 6.9 \\
  & exec from \texttt{/tmp} & 20/20 & 0.8 & 0.9 &  &  \\
- & connect :4444 & 20/20 & 2.3 & 2.7 &  &  \\
+ & connect :4444 & 20/20 & 1.9 & 2.0 &  &  \\
 \addlinespace
-Falco & read \texttt{/etc/shadow} & 20/20 & 2.8 & 3.0 & 371 & 1.2 \\
- & exec from \texttt{/tmp} & 20/20 & 0.7 & 0.7 &  &  \\
- & connect :4444 & 20/20 & 1.8 & 1.9 &  &  \\
+Falco & read \texttt{/etc/shadow} & 20/20 & 2.9 & 3.1 & 369 & 2.5 \\
+ & exec from \texttt{/tmp} & 20/20 & 0.7 & 0.8 &  &  \\
+ & connect :4444 & 20/20 & 1.9 & 1.9 &  &  \\
 \addlinespace
-Tetragon & read \texttt{/etc/shadow} & 20/20 & 2.7 & 3.0 & 154 & 0.8 \\
- & exec from \texttt{/tmp} & 20/20 & 0.8 & 0.8 &  &  \\
+Tetragon & read \texttt{/etc/shadow} & 20/20 & 2.7 & 3.0 & 86 & 0.7 \\
+ & exec from \texttt{/tmp} & 20/20 & 0.7 & 0.8 &  &  \\
  & connect :4444 & 20/20 & 1.7 & 1.8 &  &  \\
 \bottomrule
 \end{tabular}

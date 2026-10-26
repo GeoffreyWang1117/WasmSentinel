@@ -147,10 +147,11 @@ start-up through \texttt{train\_sequence}, provides a cheap novelty check,
 and a model over a 64-dimensional feature vector of the window (counts,
 category histograms, transition statistics; ``feature set v1'') provides
 the score. Two models are embedded at build time and the init
-configuration picks one: a 128-64-32-16 MLP (\num{19201} weights, the
-default) and a random forest of \rfTrees{} trees (\rfNodes{} nodes,
-\rfKiB{}~KiB) stored as a flat table of split features, float32 thresholds
-and child indices that the module walks in place. The module exports
+configuration picks one: a random forest of \rfTrees{} trees (\rfNodes{}
+nodes, \rfKiB{}~KiB), the default, stored as a flat table of split
+features, float32 thresholds and child indices that the module walks in
+place, and the 128-64-32-16 MLP (\num{19201} weights) the module first
+shipped with. The module exports
 \texttt{mlp\_score}/\texttt{load\_mlp\_weights} and
 \texttt{rf\_score}/\texttt{load\_rf\_model}, which is how
 \S\ref{sec:eval:e1} scores every test trace with the module itself and how
