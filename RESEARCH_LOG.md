@@ -2,6 +2,68 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-26 · 默认深路径切到随机森林；E4 / E5 用新默认重跑
+
+用户拍板「默认切到森林，重跑 E4、E5」。依据是 10-25 的 E1（模块内森林 AUPRC 0.897 对 MLP 0.730）与 E3（森林臂每事件更便宜：binary@10K detect p50 58 对 70 µs，饱和吞吐 +17%）。
+
+**改动**（代码提交见本条之后的提交记录）
+
+- `rules/ml-detector`：`HybridConfig::default().model` 从 `"mlp"` 改为 `"rf"`；`init` 不给配置或 `{"model":"rf"}` 都走森林，`{"model":"mlp"}` 切回 MLP；`model_info.default_model` 随之为 `rf`。部署里深路径分数不单独过阈值（`0.4 × STIDE + 0.6 × 深路径` 再映射威胁等级），所以换默认不涉及阈值选择；E1 里森林的折内 F1 最优阈值 0.59 ± 0.02、FPR-5 阈值 0.08 记在 MODEL.md 供参考。模块 `rules/wasm/ml_detector.wasm` sha256 `699e337f…`（2,526,806 B）。
+- 测试：`config_selects_the_deep_path_model` 断言空配置 → `rf`、`{"model":"mlp"}` → `mlp`；`test_init` 的合法配置改为 `mlp`；host `TestRealMLDetectorInitConfig` 改为用 `{"model":"mlp"}` 走非默认路径。`make build && make test` 全过；`make parity` 重跑（MLP 1,400 输入 max diff 1.97e-6、森林 28 例 2.78e-8、`default_model: rf`），`evaluation/results/2026-11/parity/parity.txt` 更新。
+- 端到端确认：无配置回放 20,000 条 ADFA 攻击事件（binary，5K eps），detect p50 65 µs、12,072 条告警、无错误。
+- `e3_throughput.py` 两个模型都显式写 `--rule-config`（不再依赖模块默认），已提交的 E3 结果（3e804a6，当时默认是 MLP）不受影响；E4 / E5 脚本的 provenance 新增 `wasm_sha256`。
+- 文档：README `--rule-config` 行、`rules/wasm/README.md`、`host/cmd/main.go` 帮助、`engine.go` 注释、MODEL.md。
+
+**E4 重跑**：`make e4` 02:24–02:48 本地（09:24–09:48Z）；commit 2055159（代码改动在其后提交），模块 sha256 `699e337f…`（provenance 新增 `wasm_sha256`）。配置同上次：nginx / redis / postgres × {none, wasmsentinel, falco, tetragon}，每格 5 次交错、20 s；WasmSentinel 两条规则、JSON 编码、ml_detector 默认深路径 = 森林。
+
+| 负载 | 臂 | 吞吐（均值 ± 标准差） | Δ vs none | 95% CI | 监控 CPU % | 监控 RSS 峰值 (MiB) |
+|---|---|---|---|---|---|---|
+| nginx | none | 170,989 ± 5,499 req/s | — | — | — | — |
+| nginx | wasmsentinel | 163,376 ± 5,542 | **−4.4%** | [−6.4, −2.5] | 16.8 | 153 |
+| nginx | falco | 155,239 ± 8,586 | −9.2% | [−12.9, −5.6] | 80.8 | 367 |
+| nginx | tetragon | 140,880 ± 5,595 | −17.5% | [−23.4, −11.6] | 277.6 | 201 |
+| redis | none | 948,485 ± 15,491 ops/s | — | — | — | — |
+| redis | wasmsentinel | 914,511 ± 27,968 | −3.6% | [−7.2, +0.0] | 9.7 | 142 |
+| redis | falco | 900,656 ± 15,590 | −5.0% | [−8.1, −1.9] | 8.0 | 371 |
+| redis | tetragon | 936,621 ± 12,701 | −1.2% | [−3.2, +0.8] | 7.6 | 95 |
+| postgres | none | 25,217 ± 1,379 tps | — | — | — | — |
+| postgres | wasmsentinel | 22,857 ± 667 | −9.2% | [−12.5, −6.0] | **163.0** | 180 |
+| postgres | falco | 22,964 ± 646 | −8.6% | [−17.2, −0.0] | 81.5 | 366 |
+| postgres | tetragon | 25,129 ± 685 | −0.1% | [−7.8, +7.6] | 19.1 | 119 |
+
+WasmSentinel 管道自身计数（`runs[].monitor`，5 次均值），与 10-25 的 MLP 默认对照：
+
+| 负载 | 默认模型 | 处理 eps | 采集器丢弃 | 告警 / 已处理事件 | detect p50 (µs) | e2e p50 |
+|---|---|---|---|---|---|---|
+| nginx | MLP（10-25） | 2,798 | 0% | 30% | 15 | 2.3 ms |
+| nginx | **森林（10-26）** | 2,288 | 0.8% | 39% | 17 | 1.6 ms |
+| redis | MLP | 1,930 | 0% | 11% | 8 | 0.4 ms |
+| redis | **森林** | 2,191 | 0% | 15% | 9 | 2.5 ms |
+| postgres | MLP | 7,797 | **66%** | 94% | 99 | 2.45 s |
+| postgres | **森林** | **12,401** | **45%** | 96% | **55** | 1.50 s |
+
+- **吞吐 Δ 与上次几乎一样**：nginx −4.4% / −9.2% / −17.5%（上次 −4.4 / −9.2 / −16.6），redis −3.6 / −5.0 / −1.2（上次 −3.4 / −4.2 / −1.5），postgres −9.2 / −8.6 / −0.1（上次 −10.0 / −10.2 / −1.9）。redis 臂 WS 的 CI 上界碰到 0；postgres 臂 Falco 的 CI 也碰到 0（Falco 5 次里有一次掉得少）。结论不变：WS 与 Falco 同量级，nginx 上更低。
+- **森林让饱和的管道多处理 59% 的事件**：pgbench 下 WS 的采集器仍然丢事件（这是上次也有、但上次日志没写出来的事实：MLP 默认丢 66%），森林默认 detect p50 从 99 降到 55 µs，处理速率 7.8K → 12.4K eps，丢弃率 66% → 45%，e2e 队列延迟 2.45 → 1.50 s。监控 CPU 150% → 163%、RSS 156 → 175 MiB 是因为同样饱和的管道干了更多活。**论文 E4 段新增一句把这个饱和写出来**（WS 对 postgres 的 −9.2% 是"监控器在极限运行时"的成本），Discussion 的 per-event alerting 段加上 E4 实测告警率。
+- **告警率 95%**：pgbench 的 syscall 事件几乎每条都告警——ADFA 训练的 STIDE 库对 x86-64 syscall 号全是"新颖"，深路径对每条事件都跑，森林对这些分布外窗口给高分。MLP 默认时是 94%，与模型无关，是规则设计（已有 Discussion 段）。nginx / redis 的告警率 39% / 15%（上次 30% / 11%），同样是 file_open 事件进 suspicious_shell 与 syscall 事件进 ml_detector 的叠加。
+- **RSS 峰值 142–180 MiB（上次 97–161）大半不是森林的**：nginx rep 2 与 redis rep 2 各有一次事件突发（95,839 / 60,962 条事件，是其他 rep 的 2–4 倍，file_open 占绝大多数，来自同机的 autogen 代码执行容器——WS 采集的是整机），队列堆高把 RSS 推到 147 / 142 MiB，其余 rep 103–112 MiB（上次 96–107，+7 MiB 与 E5 一致，是 2.2 MB 森林图加 wasmtime 编译后的代码）。表里报的是 5 次的峰值，论文措辞是"peak"。
+- **机器状态**：起跑前 1 分钟负载 4.7；跑的时候 52 个采样中位 16.5、最高 49.6（包含被测负载本身：wrk / pgbench 把负载推到 20–30）；vLLM 两张卡 100%、5 个 autogen 容器常驻。与上次（中位 15）同一量级，仍不是空机。
+
+
+**E5 重跑**：`make e5` 02:48–02:50 本地；同一 commit 与模块。
+
+| 系统 | 场景 | 检出 | 延迟中位 (ms) | p90 | RSS 峰值 (MiB) | 试验期间 CPU % |
+|---|---|---|---|---|---|---|
+| wasmsentinel | shadow / tmpexec / connect | 20/20 · 20/20 · 20/20 | 2.9 · 0.8 · 1.9 | 3.1 · 0.9 · 2.0 | 104 | 6.9 |
+| falco | 同上 | 20/20 · 20/20 · 20/20 | 2.9 · 0.7 · 1.9 | 3.1 · 0.8 · 1.9 | 369 | 2.5 |
+| tetragon | 同上 | 20/20 · 20/20 · 20/20 | 2.7 · 0.7 · 1.7 | 3.0 · 0.8 · 1.8 | 86 | 0.7 |
+
+- 与上次一致：三系统三场景全部 20/20，延迟 0.7–2.9 ms 同量级（WS connect 场景从 2.3 降到 1.9，与 Falco 相同）。RSS WS 104（上次 97，+7 MiB 森林）、Falco 369、Tetragon 86（上次 154，Tetragon 这次低了一半——它的 RSS 随策略与运行时长变化，论文只说排序）。CPU 6.9 / 2.5 / 0.7%（上次 7.1 / 1.2 / 0.8），WS 最高的原因同 E4。
+
+
+**论文**：Setup 改为「E1/E2/E3 两个模型都报，E4/E5 用默认（森林）」；design 把森林列为默认；discussion 的「MLP 仍是默认」改为「森林是默认深路径，E4/E5 据此测量，MLP 留在模块里由 init 选项切换」；E4/E5 段落数字全部走宏自动更新，定性句子按新数字核对。
+
+**CLAIMS**：C1.4、C1.5 更新为新数字（默认森林）；C3.4 注明默认。
+
 ## 2026-10-25 · RF-in-Wasm 完成：森林嵌入模块、E1 加 `wasmsentinel_rf` 臂，E1 / E2 / E3 重跑
 
 用户拍板「做 RF-in-Wasm，给 E1 加 rf_wasm 臂」。实现见 fd8097d（森林 + E1 臂）、d549f3c（host `--rule-config`、严格 `init`、E2/E3 森林臂）、3e804a6（论文宏网格）；结果与论文见本条之后的提交。

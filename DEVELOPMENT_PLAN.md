@@ -168,8 +168,8 @@
 | E1 ✅ 2026-10-25（重跑含模块内 RF 臂：Wasm 森林 0.897 = sklearn 森林，MLP 0.730 AUPRC，`make e1`） | 检测准确率（ADFA-LD） | 推理跑在 **Wasm 模块**上（Python wasmtime 或 host 回放模式）。5-fold × 3 seeds，报 **PR 曲线 + AUPRC**，明示工作点（如 FPR ≤ 5% 下的 recall）。baseline：STIDE/n-gram、Isolation Forest 或 one-class SVM（替换崩掉的 autoencoder；若保留 AE，必须只用 normal 训练并在验证集选阈值）、Random Forest、训满并早停的 LSTM。配对检验按 fold 做，报 CI。 | ✅ |
 | E2 ✅ 2026-10-25（重跑含森林：MLP 三路 max diff 1.9e-6、森林 3.0e-8，引擎 2.1 µs，`make e2`） | Wasm vs native 一致性与单次推理开销 | 同一模型 NumPy / 原生 Rust / Wasm 三路输出一致；Wasm 内推理延迟与 host 调用开销分开报；吞吐 | ✅ |
 | E3 ✅ 2026-10-25（重跑含森林臂：可持续 MLP 18.3K/15.1K、森林 21.4K/17.0K eps，`make e3`） | 端到端延迟与吞吐 | eBPF 事件 → 告警；JSON 臂 vs 零拷贝臂；1K / 10K / 50K events/s；P50/P99/P999 | ✅ |
-| E4 ✅ 2026-10-25（nginx −4.4% / Falco −9.2% / Tetragon −16.6%，`make e4`；机器有后台负载） | 系统开销（真实监控臂） | nginx(wrk) / redis(redis-benchmark) / postgres(pgbench) × {无监控, WasmSentinel, Falco, Tetragon}，每格 ≥5 次；报吞吐 Δ、CPU%、RSS 与 CI。`real_workload_test.py` 的 `simulated` 分支删除 | ✅（Tetragon 列可砍）|
-| E5 ✅ 2026-10-25（三系统 3×20/20，延迟 0.7–2.9 ms，`make e5`） | Falco/Tetragon 公平对比 | 同一规则集（读 `/etc/shadow`、`/tmp` 可执行、反弹 shell 序列）在三系统实现；真实检出、延迟、内存采样 | ⚠️ 可缩到只对 Falco |
+| E4 ✅ 2026-10-26 重跑（默认森林：nginx −4.4% / Falco −9.2% / Tetragon −17.5%，`make e4`；机器有 vLLM 与其他容器） | 系统开销（真实监控臂） | nginx(wrk) / redis(redis-benchmark) / postgres(pgbench) × {无监控, WasmSentinel, Falco, Tetragon}，每格 ≥5 次；报吞吐 Δ、CPU%、RSS 与 CI。`real_workload_test.py` 的 `simulated` 分支删除 | ✅（Tetragon 列可砍）|
+| E5 ✅ 2026-10-26 重跑（默认森林：三系统 3×20/20，延迟 0.7–2.9 ms，`make e5`） | Falco/Tetragon 公平对比 | 同一规则集（读 `/etc/shadow`、`/tmp` 可执行、反弹 shell 序列）在三系统实现；真实检出、延迟、内存采样 | ⚠️ 可缩到只对 Falco |
 | E6 ✅ 2026-10-18（11/11，`make isolation`） | 沙箱隔离 | 真实编译 7 个恶意 Wasm 模块（读文件、连网、死循环、内存炸、spawn、越界访问、读 host 内存），在 host 里加载，记录 trap/fuel/limit 日志；写成 CI 测试长期存在。`sandbox_isolation_test.py` 的硬编码字典删除 | ✅ |
 | E7 | 现代攻击 | 现有模拟脚本如实称为 syscall-pattern replay；若时间允许在容器里跑真实 PoC | 可砍 |
 | E8 | 第二数据集 | LID-DS 2021 真实录制或 CB-DS；做不到就在 Limitations 写明单数据集 | 可砍 |
