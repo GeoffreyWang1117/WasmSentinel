@@ -6,10 +6,12 @@ Measurement & Unit of work & Median \\
 \midrule
 Host engine, empty guest & one call & 2.1~\si{\micro\second} \\
 \texttt{ml\_detector}, JSON event & one process event & 10.2~\si{\micro\second} \\
-\texttt{ml\_detector}, binary event & one process event & 4.6~\si{\micro\second} \\
+\texttt{ml\_detector}, binary event & one process event & 4.4~\si{\micro\second} \\
 \midrule
-Native Rust, whole trace & one trace (343 syscalls) & 26.0~\si{\micro\second} \\
-Wasm via wasmtime-py (+Python call) & one trace & 126.3~\si{\micro\second} \\
-NumPy reference & one trace & 164.6~\si{\micro\second} \\
+Native Rust, MLP & one trace (343 syscalls) & 23.8~\si{\micro\second} \\
+Wasm via wasmtime-py (+Python call), MLP & one trace & 127.4~\si{\micro\second} \\
+NumPy reference, MLP & one trace & 165.7~\si{\micro\second} \\
+Native Rust, forest & one trace & 19.5~\si{\micro\second} \\
+Wasm via wasmtime-py (+Python call), forest & one trace & 132.6~\si{\micro\second} \\
 \bottomrule
 \end{tabular}

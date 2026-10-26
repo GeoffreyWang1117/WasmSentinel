@@ -27,10 +27,12 @@ module, library versions, timestamp), and each table caption names the
 script that produced it. Timing experiments were run while a user-level LLM
 inference server idled on the same machine (about 2.5 of 32 threads busy);
 we report medians and percentiles over repeated runs rather than best cases.
+\texttt{ml\_detector} carries two deep-path models (\S\ref{sec:design:rules});
+E4 and E5 ran it with its default, the MLP, E1, E2 and E3 report both.
 
 \subsection{Same model, three implementations (E2)}
 \label{sec:eval:e2}
-The detector that ships in \sys is a 128-64-32-16 MLP over the 64-dimensional
+The MLP that ships in \sys is a 128-64-32-16 network over the 64-dimensional
 ``v1'' feature set computed from a window of syscall numbers
 (\S\ref{sec:impl}). We built it three times from the same weights: the NumPy
 reference used for training, a native Rust build of the rule crate, and the
@@ -39,6 +41,12 @@ largest absolute score difference is \eTwoMaxDiffNumpyWasm{} between NumPy
 and Wasm and \eTwoMaxDiffNativeWasm{} between native and Wasm; at the
 deployed threshold every one of the \eTwoTraces{} decisions agrees. The
 residual is single-precision accumulation order, not a semantic difference.
+The embedded forest (\rfTrees{} trees, \rfNodes{} nodes) gets the same
+three-way check, with a NumPy reader of the forest image in place of the
+training code: \eTwoRfMaxDiffNumpyWasm{} between the reader and Wasm,
+\eTwoRfMaxDiffNativeWasm{} between native and Wasm; the image itself was
+checked against scikit-learn's \texttt{predict\_proba} when it was
+exported (\rfExporterMaxDiff{} over the same traces).
 
 Table~\ref{tab:e2} gives the per-call cost. The host engine's own overhead,
 measured with a guest that returns immediately, is \eTwoEngineOverheadUs{}~\si{\micro\second}
@@ -47,7 +55,8 @@ per invocation. The real rule on one process event costs
 \eTwoMlRawUs{}~\si{\micro\second} when it is passed as the fixed-layout
 binary record (\S\ref{sec:design:wire}); the difference is JSON parsing inside
 the guest. Scoring an entire trace (median \eTwoTraceLen{} syscalls) costs
-\eTwoUsPerCallNative{}~\si{\micro\second} in native Rust; the
+\eTwoUsPerCallNative{}~\si{\micro\second} in native Rust with the MLP and
+\eTwoUsPerCallNativeRf{}~\si{\micro\second} with the forest; the
 wasmtime-py and NumPy rows are dominated by the Python call path and are
 shown only to make the point that the \emph{model} is cheap everywhere.
 
@@ -90,16 +99,26 @@ together take \eThreeDetectPFiftyBinTenK{}~\si{\micro\second} at the median,
 an order of magnitude more than the \eTwoMlRawUs{}~\si{\micro\second} E2
 measured for a process event. The difference is not the sandbox but the
 rule: for every syscall event \texttt{ml\_detector} recomputes the v1
-feature vector over its 100-event window and runs the MLP, and the feature
+feature vector over its 100-event window and runs the model, and the feature
 pass dominates. Incremental feature maintenance would remove most of it;
 we return to this in \S\ref{sec:discussion}. Resident memory stays near
 \eThreeRssMiBBinTenK{}~MiB until saturation, where the queue grows it to
 \eThreeRssMiBBinFiftyK{}~MiB.
 
+The rows marked RF run the same pipeline with \texttt{ml\_detector}'s deep
+path switched to the embedded forest by its init configuration
+(\texttt{--rule-config}). The forest costs \eThreeDetectPFiftyBinTenKRf{}~\si{\micro\second}
+per event at the median against the MLP's \eThreeDetectPFiftyBinTenK{}, and
+the pipeline saturates at \eThreeAchievedBinFiftyKRf{} events/s against
+\eThreeAchievedBinFiftyK{}; the \SI{2}{MiB} image shows in resident memory
+as \eThreeRssMiBBinTenKRf{} against \eThreeRssMiBBinTenK{}~MiB. The better
+detector of \S\ref{sec:eval:e1} is not the more expensive one to run.
+
 \begin{table}[t]
 \caption{E3: end-to-end latency and sustained throughput while replaying
-ADFA-LD syscall events through the full pipeline (mean of 3 runs). At
-\num{50000} offered events/s the pipeline is saturated and the latency
+ADFA-LD syscall events through the full pipeline (mean of 3 runs). Model is
+\texttt{ml\_detector}'s deep path, the MLP default or the embedded forest.
+At \num{50000} offered events/s the pipeline is saturated and the latency
 columns measure queueing. Produced by \texttt{e3\_throughput.py} from
 \texttt{e3/e3\_results.json}.}
 \label{tab:e3}
@@ -111,8 +130,8 @@ columns measure queueing. Produced by \texttt{e3\_throughput.py} from
 \centering
 \includegraphics[width=.85\textwidth]{figures/e3_latency_throughput}
 \caption{E3: end-to-end latency (left, log--log) and achieved throughput
-(right) per offered rate. \texttt{plot\_e3.py} from
-\texttt{e3/e3\_results.json}.}
+(right) per offered rate, MLP deep path; the forest rows are in
+Table~\ref{tab:e3}. \texttt{plot\_e3.py} from \texttt{e3/e3\_results.json}.}
 \label{fig:e3}
 \end{figure*}
 
@@ -237,45 +256,58 @@ Produced by \texttt{go test ./internal/engine -run Adversarial} from
 We evaluate on ADFA-LD~\cite{adfa-ld}: \eOneNormal{} normal and
 \eOneAttack{} attack traces from six attack families. The protocol is
 stratified \eOneFolds-fold cross-validation repeated with \eOneSeeds{} seeds.
-For \sys, the MLP is trained per fold in NumPy, its weights are loaded into
-the compiled module through the \texttt{load\_mlp\_weights} export, and
-\emph{every test score is produced by the module's} \texttt{mlp\_score}
-export; the largest Wasm--NumPy score difference across all folds is
-\eOneWasmNumpyMaxDiff{}. Baselines are a STIDE 6-gram novelty detector
-trained on normal traces only~\cite{stide}, an Isolation Forest on the same
-v1 features trained on normal traces only, a Random Forest on the same
-features (supervised), and an LSTM on the raw syscall sequence (supervised,
-early stopping on a held-out part of the training fold)~\cite{kim-lstm}.
-Operating points are fixed on the training fold (the 95th percentile of the
-training normal scores, i.e.\ a nominal \SI{5}{\percent} FPR) and reported
-on the test fold. We report AUPRC because the classes are imbalanced
-(\SI{12.5}{\percent} attacks), and paired AUPRC differences across the 15
-(seed, fold) runs with a $t$-interval and a Wilcoxon test; the runs share
-data across seeds, so the intervals are optimistic.
+\sys enters twice, once per model the module carries. For the MLP, the
+network is trained per fold in NumPy and its weights are loaded into the
+compiled module through \texttt{load\_mlp\_weights}; for the forest, a
+scikit-learn random forest (300 trees, balanced class weights) is trained
+per fold, serialised into the module's forest image and loaded through
+\texttt{load\_rf\_model}. In both arms \emph{every test score is produced by
+the module} (\texttt{mlp\_score}, \texttt{rf\_score}). The largest
+difference from the reference implementation across all folds is
+\eOneWasmNumpyMaxDiff{} for the MLP and \eOneWasmSklearnMaxDiff{} for the
+forest; the forest's exporter rounds each threshold down to the nearest
+float32, which preserves every comparison scikit-learn makes on float32
+features (\S\ref{sec:appendix:baselines}). Baselines are a STIDE 6-gram
+novelty detector trained on normal traces only~\cite{stide}, an Isolation
+Forest on the same v1 features trained on normal traces only, the same
+random forest scored by scikit-learn (the forest arm's reference), and an
+LSTM on the raw syscall sequence (supervised, early stopping on a held-out
+part of the training fold)~\cite{kim-lstm}. Operating points are fixed on
+the training fold (the 95th percentile of the training normal scores, i.e.\
+a nominal \SI{5}{\percent} FPR) and reported on the test fold. We report
+AUPRC because the classes are imbalanced (\SI{12.5}{\percent} attacks), and
+paired AUPRC differences against the forest in Wasm across the 15 (seed,
+fold) runs with a $t$-interval and a Wilcoxon test; the runs share data
+across seeds, so the intervals are optimistic.
 
-Table~\ref{tab:e1} and Figure~\ref{fig:e1-pr} give the result. The
-sandboxed MLP reaches an AUPRC of \eOneAuprcMlp{} $\pm$ \eOneAuprcStdMlp{},
-clearly above both unsupervised baselines
-(\eOneDiffStide{} over STIDE, \eOneDiffIForest{} over Isolation Forest) and
-clearly \emph{below} both supervised baselines: the Random Forest on the same
-features is better by \eOneDiffRf{} AUPRC
-(95\% CI [\eOneDiffCiLoRf{}, \eOneDiffCiHiRf{}]) and the LSTM by
-\eOneDiffLstm{} ([\eOneDiffCiLoLstm{}, \eOneDiffCiHiLstm{}]). At a
+Table~\ref{tab:e1} and Figure~\ref{fig:e1-pr} give the result. The forest
+inside the module reaches an AUPRC of \eOneAuprcRfWasm{} $\pm$
+\eOneAuprcStdRfWasm{}, the same number to three decimals as the same forest
+in scikit-learn (the paired difference is \eOneDiffVsRfRf{} on every fold),
+above the LSTM by \eOneDiffVsRfLstm{} (95\% CI [\eOneDiffVsRfCiLoLstm{},
+\eOneDiffVsRfCiHiLstm{}]) and far above both unsupervised baselines
+(\eOneDiffVsRfStide{} over STIDE, \eOneDiffVsRfIForest{} over Isolation
+Forest). The MLP, on the same features and in the same module, reaches
+\eOneAuprcMlp{} $\pm$ \eOneAuprcStdMlp{}, \eOneDiffVsRfMlp{} below the
+forest ([\eOneDiffVsRfCiLoMlp{}, \eOneDiffVsRfCiHiMlp{}]); at a
 \SI{1}{\percent} FPR the gap widens (recall \eOneRecallFprOneMlp{} vs.\
-\eOneRecallFprOneRf{} for the forest). Per-family recall
-(Table~\ref{tab:e1-family}) shows the MLP weakest on \texttt{Web\_Shell} and
-\texttt{Meterpreter}. We draw two conclusions. First, the number a reader
-should attach to \sys's shipped detector is \eOneAuprcMlp{}, and it is the
-number the sandboxed module produces, not a number from a notebook. Second,
-the MLP is not the best model for these features; a tree ensemble is, and
-nothing in the sandbox prefers one over the other
-(\S\ref{sec:discussion}).
+\eOneRecallFprOneRfWasm{}). Per-family recall (Table~\ref{tab:e1-family})
+puts the forest's weakest family at \texttt{Web\_Shell}
+(\eOneFamWebShellRfWasm{}), where the MLP reaches \eOneFamWebShellMlp{}. We
+draw two conclusions. First, the number a reader should attach to \sys's
+detector is \eOneAuprcRfWasm{}, and it is the number the sandboxed module
+produces through the same code path the daemon runs, not a number from a
+notebook. Second, the sandbox did not care which model it ran: the forest
+was added after the MLP had been measured (\S\ref{sec:discussion}), is a
+table of \rfNodes{} thresholds and child indices rather than
+\num{19201} weights, and its per-event cost in the pipeline is reported next
+to the MLP's in Table~\ref{tab:e3}.
 
 \begin{table*}[t]
 \caption{E1: ADFA-LD, \eOneFolds-fold $\times$ \eOneSeeds{} seeds (mean,
 $\pm$ std for AUPRC). R@$x$\% is recall at a nominal $x$\% FPR fixed on the
-training fold. $\Delta$AUPRC is \sys minus the baseline with a 95\% CI over
-the 15 paired runs. Produced by \texttt{e1\_adfa\_eval.py} from
+training fold. $\Delta$AUPRC is \sys RF (Wasm) minus the model with a 95\%
+CI over the 15 paired runs. Produced by \texttt{e1\_adfa\_eval.py} from
 \texttt{e1/e1\_results.json}.}
 \label{tab:e1}
 \centering\footnotesize
@@ -293,7 +325,8 @@ over runs). Same source as Table~\ref{tab:e1}.}
 \begin{figure}[t]
 \centering
 \includegraphics[width=\linewidth]{figures/e1_pr_curves}
-\caption{E1: mean precision--recall curves with the across-run band.
+\caption{E1: mean precision--recall curves with the across-run band. The
+scikit-learn forest coincides with the forest in Wasm and is not drawn.
 \texttt{plot\_e1.py} from \texttt{e1/e1\_pr\_curves.json}.}
 \label{fig:e1-pr}
 \end{figure}

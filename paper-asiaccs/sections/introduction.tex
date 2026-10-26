@@ -33,7 +33,8 @@ hands each one to every rule through a five-function ABI; a rule is a Wasm
 module that returns a severity. Two rules ship with it: a pattern rule of
 the kind one writes in Falco's filter language, and a syscall-sequence
 detector that combines a STIDE $n$-gram database~\cite{stide} with a
-small MLP whose weights are embedded at build time. The design choices
+model over a window of syscall numbers, a small MLP or a random forest,
+both embedded at build time. The design choices
 that affect the measurement are few: one long-lived instance per rule,
 limits attached to the instance's store, a trapped rule dropped and
 re-instantiated, and a choice between a JSON encoding of the event and the
@@ -69,15 +70,18 @@ it.
   and the one case the runtime classifies less precisely than we would
   like.
 \item \textbf{Equivalence (E1--E2).} The module the daemon loads produces,
-  to within \eTwoMaxDiffNumpyWasm{}, the same score as the reference
-  implementation that was trained, on all \eTwoTraces{} ADFA-LD traces.
-  Because of that, the accuracy we report is the module's own: every test
-  score in a \eOneFolds-fold, \eOneSeeds-seed evaluation is produced
-  inside the sandbox. That accuracy is an AUPRC of \eOneAuprcMlp{},
-  above STIDE and an Isolation Forest and \emph{below} a random forest
-  (\eOneAuprcRf{}) and an LSTM (\eOneAuprcLstm{}) on the same data. We
-  say so because the point of E1 is the protocol, and because nothing in
-  the sandbox prefers the weaker model.
+  to within \eTwoMaxDiffNumpyWasm{} for its MLP and
+  \eOneWasmSklearnMaxDiff{} for its random forest, the same scores as the
+  reference implementations that were trained, on all \eTwoTraces{}
+  ADFA-LD traces. Because of that, the accuracy we report is the module's
+  own: every test score in a \eOneFolds-fold, \eOneSeeds-seed evaluation
+  is produced inside the sandbox. With the forest that accuracy is an
+  AUPRC of \eOneAuprcRfWasm{}, above an LSTM (\eOneAuprcLstm{}), STIDE and
+  an Isolation Forest; with the MLP the module first shipped with it is
+  \eOneAuprcMlp{}. The forest went into the module after the MLP's number
+  was known, through the same protocol, and the point of E1 is that
+  protocol: the number is the sandboxed artifact's, whichever model it
+  carries.
 \end{enumerate}
 
 We do not claim that \sys is the earliest system to combine eBPF and

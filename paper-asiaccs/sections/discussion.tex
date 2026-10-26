@@ -31,19 +31,25 @@ it gained nothing. Encodings matter only when the rule consumes them
 directly, which argues for giving rule authors a field-access library
 (\texttt{EventFields}) rather than a format.
 
-\paragraph{The sandbox is model-agnostic; the paper's model is not the
-best one.}
-E1 is the result we most expected readers to question, so we state it
-plainly: on the same 64 features, a random forest reaches an AUPRC of
-\eOneAuprcRf{} where the shipped MLP reaches \eOneAuprcMlp{}, and an LSTM
-on the raw sequence reaches \eOneAuprcLstm{}. Nothing in \sys prefers the
-MLP. A tree ensemble is a table of thresholds and child indices, which is
-easier to embed in a Wasm module than a neural network and cheaper to
-evaluate; the same \texttt{load\_mlp\_weights}/\texttt{mlp\_score} protocol
-that let E1 score every test trace inside the module would carry it. The
-reason the MLP is in the paper is that it is what the system shipped, and
-the contribution we claim for E1 is the protocol---the number reported is
-the module's number---rather than the number itself.
+\paragraph{The sandbox is model-agnostic, and the protocol showed it.}
+The first version of this evaluation shipped only the MLP, and E1 said
+plainly that a random forest on the same 64 features was the better model
+(\eOneAuprcRf{} against \eOneAuprcMlp{}). Because the evaluation already
+scored every trace through the module, replacing the model was a matter of
+giving the module a second loader: a tree ensemble is a table of thresholds
+and child indices, \rfNodes{} of them here in \rfKiB{}~KiB, walked in
+place from the module's data segment. The one subtlety is numeric.
+scikit-learn stores thresholds in float64 and compares float32 features
+against them; the exporter rounds each threshold down to the nearest
+float32, and we checked with an SMT solver (Z3, over all float32 features
+and finite float64 thresholds) that this preserves every comparison, which
+is why the forest in Wasm reproduces scikit-learn to
+\eOneWasmSklearnMaxDiff{} rather than approximately. The forest is now the
+number we attach to \sys (\eOneAuprcRfWasm{}), it costs no more per event
+than the MLP did (Table~\ref{tab:e3}), and the MLP stays in the module as
+the default the E4 and E5 measurements were taken with. What we claim for
+E1 is still the protocol rather than the number: a reader can swap in the
+next model and get the module's own accuracy for it the same way.
 
 \paragraph{Per-event alerting is not an operating point.}
 E1 scores whole traces offline. The deployed rule scores a sliding window

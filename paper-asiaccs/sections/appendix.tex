@@ -50,9 +50,9 @@ frequencies of the ten most common bigrams; and ten statistics (scaled
 length, distinct ratio, normalised entropy, peak-to-mean count, a dangerous
 flag, repetition and ordering counts). Eighteen of the 64 slots are unused
 and always zero; the category sets mix syscall numberings from different
-ABIs, which we keep verbatim because the trained weights depend on them.
-Both facts are recorded in the module's source and are part of why
-\S\ref{sec:eval:e1} does not present the MLP as a strong detector.
+ABIs, which we keep verbatim because both trained models depend on them.
+Both facts are recorded in the module's source; the forest reaches its
+accuracy on these features as they are.
 
 \subsection{Baselines and training (E1)}
 \label{sec:appendix:baselines}
@@ -69,9 +69,19 @@ negated anomaly score. \textbf{Random Forest}: scikit-learn, 300 trees,
 balanced class weights, on v1 features. \textbf{LSTM}: embedding of size
 32, one LSTM layer of 64 units, sequences truncated to 1,000 syscalls,
 Adam at $10^{-3}$, batch 128, up to 40 epochs with patience 5 on the same
-validation split (36,097 parameters). Operating points: the 95th
-percentile of the training fold's normal scores (nominal \SI{5}{\percent}
-FPR) and the F1-optimal threshold on the training fold. Seeds control fold
-assignment and model initialisation; the three seeds re-shuffle the same
-5,951 traces, so the 15 runs are not independent and the confidence
-intervals in Table~\ref{tab:e1} are optimistic.
+validation split (36,097 parameters). \textbf{\sys RF}: the Random Forest
+of the same (seed, fold), serialised by \texttt{forest\_export.py} into the
+module's image (depth-first nodes of 12 bytes: split feature, float32
+threshold or leaf probability, right-child index; the left child is the
+next node) and scored through \texttt{rf\_score}. Each float64 threshold
+$t$ is stored as the largest float32 $\le t$; for every float32 $x$,
+$x \le t$ iff $x \le \mathrm{floor}_{32}(t)$, and the rounding the exporter
+implements equals that floor for finite $|t| < 3\cdot10^{38}$. Both
+statements were discharged by Z3 as floating-point SMT problems (the files
+are in the repository), so the only difference from scikit-learn is the
+float32 storage of leaf probabilities, averaged in float64. Operating
+points: the 95th percentile of the training fold's normal scores (nominal
+\SI{5}{\percent} FPR) and the F1-optimal threshold on the training fold.
+Seeds control fold assignment and model initialisation; the three seeds
+re-shuffle the same 5,951 traces, so the 15 runs are not independent and
+the confidence intervals in Table~\ref{tab:e1} are optimistic.

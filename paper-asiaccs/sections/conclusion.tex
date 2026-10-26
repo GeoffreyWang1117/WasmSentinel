@@ -11,8 +11,9 @@ PostgreSQL in the same range as Falco's. It holds: ten adversarial modules
 in eleven attempts were contained by memory, fuel and deadline limits with
 their neighbours unaffected. And it makes a claim checkable that is
 usually taken on faith: the detector the system runs is, to
-\eTwoMaxDiffNumpyWasm{}, the detector that was evaluated, which is how we
-can report that its accuracy on ADFA-LD is an AUPRC of \eOneAuprcMlp{},
-and that a random forest on the same features does better. The remaining
-cost is in the rules, not the sandbox, and we have named the two levers
-that move it.
+\eTwoMaxDiffNumpyWasm{} for the MLP and \eOneWasmSklearnMaxDiff{} for the
+forest, the detector that was evaluated, which is how we can report that
+\sys's accuracy on ADFA-LD is an AUPRC of \eOneAuprcRfWasm{} with the forest
+and \eOneAuprcMlp{} with the MLP it first shipped with, and how the better
+model got into the module in a day. The remaining cost is in the rules, not
+the sandbox, and we have named the two levers that move it.

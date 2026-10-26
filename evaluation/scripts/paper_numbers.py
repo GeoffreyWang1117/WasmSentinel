@@ -76,7 +76,12 @@ def write_tables(tables_dir, e1, e2, iso, e3=None, e4=None, e5=None):
             if not s:
                 continue
             pz = e1[ref_paired].get(key)
-            delta = "---" if key == ref_key else "{:+.3f} [{:+.3f}, {:+.3f}]".format(pz["auprc_diff_mean"], *pz["ci95"])
+            if key == ref_key:
+                delta = "---"
+            elif pz["auprc_diff_mean"] == 0 and tuple(pz["ci95"]) == (0, 0):
+                delta = "0 (identical scores)"  # the forest in Wasm vs the scikit-learn forest it was exported from
+            else:
+                delta = "{:+.3f} [{:+.3f}, {:+.3f}]".format(pz["auprc_diff_mean"], *pz["ci95"])
             rows.append("{} & {:.3f} $\\pm$ {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {} \\\\".format(
                 label, s["auprc"]["mean"], s["auprc"]["std"], s["roc_auc"]["mean"], s["recall_at_fpr5"]["mean"],
                 s["recall_at_fpr1"]["mean"], s["op_fpr5_f1"]["mean"], delta))
