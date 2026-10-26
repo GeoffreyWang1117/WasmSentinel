@@ -1,10 +1,10 @@
 {
  "experiment": "E3 end-to-end latency and throughput (replay collector -> rules -> output)",
  "provenance": {
-  "git_commit": "ba7af70ee77e0cec2139fb05d64428c19612565d",
+  "git_commit": "3e804a63d77c93c5c83b9f967c0ee1927fa29e3d",
   "kernel": "7.0.0-34-generic",
   "cpu": "AMD Ryzen 9 5950X 16-Core Processor",
-  "timestamp": "2026-10-25T12:59:09Z",
+  "timestamp": "2026-10-25T21:38:35Z",
   "args": {
    "binary": "/home/coder-gw/Engineering/WasmSentinel/wasmsentinel",
    "rules": "/home/coder-gw/Engineering/WasmSentinel/rules/wasm",
@@ -12,6 +12,7 @@
    "train_dir": "/home/coder-gw/Engineering/WasmSentinel/evaluation/datasets/raw/ADFA-LD/ADFA-LD/Training_Data_Master",
    "rates": "1000,10000,50000",
    "encodings": "json,binary",
+   "models": "mlp,rf",
    "seconds": "30.0",
    "reps": "3",
    "timeout": "600",
@@ -26,72 +27,138 @@
  "summary": {
   "json@1000": {
    "n": 3,
+   "model": "mlp",
+   "encoding": "json",
+   "offered_eps": 1000,
    "achieved_eps": {
-    "mean": 964.0,
-    "min": 962.0,
-    "max": 966.0
+    "mean": 969.0,
+    "min": 961.0,
+    "max": 981.0
    },
    "max_rss_kb": {
-    "mean": 91914.66666666667,
-    "min": 90440,
-    "max": 92744
+    "mean": 95492,
+    "min": 95056,
+    "max": 96168
    },
    "e2e_us": {
     "p50": {
-     "mean": 118.33333333333333,
-     "max": 119
+     "mean": 117.66666666666667,
+     "max": 120
     },
     "p90": {
-     "mean": 144.33333333333334,
-     "max": 145
+     "mean": 143.66666666666666,
+     "max": 148
     },
     "p99": {
-     "mean": 182.66666666666666,
-     "max": 187
+     "mean": 191,
+     "max": 208
     },
     "p999": {
-     "mean": 325.3333333333333,
-     "max": 340
+     "mean": 330.6666666666667,
+     "max": 391
     },
     "max": {
-     "mean": 1492.3333333333333,
-     "max": 3170
+     "mean": 1650.3333333333333,
+     "max": 3759
     }
    },
    "detect_us": {
     "p50": {
      "mean": 105.33333333333333,
-     "max": 106
+     "max": 107
     },
     "p90": {
-     "mean": 126,
-     "max": 127
+     "mean": 125.33333333333333,
+     "max": 128
     },
     "p99": {
-     "mean": 149.33333333333334,
+     "mean": 147.66666666666666,
      "max": 153
     },
     "p999": {
-     "mean": 211.66666666666666,
-     "max": 224
+     "mean": 216,
+     "max": 226
     },
     "max": {
-     "mean": 567.3333333333334,
-     "max": 821
+     "mean": 1527.6666666666667,
+     "max": 3740
+    }
+   }
+  },
+  "json@1000@rf": {
+   "n": 3,
+   "model": "rf",
+   "encoding": "json",
+   "offered_eps": 1000,
+   "achieved_eps": {
+    "mean": 965.3333333333334,
+    "min": 964.0,
+    "max": 966.0
+   },
+   "max_rss_kb": {
+    "mean": 100973.33333333333,
+    "min": 100580,
+    "max": 101412
+   },
+   "e2e_us": {
+    "p50": {
+     "mean": 103,
+     "max": 104
+    },
+    "p90": {
+     "mean": 132.66666666666666,
+     "max": 136
+    },
+    "p99": {
+     "mean": 185,
+     "max": 203
+    },
+    "p999": {
+     "mean": 343.6666666666667,
+     "max": 358
+    },
+    "max": {
+     "mean": 775.6666666666666,
+     "max": 1114
+    }
+   },
+   "detect_us": {
+    "p50": {
+     "mean": 90.33333333333333,
+     "max": 91
+    },
+    "p90": {
+     "mean": 116,
+     "max": 119
+    },
+    "p99": {
+     "mean": 152.66666666666666,
+     "max": 170
+    },
+    "p999": {
+     "mean": 274.6666666666667,
+     "max": 292
+    },
+    "max": {
+     "mean": 683.3333333333334,
+     "max": 1102
     }
    }
   },
   "binary@1000": {
    "n": 3,
+   "model": "mlp",
+   "encoding": "binary",
+   "offered_eps": 1000,
    "achieved_eps": {
-    "mean": 960.6666666666666,
-    "min": 955.0,
-    "max": 964.0
+    "mean": 962.0,
+    "min": 958.0,
+    "max": 966.0
    },
    "max_rss_kb": {
-    "mean": 94260,
-    "min": 92860,
-    "max": 95268
+    "mean": 96109.33333333333,
+    "min": 95564,
+    "max": 96552
    },
    "e2e_us": {
     "p50": {
@@ -99,134 +166,260 @@
      "max": 102
     },
     "p90": {
-     "mean": 122,
+     "mean": 120.66666666666667,
      "max": 123
     },
     "p99": {
-     "mean": 144,
-     "max": 148
+     "mean": 146,
+     "max": 153
     },
     "p999": {
-     "mean": 239.66666666666666,
-     "max": 264
+     "mean": 245.33333333333334,
+     "max": 251
     },
     "max": {
-     "mean": 634.6666666666666,
-     "max": 924
+     "mean": 611.3333333333334,
+     "max": 824
     }
    },
    "detect_us": {
     "p50": {
-     "mean": 88.66666666666667,
-     "max": 89
+     "mean": 89,
+     "max": 90
     },
     "p90": {
      "mean": 104,
-     "max": 105
+     "max": 106
     },
     "p99": {
-     "mean": 119,
-     "max": 120
+     "mean": 121.66666666666667,
+     "max": 125
     },
     "p999": {
-     "mean": 149.66666666666666,
-     "max": 158
+     "mean": 155.66666666666666,
+     "max": 164
     },
     "max": {
-     "mean": 548.3333333333334,
-     "max": 887
+     "mean": 342.3333333333333,
+     "max": 434
+    }
+   }
+  },
+  "binary@1000@rf": {
+   "n": 3,
+   "model": "rf",
+   "encoding": "binary",
+   "offered_eps": 1000,
+   "achieved_eps": {
+    "mean": 967.6666666666666,
+    "min": 963.0,
+    "max": 975.0
+   },
+   "max_rss_kb": {
+    "mean": 99302.66666666667,
+    "min": 97712,
+    "max": 101788
+   },
+   "e2e_us": {
+    "p50": {
+     "mean": 85.66666666666667,
+     "max": 86
+    },
+    "p90": {
+     "mean": 112,
+     "max": 114
+    },
+    "p99": {
+     "mean": 153,
+     "max": 184
+    },
+    "p999": {
+     "mean": 284.3333333333333,
+     "max": 298
+    },
+    "max": {
+     "mean": 554.6666666666666,
+     "max": 663
+    }
+   },
+   "detect_us": {
+    "p50": {
+     "mean": 73,
+     "max": 73
+    },
+    "p90": {
+     "mean": 94.66666666666667,
+     "max": 95
+    },
+    "p99": {
+     "mean": 116,
+     "max": 123
+    },
+    "p999": {
+     "mean": 217.66666666666666,
+     "max": 241
+    },
+    "max": {
+     "mean": 478.6666666666667,
+     "max": 627
     }
    }
   },
   "json@10000": {
    "n": 3,
+   "model": "mlp",
+   "encoding": "json",
+   "offered_eps": 10000,
    "achieved_eps": {
-    "mean": 9689.0,
-    "min": 9672.0,
-    "max": 9701.0
+    "mean": 9706.333333333334,
+    "min": 9700.0,
+    "max": 9712.0
    },
    "max_rss_kb": {
-    "mean": 101053.33333333333,
-    "min": 100356,
-    "max": 101652
+    "mean": 103494.66666666667,
+    "min": 102264,
+    "max": 104608
    },
    "e2e_us": {
     "p50": {
-     "mean": 378,
-     "max": 383
+     "mean": 381.6666666666667,
+     "max": 394
     },
     "p90": {
-     "mean": 902.3333333333334,
-     "max": 919
+     "mean": 915,
+     "max": 956
     },
     "p99": {
-     "mean": 1852.6666666666667,
-     "max": 1942
+     "mean": 2188.6666666666665,
+     "max": 2793
     },
     "p999": {
-     "mean": 4686.333333333333,
-     "max": 7318
+     "mean": 6280,
+     "max": 9555
     },
     "max": {
-     "mean": 7667,
-     "max": 11832
+     "mean": 7994,
+     "max": 10757
     }
    },
    "detect_us": {
     "p50": {
-     "mean": 81,
-     "max": 81
+     "mean": 81.33333333333333,
+     "max": 83
     },
     "p90": {
      "mean": 105,
      "max": 106
     },
     "p99": {
-     "mean": 131,
-     "max": 132
+     "mean": 130.33333333333334,
+     "max": 134
     },
     "p999": {
-     "mean": 189.66666666666666,
+     "mean": 189.33333333333334,
+     "max": 204
+    },
+    "max": {
+     "mean": 1236.6666666666667,
+     "max": 1859
+    }
+   }
+  },
+  "json@10000@rf": {
+   "n": 3,
+   "model": "rf",
+   "encoding": "json",
+   "offered_eps": 10000,
+   "achieved_eps": {
+    "mean": 9685.0,
+    "min": 9682.0,
+    "max": 9691.0
+   },
+   "max_rss_kb": {
+    "mean": 107516,
+    "min": 106728,
+    "max": 108488
+   },
+   "e2e_us": {
+    "p50": {
+     "mean": 335.3333333333333,
+     "max": 341
+    },
+    "p90": {
+     "mean": 781.6666666666666,
+     "max": 798
+    },
+    "p99": {
+     "mean": 1433.6666666666667,
+     "max": 1521
+    },
+    "p999": {
+     "mean": 2663.6666666666665,
+     "max": 3229
+    },
+    "max": {
+     "mean": 4733,
+     "max": 6167
+    }
+   },
+   "detect_us": {
+    "p50": {
+     "mean": 69.66666666666667,
+     "max": 70
+    },
+    "p90": {
+     "mean": 93.66666666666667,
+     "max": 95
+    },
+    "p99": {
+     "mean": 118.33333333333333,
+     "max": 119
+    },
+    "p999": {
+     "mean": 188.66666666666666,
      "max": 191
     },
     "max": {
-     "mean": 2472,
-     "max": 3104
+     "mean": 1798.3333333333333,
+     "max": 2227
     }
    }
   },
   "binary@10000": {
    "n": 3,
+   "model": "mlp",
+   "encoding": "binary",
+   "offered_eps": 10000,
    "achieved_eps": {
-    "mean": 9687.666666666666,
+    "mean": 9687.333333333334,
     "min": 9676.0,
-    "max": 9696.0
+    "max": 9693.0
    },
    "max_rss_kb": {
-    "mean": 102252,
-    "min": 100972,
-    "max": 103344
+    "mean": 105406.66666666667,
+    "min": 103484,
+    "max": 106668
    },
    "e2e_us": {
     "p50": {
-     "mean": 304,
-     "max": 305
+     "mean": 300.6666666666667,
+     "max": 303
     },
     "p90": {
-     "mean": 745.6666666666666,
-     "max": 755
+     "mean": 740.6666666666666,
+     "max": 750
     },
     "p99": {
-     "mean": 1245.6666666666667,
-     "max": 1375
+     "mean": 1194.3333333333333,
+     "max": 1284
     },
     "p999": {
-     "mean": 3585.3333333333335,
-     "max": 6904
+     "mean": 1833.6666666666667,
+     "max": 2155
     },
     "max": {
-     "mean": 5843,
-     "max": 9524
+     "mean": 3698,
+     "max": 3928
     }
    },
    "detect_us": {
@@ -239,51 +432,114 @@
      "max": 92
     },
     "p99": {
-     "mean": 111.66666666666667,
-     "max": 113
+     "mean": 109.66666666666667,
+     "max": 111
     },
     "p999": {
-     "mean": 148.66666666666666,
-     "max": 155
+     "mean": 143.66666666666666,
+     "max": 145
     },
     "max": {
-     "mean": 1202,
-     "max": 1523
+     "mean": 1792.6666666666667,
+     "max": 2868
+    }
+   }
+  },
+  "binary@10000@rf": {
+   "n": 3,
+   "model": "rf",
+   "encoding": "binary",
+   "offered_eps": 10000,
+   "achieved_eps": {
+    "mean": 9671.333333333334,
+    "min": 9666.0,
+    "max": 9679.0
+   },
+   "max_rss_kb": {
+    "mean": 109426.66666666667,
+    "min": 108184,
+    "max": 110252
+   },
+   "e2e_us": {
+    "p50": {
+     "mean": 254,
+     "max": 256
+    },
+    "p90": {
+     "mean": 634,
+     "max": 636
+    },
+    "p99": {
+     "mean": 987,
+     "max": 998
+    },
+    "p999": {
+     "mean": 1466,
+     "max": 1492
+    },
+    "max": {
+     "mean": 3350.3333333333335,
+     "max": 3794
+    }
+   },
+   "detect_us": {
+    "p50": {
+     "mean": 58,
+     "max": 58
+    },
+    "p90": {
+     "mean": 78.66666666666667,
+     "max": 79
+    },
+    "p99": {
+     "mean": 97.33333333333333,
+     "max": 99
+    },
+    "p999": {
+     "mean": 153.33333333333334,
+     "max": 161
+    },
+    "max": {
+     "mean": 2758.6666666666665,
+     "max": 3098
     }
    }
   },
   "json@50000": {
    "n": 3,
+   "model": "mlp",
+   "encoding": "json",
+   "offered_eps": 50000,
    "achieved_eps": {
-    "mean": 14996.333333333334,
-    "min": 14853.0,
-    "max": 15093.0
+    "mean": 15071.666666666666,
+    "min": 15014.0,
+    "max": 15150.0
    },
    "max_rss_kb": {
-    "mean": 182078.66666666666,
-    "min": 181204,
-    "max": 183100
+    "mean": 193216,
+    "min": 193160,
+    "max": 193284
    },
    "e2e_us": {
     "p50": {
-     "mean": 334813.3333333333,
-     "max": 337847
+     "mean": 333324.3333333333,
+     "max": 334520
     },
     "p90": {
-     "mean": 389402.6666666667,
-     "max": 393368
+     "mean": 386963.6666666667,
+     "max": 388344
     },
     "p99": {
-     "mean": 425654.3333333333,
-     "max": 433649
+     "mean": 419910.6666666667,
+     "max": 422808
     },
     "p999": {
-     "mean": 445640.3333333333,
-     "max": 461082
+     "mean": 437699.3333333333,
+     "max": 440259
     },
     "max": {
-     "mean": 460652.3333333333,
-     "max": 489773
+     "mean": 448373,
+     "max": 457496
     }
    },
    "detect_us": {
@@ -292,77 +548,200 @@
      "max": 83
     },
     "p90": {
-     "mean": 92.66666666666667,
-     "max": 93
+     "mean": 91.66666666666667,
+     "max": 92
     },
     "p99": {
-     "mean": 117.33333333333333,
-     "max": 119
+     "mean": 114.66666666666667,
+     "max": 118
     },
     "p999": {
-     "mean": 151.33333333333334,
-     "max": 156
+     "mean": 150.66666666666666,
+     "max": 154
     },
     "max": {
-     "mean": 3244.3333333333335,
-     "max": 4503
+     "mean": 3891.6666666666665,
+     "max": 5317
+    }
+   }
+  },
+  "json@50000@rf": {
+   "n": 3,
+   "model": "rf",
+   "encoding": "json",
+   "offered_eps": 50000,
+   "achieved_eps": {
+    "mean": 17044.0,
+    "min": 17011.0,
+    "max": 17099.0
+   },
+   "max_rss_kb": {
+    "mean": 195053.33333333334,
+    "min": 192164,
+    "max": 199360
+   },
+   "e2e_us": {
+    "p50": {
+     "mean": 294724.3333333333,
+     "max": 295837
+    },
+    "p90": {
+     "mean": 341794.6666666667,
+     "max": 344079
+    },
+    "p99": {
+     "mean": 369420.3333333333,
+     "max": 372732
+    },
+    "p999": {
+     "mean": 381873.3333333333,
+     "max": 385821
+    },
+    "max": {
+     "mean": 389215.3333333333,
+     "max": 393976
+    }
+   },
+   "detect_us": {
+    "p50": {
+     "mean": 69,
+     "max": 69
+    },
+    "p90": {
+     "mean": 80,
+     "max": 80
+    },
+    "p99": {
+     "mean": 100,
+     "max": 101
+    },
+    "p999": {
+     "mean": 139.66666666666666,
+     "max": 140
+    },
+    "max": {
+     "mean": 2832,
+     "max": 3250
     }
    }
   },
   "binary@50000": {
    "n": 3,
+   "model": "mlp",
+   "encoding": "binary",
+   "offered_eps": 50000,
    "achieved_eps": {
-    "mean": 18466.0,
-    "min": 18320.0,
-    "max": 18539.0
+    "mean": 18277.333333333332,
+    "min": 17986.0,
+    "max": 18441.0
    },
    "max_rss_kb": {
-    "mean": 193897.33333333334,
-    "min": 190484,
-    "max": 197228
+    "mean": 203374.66666666666,
+    "min": 201664,
+    "max": 205940
    },
    "e2e_us": {
     "p50": {
-     "mean": 270773,
-     "max": 272997
+     "mean": 273616,
+     "max": 278435
     },
     "p90": {
-     "mean": 322848.6666666667,
-     "max": 326540
+     "mean": 326650.3333333333,
+     "max": 330878
     },
     "p99": {
-     "mean": 352795.3333333333,
-     "max": 354383
+     "mean": 364278,
+     "max": 376833
     },
     "p999": {
-     "mean": 366660.3333333333,
-     "max": 368872
+     "mean": 383935.3333333333,
+     "max": 402084
     },
     "max": {
-     "mean": 376952,
-     "max": 380282
+     "mean": 396540.6666666667,
+     "max": 422986
     }
    },
    "detect_us": {
     "p50": {
-     "mean": 71,
-     "max": 71
+     "mean": 71.33333333333333,
+     "max": 72
     },
     "p90": {
-     "mean": 80,
+     "mean": 80.33333333333333,
      "max": 81
     },
     "p99": {
-     "mean": 94.66666666666667,
-     "max": 96
+     "mean": 97.33333333333333,
+     "max": 102
     },
     "p999": {
-     "mean": 124.66666666666667,
-     "max": 126
+     "mean": 128,
+     "max": 133
     },
     "max": {
-     "mean": 3058.6666666666665,
-     "max": 3187
+     "mean": 3097.3333333333335,
+     "max": 3124
+    }
+   }
+  },
+  "binary@50000@rf": {
+   "n": 3,
+   "model": "rf",
+   "encoding": "binary",
+   "offered_eps": 50000,
+   "achieved_eps": {
+    "mean": 21430.0,
+    "min": 21369.0,
+    "max": 21510.0
+   },
+   "max_rss_kb": {
+    "mean": 201926.66666666666,
+    "min": 199028,
+    "max": 207364
+   },
+   "e2e_us": {
+    "p50": {
+     "mean": 233726.66666666666,
+     "max": 234633
+    },
+    "p90": {
+     "mean": 280696,
+     "max": 281132
+    },
+    "p99": {
+     "mean": 308660.3333333333,
+     "max": 310178
+    },
+    "p999": {
+     "mean": 323171.3333333333,
+     "max": 329257
+    },
+    "max": {
+     "mean": 333200.6666666667,
+     "max": 344875
+    }
+   },
+   "detect_us": {
+    "p50": {
+     "mean": 56.666666666666664,
+     "max": 57
+    },
+    "p90": {
+     "mean": 68.33333333333333,
+     "max": 69
+    },
+    "p99": {
+     "mean": 82.33333333333333,
+     "max": 83
+    },
+    "p999": {
+     "mean": 113,
+     "max": 115
+    },
+    "max": {
+     "mean": 2205.6666666666665,
+     "max": 3103
     }
    }
   }
@@ -372,27 +751,28 @@
    "encoding": "json",
    "offered_eps": 1000,
    "max_events": 30000,
+   "model": "mlp",
    "events": 30000,
    "alerts": 17952,
-   "elapsed_s": 31.186178313,
-   "achieved_eps": 962.0,
-   "max_rss_kb": 90440,
+   "elapsed_s": 30.591884226,
+   "achieved_eps": 981.0,
+   "max_rss_kb": 96168,
    "e2e_us": {
-    "max": 843,
-    "mean": 94,
-    "p50": 118,
-    "p90": 145,
-    "p99": 182,
-    "p999": 340,
+    "max": 3759,
+    "mean": 92,
+    "p50": 116,
+    "p90": 139,
+    "p99": 208,
+    "p999": 391,
     "samples": 30000
    },
    "detect_us": {
-    "max": 821,
-    "mean": 83,
-    "p50": 105,
-    "p90": 127,
-    "p99": 150,
-    "p999": 224,
+    "max": 3740,
+    "mean": 80,
+    "p50": 104,
+    "p90": 122,
+    "p99": 143,
+    "p999": 226,
     "samples": 30000
    },
    "rules": {
@@ -401,48 +781,100 @@
      "calls_raw": 0,
      "threats": 17952,
      "errors": 0,
-     "fuel_total": 12775820805,
-     "latency_max": "1.949979ms",
-     "memory_bytes": 3735552
+     "fuel_total": 12780448276,
+     "latency_max": "3.636622ms",
+     "memory_bytes": 5898240
     },
     "suspicious_shell": {
      "calls": 30000,
      "calls_raw": 0,
      "threats": 0,
      "errors": 0,
-     "fuel_total": 695946362,
-     "latency_max": "192.574\u00b5s",
+     "fuel_total": 695945727,
+     "latency_max": "206.765\u00b5s",
      "memory_bytes": 1179648
     }
    },
-   "wall_s": 31.6,
+   "wall_s": 31.1,
+   "rep": 0
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 1000,
+   "max_events": 30000,
+   "model": "rf",
+   "events": 30000,
+   "alerts": 17952,
+   "elapsed_s": 31.120308758,
+   "achieved_eps": 964.0,
+   "max_rss_kb": 100928,
+   "e2e_us": {
+    "max": 638,
+    "mean": 88,
+    "p50": 104,
+    "p90": 136,
+    "p99": 203,
+    "p999": 358,
+    "samples": 30000
+   },
+   "detect_us": {
+    "max": 574,
+    "mean": 77,
+    "p50": 91,
+    "p90": 119,
+    "p99": 170,
+    "p999": 292,
+    "samples": 30000
+   },
+   "rules": {
+    "suspicious_shell": {
+     "calls": 30000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 695945409,
+     "latency_max": "175.783\u00b5s",
+     "memory_bytes": 1179648
+    },
+    "ml_detector": {
+     "calls": 30834,
+     "calls_raw": 0,
+     "threats": 17952,
+     "errors": 0,
+     "fuel_total": 9682153405,
+     "latency_max": "1.975919ms",
+     "memory_bytes": 8126464
+    }
+   },
+   "wall_s": 31.5,
    "rep": 0
   },
   {
    "encoding": "binary",
    "offered_eps": 1000,
    "max_events": 30000,
+   "model": "mlp",
    "events": 30000,
    "alerts": 17952,
-   "elapsed_s": 31.104305107,
-   "achieved_eps": 964.0,
-   "max_rss_kb": 92860,
+   "elapsed_s": 31.071497541,
+   "achieved_eps": 966.0,
+   "max_rss_kb": 95564,
    "e2e_us": {
-    "max": 924,
+    "max": 824,
     "mean": 75,
-    "p50": 101,
-    "p90": 122,
-    "p99": 148,
-    "p999": 264,
+    "p50": 102,
+    "p90": 123,
+    "p99": 153,
+    "p999": 251,
     "samples": 30000
    },
    "detect_us": {
-    "max": 887,
-    "mean": 63,
-    "p50": 89,
-    "p90": 104,
-    "p99": 120,
-    "p999": 158,
+    "max": 434,
+    "mean": 64,
+    "p50": 90,
+    "p90": 106,
+    "p99": 125,
+    "p999": 164,
     "samples": 30000
    },
    "rules": {
@@ -452,7 +884,7 @@
      "threats": 0,
      "errors": 0,
      "fuel_total": 9720000,
-     "latency_max": "119.542\u00b5s",
+     "latency_max": "66.381\u00b5s",
      "memory_bytes": 1179648
     },
     "ml_detector": {
@@ -460,389 +892,244 @@
      "calls_raw": 30000,
      "threats": 17952,
      "errors": 0,
-     "fuel_total": 11726500911,
-     "latency_max": "1.946109ms",
-     "memory_bytes": 3735552
+     "fuel_total": 11734631813,
+     "latency_max": "1.98788ms",
+     "memory_bytes": 5898240
     }
    },
    "wall_s": 31.5,
    "rep": 0
   },
   {
+   "encoding": "binary",
+   "offered_eps": 1000,
+   "max_events": 30000,
+   "model": "rf",
+   "events": 30000,
+   "alerts": 17952,
+   "elapsed_s": 30.781573588,
+   "achieved_eps": 975.0,
+   "max_rss_kb": 98408,
+   "e2e_us": {
+    "max": 511,
+    "mean": 69,
+    "p50": 86,
+    "p90": 114,
+    "p99": 184,
+    "p999": 298,
+    "samples": 30000
+   },
+   "detect_us": {
+    "max": 435,
+    "mean": 56,
+    "p50": 73,
+    "p90": 95,
+    "p99": 123,
+    "p999": 241,
+    "samples": 30000
+   },
+   "rules": {
+    "suspicious_shell": {
+     "calls": 30000,
+     "calls_raw": 30000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 9720000,
+     "latency_max": "212.154\u00b5s",
+     "memory_bytes": 1179648
+    },
+    "ml_detector": {
+     "calls": 30834,
+     "calls_raw": 30000,
+     "threats": 17952,
+     "errors": 0,
+     "fuel_total": 8650002161,
+     "latency_max": "1.955839ms",
+     "memory_bytes": 8126464
+    }
+   },
+   "wall_s": 31.2,
+   "rep": 0
+  },
+  {
    "encoding": "json",
    "offered_eps": 10000,
    "max_events": 300000,
+   "model": "mlp",
    "events": 300000,
    "alerts": 184046,
-   "elapsed_s": 30.947553213,
-   "achieved_eps": 9694.0,
-   "max_rss_kb": 101652,
+   "elapsed_s": 30.890724767000002,
+   "achieved_eps": 9712.0,
+   "max_rss_kb": 104608,
    "e2e_us": {
-    "max": 4823,
-    "mean": 472,
-    "p50": 383,
-    "p90": 919,
-    "p99": 1895,
-    "p999": 3422,
+    "max": 8616,
+    "mean": 481,
+    "p50": 380,
+    "p90": 916,
+    "p99": 2131,
+    "p999": 6118,
     "samples": 300000
    },
    "detect_us": {
-    "max": 3104,
-    "mean": 64,
+    "max": 1367,
+    "mean": 63,
     "p50": 81,
-    "p90": 106,
-    "p99": 132,
+    "p90": 105,
+    "p99": 130,
+    "p999": 181,
+    "samples": 300000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 300834,
+     "calls_raw": 0,
+     "threats": 184046,
+     "errors": 0,
+     "fuel_total": 125586729905,
+     "latency_max": "1.940769ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 300000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 6965459196,
+     "latency_max": "1.268275ms",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.3,
+   "rep": 0
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 10000,
+   "max_events": 300000,
+   "model": "rf",
+   "events": 300000,
+   "alerts": 184046,
+   "elapsed_s": 30.958057807,
+   "achieved_eps": 9691.0,
+   "max_rss_kb": 108488,
+   "e2e_us": {
+    "max": 4408,
+    "mean": 403,
+    "p50": 335,
+    "p90": 782,
+    "p99": 1474,
+    "p999": 2752,
+    "samples": 300000
+   },
+   "detect_us": {
+    "max": 1496,
+    "mean": 57,
+    "p50": 70,
+    "p90": 94,
+    "p99": 119,
     "p999": 188,
     "samples": 300000
    },
    "rules": {
-    "suspicious_shell": {
-     "calls": 300000,
-     "calls_raw": 0,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 6965508599,
-     "latency_max": "1.037281ms",
-     "memory_bytes": 1179648
-    },
     "ml_detector": {
      "calls": 300834,
      "calls_raw": 0,
      "threats": 184046,
      "errors": 0,
-     "fuel_total": 125537885691,
-     "latency_max": "1.975339ms",
-     "memory_bytes": 3735552
+     "fuel_total": 92929502262,
+     "latency_max": "1.993529ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 300000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 6965488992,
+     "latency_max": "186.653\u00b5s",
+     "memory_bytes": 1179648
     }
    },
-   "wall_s": 31.3,
+   "wall_s": 31.4,
    "rep": 0
   },
   {
    "encoding": "binary",
    "offered_eps": 10000,
    "max_events": 300000,
+   "model": "mlp",
    "events": 300000,
    "alerts": 184046,
-   "elapsed_s": 31.005148852,
-   "achieved_eps": 9676.0,
-   "max_rss_kb": 100972,
+   "elapsed_s": 30.950626229,
+   "achieved_eps": 9693.0,
+   "max_rss_kb": 106068,
    "e2e_us": {
-    "max": 4874,
-    "mean": 358,
-    "p50": 305,
-    "p90": 742,
-    "p99": 1164,
-    "p999": 1990,
+    "max": 3295,
+    "mean": 351,
+    "p50": 299,
+    "p90": 735,
+    "p99": 1160,
+    "p999": 1708,
     "samples": 300000
    },
    "detect_us": {
-    "max": 703,
+    "max": 387,
     "mean": 52,
-    "p50": 71,
+    "p50": 70,
     "p90": 92,
-    "p99": 113,
-    "p999": 155,
-    "samples": 300000
-   },
-   "rules": {
-    "ml_detector": {
-     "calls": 300834,
-     "calls_raw": 300000,
-     "threats": 184046,
-     "errors": 0,
-     "fuel_total": 115162930090,
-     "latency_max": "1.986259ms",
-     "memory_bytes": 3735552
-    },
-    "suspicious_shell": {
-     "calls": 300000,
-     "calls_raw": 300000,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 97200000,
-     "latency_max": "175.833\u00b5s",
-     "memory_bytes": 1179648
-    }
-   },
-   "wall_s": 31.4,
-   "rep": 0
-  },
-  {
-   "encoding": "json",
-   "offered_eps": 50000,
-   "max_events": 1500000,
-   "events": 1500000,
-   "alerts": 921509,
-   "elapsed_s": 99.386825227,
-   "achieved_eps": 15093.0,
-   "max_rss_kb": 183100,
-   "e2e_us": {
-    "max": 446844,
-    "mean": 337034,
-    "p50": 333320,
-    "p90": 384296,
-    "p99": 419892,
-    "p999": 438713,
-    "samples": 1500000
-   },
-   "detect_us": {
-    "max": 2113,
-    "mean": 60,
-    "p50": 82,
-    "p90": 92,
-    "p99": 117,
-    "p999": 150,
-    "samples": 1500000
-   },
-   "rules": {
-    "ml_detector": {
-     "calls": 1500834,
-     "calls_raw": 0,
-     "threats": 921509,
-     "errors": 0,
-     "fuel_total": 641810922254,
-     "latency_max": "1.951879ms",
-     "memory_bytes": 3735552
-    },
-    "suspicious_shell": {
-     "calls": 1500000,
-     "calls_raw": 0,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 34694881897,
-     "latency_max": "2.03174ms",
-     "memory_bytes": 1179648
-    }
-   },
-   "wall_s": 99.9,
-   "rep": 0
-  },
-  {
-   "encoding": "binary",
-   "offered_eps": 50000,
-   "max_events": 1500000,
-   "events": 1500000,
-   "alerts": 921509,
-   "elapsed_s": 80.909106639,
-   "achieved_eps": 18539.0,
-   "max_rss_kb": 197228,
-   "e2e_us": {
-    "max": 374652,
-    "mean": 274244,
-    "p50": 269357,
-    "p90": 321383,
-    "p99": 351493,
-    "p999": 364303,
-    "samples": 1500000
-   },
-   "detect_us": {
-    "max": 3095,
-    "mean": 48,
-    "p50": 71,
-    "p90": 79,
-    "p99": 94,
-    "p999": 125,
-    "samples": 1500000
-   },
-   "rules": {
-    "suspicious_shell": {
-     "calls": 1500000,
-     "calls_raw": 1500000,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 486000000,
-     "latency_max": "379.627\u00b5s",
-     "memory_bytes": 1179648
-    },
-    "ml_detector": {
-     "calls": 1500834,
-     "calls_raw": 1500000,
-     "threats": 921509,
-     "errors": 0,
-     "fuel_total": 590260113080,
-     "latency_max": "3.068231ms",
-     "memory_bytes": 3735552
-    }
-   },
-   "wall_s": 81.5,
-   "rep": 0
-  },
-  {
-   "encoding": "json",
-   "offered_eps": 1000,
-   "max_events": 30000,
-   "events": 30000,
-   "alerts": 17952,
-   "elapsed_s": 31.048511103,
-   "achieved_eps": 966.0,
-   "max_rss_kb": 92560,
-   "e2e_us": {
-    "max": 464,
-    "mean": 94,
-    "p50": 118,
-    "p90": 143,
-    "p99": 179,
-    "p999": 301,
-    "samples": 30000
-   },
-   "detect_us": {
-    "max": 442,
-    "mean": 81,
-    "p50": 105,
-    "p90": 125,
-    "p99": 145,
-    "p999": 194,
-    "samples": 30000
-   },
-   "rules": {
-    "ml_detector": {
-     "calls": 30834,
-     "calls_raw": 0,
-     "threats": 17952,
-     "errors": 0,
-     "fuel_total": 12776902091,
-     "latency_max": "1.937198ms",
-     "memory_bytes": 3735552
-    },
-    "suspicious_shell": {
-     "calls": 30000,
-     "calls_raw": 0,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 695943014,
-     "latency_max": "149.873\u00b5s",
-     "memory_bytes": 1179648
-    }
-   },
-   "wall_s": 31.4,
-   "rep": 1
-  },
-  {
-   "encoding": "binary",
-   "offered_eps": 1000,
-   "max_events": 30000,
-   "events": 30000,
-   "alerts": 17952,
-   "elapsed_s": 31.156411999,
-   "achieved_eps": 963.0,
-   "max_rss_kb": 95268,
-   "e2e_us": {
-    "max": 503,
-    "mean": 74,
-    "p50": 101,
-    "p90": 121,
-    "p99": 141,
-    "p999": 227,
-    "samples": 30000
-   },
-   "detect_us": {
-    "max": 354,
-    "mean": 62,
-    "p50": 88,
-    "p90": 103,
-    "p99": 117,
+    "p99": 109,
     "p999": 142,
-    "samples": 30000
-   },
-   "rules": {
-    "ml_detector": {
-     "calls": 30834,
-     "calls_raw": 30000,
-     "threats": 17952,
-     "errors": 0,
-     "fuel_total": 11726448114,
-     "latency_max": "2.05718ms",
-     "memory_bytes": 3735552
-    },
-    "suspicious_shell": {
-     "calls": 30000,
-     "calls_raw": 30000,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 9720000,
-     "latency_max": "130.363\u00b5s",
-     "memory_bytes": 1179648
-    }
-   },
-   "wall_s": 31.5,
-   "rep": 1
-  },
-  {
-   "encoding": "json",
-   "offered_eps": 10000,
-   "max_events": 300000,
-   "events": 300000,
-   "alerts": 184046,
-   "elapsed_s": 30.924129903,
-   "achieved_eps": 9701.0,
-   "max_rss_kb": 101152,
-   "e2e_us": {
-    "max": 11832,
-    "mean": 474,
-    "p50": 376,
-    "p90": 898,
-    "p99": 1942,
-    "p999": 7318,
-    "samples": 300000
-   },
-   "detect_us": {
-    "max": 2194,
-    "mean": 63,
-    "p50": 81,
-    "p90": 104,
-    "p99": 130,
-    "p999": 190,
     "samples": 300000
    },
    "rules": {
-    "ml_detector": {
-     "calls": 300834,
-     "calls_raw": 0,
-     "threats": 184046,
-     "errors": 0,
-     "fuel_total": 125536376814,
-     "latency_max": "2.157653ms",
-     "memory_bytes": 3735552
-    },
     "suspicious_shell": {
      "calls": 300000,
-     "calls_raw": 0,
+     "calls_raw": 300000,
      "threats": 0,
      "errors": 0,
-     "fuel_total": 6965436730,
-     "latency_max": "215.164\u00b5s",
+     "fuel_total": 97200000,
+     "latency_max": "151.453\u00b5s",
      "memory_bytes": 1179648
+    },
+    "ml_detector": {
+     "calls": 300834,
+     "calls_raw": 300000,
+     "threats": 184046,
+     "errors": 0,
+     "fuel_total": 115211389369,
+     "latency_max": "1.950339ms",
+     "memory_bytes": 5898240
     }
    },
-   "wall_s": 31.3,
-   "rep": 1
+   "wall_s": 31.4,
+   "rep": 0
   },
   {
    "encoding": "binary",
    "offered_eps": 10000,
    "max_events": 300000,
+   "model": "rf",
    "events": 300000,
    "alerts": 184046,
-   "elapsed_s": 30.955433878,
-   "achieved_eps": 9691.0,
-   "max_rss_kb": 103344,
+   "elapsed_s": 31.0352105,
+   "achieved_eps": 9666.0,
+   "max_rss_kb": 110252,
    "e2e_us": {
-    "max": 9524,
-    "mean": 373,
-    "p50": 303,
-    "p90": 755,
-    "p99": 1375,
-    "p999": 6904,
+    "max": 2744,
+    "mean": 304,
+    "p50": 256,
+    "p90": 633,
+    "p99": 972,
+    "p999": 1440,
     "samples": 300000
    },
    "detect_us": {
-    "max": 1380,
-    "mean": 52,
-    "p50": 70,
-    "p90": 92,
-    "p99": 112,
-    "p999": 148,
+    "max": 2092,
+    "mean": 44,
+    "p50": 58,
+    "p90": 79,
+    "p99": 98,
+    "p999": 161,
     "samples": 300000
    },
    "rules": {
@@ -851,9 +1138,9 @@
      "calls_raw": 300000,
      "threats": 184046,
      "errors": 0,
-     "fuel_total": 115161769307,
-     "latency_max": "2.193203ms",
-     "memory_bytes": 3735552
+     "fuel_total": 82635182025,
+     "latency_max": "1.999309ms",
+     "memory_bytes": 8126464
     },
     "suspicious_shell": {
      "calls": 300000,
@@ -861,338 +1148,39 @@
      "threats": 0,
      "errors": 0,
      "fuel_total": 97200000,
-     "latency_max": "210.934\u00b5s",
-     "memory_bytes": 1179648
-    }
-   },
-   "wall_s": 31.4,
-   "rep": 1
-  },
-  {
-   "encoding": "json",
-   "offered_eps": 50000,
-   "max_events": 1500000,
-   "events": 1500000,
-   "alerts": 921509,
-   "elapsed_s": 100.986419872,
-   "achieved_eps": 14853.0,
-   "max_rss_kb": 181204,
-   "e2e_us": {
-    "max": 489773,
-    "mean": 342498,
-    "p50": 337847,
-    "p90": 393368,
-    "p99": 433649,
-    "p999": 461082,
-    "samples": 1500000
-   },
-   "detect_us": {
-    "max": 4503,
-    "mean": 61,
-    "p50": 83,
-    "p90": 93,
-    "p99": 119,
-    "p999": 156,
-    "samples": 1500000
-   },
-   "rules": {
-    "ml_detector": {
-     "calls": 1500834,
-     "calls_raw": 0,
-     "threats": 921509,
-     "errors": 0,
-     "fuel_total": 641809103932,
-     "latency_max": "2.410127ms",
-     "memory_bytes": 3735552
-    },
-    "suspicious_shell": {
-     "calls": 1500000,
-     "calls_raw": 0,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 34694827450,
-     "latency_max": "4.408026ms",
-     "memory_bytes": 1179648
-    }
-   },
-   "wall_s": 101.5,
-   "rep": 1
-  },
-  {
-   "encoding": "binary",
-   "offered_eps": 50000,
-   "max_events": 1500000,
-   "events": 1500000,
-   "alerts": 921509,
-   "elapsed_s": 81.87688798,
-   "achieved_eps": 18320.0,
-   "max_rss_kb": 190484,
-   "e2e_us": {
-    "max": 375922,
-    "mean": 277518,
-    "p50": 272997,
-    "p90": 326540,
-    "p99": 354383,
-    "p999": 368872,
-    "samples": 1500000
-   },
-   "detect_us": {
-    "max": 2894,
-    "mean": 49,
-    "p50": 71,
-    "p90": 81,
-    "p99": 96,
-    "p999": 126,
-    "samples": 1500000
-   },
-   "rules": {
-    "ml_detector": {
-     "calls": 1500834,
-     "calls_raw": 1500000,
-     "threats": 921509,
-     "errors": 0,
-     "fuel_total": 590265776182,
-     "latency_max": "2.285915ms",
-     "memory_bytes": 3735552
-    },
-    "suspicious_shell": {
-     "calls": 1500000,
-     "calls_raw": 1500000,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 486000000,
-     "latency_max": "866.877\u00b5s",
-     "memory_bytes": 1179648
-    }
-   },
-   "wall_s": 82.4,
-   "rep": 1
-  },
-  {
-   "encoding": "json",
-   "offered_eps": 1000,
-   "max_events": 30000,
-   "events": 30000,
-   "alerts": 17952,
-   "elapsed_s": 31.121037013,
-   "achieved_eps": 964.0,
-   "max_rss_kb": 92744,
-   "e2e_us": {
-    "max": 3170,
-    "mean": 95,
-    "p50": 119,
-    "p90": 145,
-    "p99": 187,
-    "p999": 335,
-    "samples": 30000
-   },
-   "detect_us": {
-    "max": 439,
-    "mean": 83,
-    "p50": 106,
-    "p90": 126,
-    "p99": 153,
-    "p999": 217,
-    "samples": 30000
-   },
-   "rules": {
-    "ml_detector": {
-     "calls": 30834,
-     "calls_raw": 0,
-     "threats": 17952,
-     "errors": 0,
-     "fuel_total": 12775848784,
-     "latency_max": "2.084741ms",
-     "memory_bytes": 3735552
-    },
-    "suspicious_shell": {
-     "calls": 30000,
-     "calls_raw": 0,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 695945888,
-     "latency_max": "192.514\u00b5s",
+     "latency_max": "498.81\u00b5s",
      "memory_bytes": 1179648
     }
    },
    "wall_s": 31.5,
-   "rep": 2
-  },
-  {
-   "encoding": "binary",
-   "offered_eps": 1000,
-   "max_events": 30000,
-   "events": 30000,
-   "alerts": 17952,
-   "elapsed_s": 31.408027635,
-   "achieved_eps": 955.0,
-   "max_rss_kb": 94652,
-   "e2e_us": {
-    "max": 477,
-    "mean": 75,
-    "p50": 102,
-    "p90": 123,
-    "p99": 143,
-    "p999": 228,
-    "samples": 30000
-   },
-   "detect_us": {
-    "max": 404,
-    "mean": 63,
-    "p50": 89,
-    "p90": 105,
-    "p99": 120,
-    "p999": 149,
-    "samples": 30000
-   },
-   "rules": {
-    "suspicious_shell": {
-     "calls": 30000,
-     "calls_raw": 30000,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 9720000,
-     "latency_max": "145.073\u00b5s",
-     "memory_bytes": 1179648
-    },
-    "ml_detector": {
-     "calls": 30834,
-     "calls_raw": 30000,
-     "threats": 17952,
-     "errors": 0,
-     "fuel_total": 11726240349,
-     "latency_max": "2.090011ms",
-     "memory_bytes": 3735552
-    }
-   },
-   "wall_s": 31.8,
-   "rep": 2
-  },
-  {
-   "encoding": "json",
-   "offered_eps": 10000,
-   "max_events": 300000,
-   "events": 300000,
-   "alerts": 184046,
-   "elapsed_s": 31.015976285,
-   "achieved_eps": 9672.0,
-   "max_rss_kb": 100356,
-   "e2e_us": {
-    "max": 6346,
-    "mean": 455,
-    "p50": 375,
-    "p90": 890,
-    "p99": 1721,
-    "p999": 3319,
-    "samples": 300000
-   },
-   "detect_us": {
-    "max": 2118,
-    "mean": 64,
-    "p50": 81,
-    "p90": 105,
-    "p99": 131,
-    "p999": 191,
-    "samples": 300000
-   },
-   "rules": {
-    "ml_detector": {
-     "calls": 300834,
-     "calls_raw": 0,
-     "threats": 184046,
-     "errors": 0,
-     "fuel_total": 125535634143,
-     "latency_max": "2.102911ms",
-     "memory_bytes": 3735552
-    },
-    "suspicious_shell": {
-     "calls": 300000,
-     "calls_raw": 0,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 6965538915,
-     "latency_max": "189.914\u00b5s",
-     "memory_bytes": 1179648
-    }
-   },
-   "wall_s": 31.4,
-   "rep": 2
-  },
-  {
-   "encoding": "binary",
-   "offered_eps": 10000,
-   "max_events": 300000,
-   "events": 300000,
-   "alerts": 184046,
-   "elapsed_s": 30.940293822,
-   "achieved_eps": 9696.0,
-   "max_rss_kb": 102440,
-   "e2e_us": {
-    "max": 3131,
-    "mean": 356,
-    "p50": 304,
-    "p90": 740,
-    "p99": 1198,
-    "p999": 1862,
-    "samples": 300000
-   },
-   "detect_us": {
-    "max": 1523,
-    "mean": 52,
-    "p50": 70,
-    "p90": 92,
-    "p99": 110,
-    "p999": 143,
-    "samples": 300000
-   },
-   "rules": {
-    "ml_detector": {
-     "calls": 300834,
-     "calls_raw": 300000,
-     "threats": 184046,
-     "errors": 0,
-     "fuel_total": 115167027008,
-     "latency_max": "2.007379ms",
-     "memory_bytes": 3735552
-    },
-    "suspicious_shell": {
-     "calls": 300000,
-     "calls_raw": 300000,
-     "threats": 0,
-     "errors": 0,
-     "fuel_total": 97200000,
-     "latency_max": "184.484\u00b5s",
-     "memory_bytes": 1179648
-    }
-   },
-   "wall_s": 31.3,
-   "rep": 2
+   "rep": 0
   },
   {
    "encoding": "json",
    "offered_eps": 50000,
    "max_events": 1500000,
+   "model": "mlp",
    "events": 1500000,
    "alerts": 921509,
-   "elapsed_s": 99.717286749,
-   "achieved_eps": 15043.0,
-   "max_rss_kb": 181932,
+   "elapsed_s": 99.661409736,
+   "achieved_eps": 15051.0,
+   "max_rss_kb": 193204,
    "e2e_us": {
-    "max": 445340,
-    "mean": 338183,
-    "p50": 333273,
-    "p90": 390544,
-    "p99": 423422,
-    "p999": 437126,
+    "max": 445611,
+    "mean": 338008,
+    "p50": 334394,
+    "p90": 387792,
+    "p99": 419361,
+    "p999": 440259,
     "samples": 1500000
    },
    "detect_us": {
-    "max": 3117,
+    "max": 4130,
     "mean": 60,
     "p50": 82,
-    "p90": 93,
-    "p99": 116,
-    "p999": 148,
+    "p90": 92,
+    "p99": 118,
+    "p999": 154,
     "samples": 1500000
    },
    "rules": {
@@ -1201,43 +1189,95 @@
      "calls_raw": 0,
      "threats": 921509,
      "errors": 0,
-     "fuel_total": 641811875888,
-     "latency_max": "3.09834ms",
-     "memory_bytes": 3735552
+     "fuel_total": 642056195843,
+     "latency_max": "4.107591ms",
+     "memory_bytes": 5898240
     },
     "suspicious_shell": {
      "calls": 1500000,
      "calls_raw": 0,
      "threats": 0,
      "errors": 0,
-     "fuel_total": 34694816896,
-     "latency_max": "687.234\u00b5s",
+     "fuel_total": 34694756265,
+     "latency_max": "2.03793ms",
      "memory_bytes": 1179648
     }
    },
    "wall_s": 100.2,
-   "rep": 2
+   "rep": 0
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 50000,
+   "max_events": 1500000,
+   "model": "rf",
+   "events": 1500000,
+   "alerts": 921509,
+   "elapsed_s": 87.725587454,
+   "achieved_eps": 17099.0,
+   "max_rss_kb": 199360,
+   "e2e_us": {
+    "max": 385486,
+    "mean": 297458,
+    "p50": 294183,
+    "p90": 340085,
+    "p99": 368579,
+    "p999": 379584,
+    "samples": 1500000
+   },
+   "detect_us": {
+    "max": 2120,
+    "mean": 52,
+    "p50": 69,
+    "p90": 80,
+    "p99": 101,
+    "p999": 140,
+    "samples": 1500000
+   },
+   "rules": {
+    "suspicious_shell": {
+     "calls": 1500000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 34694945048,
+     "latency_max": "1.027171ms",
+     "memory_bytes": 1179648
+    },
+    "ml_detector": {
+     "calls": 1500834,
+     "calls_raw": 0,
+     "threats": 921509,
+     "errors": 0,
+     "fuel_total": 482192291407,
+     "latency_max": "2.099202ms",
+     "memory_bytes": 8126464
+    }
+   },
+   "wall_s": 88.3,
+   "rep": 0
   },
   {
    "encoding": "binary",
    "offered_eps": 50000,
    "max_events": 1500000,
+   "model": "mlp",
    "events": 1500000,
    "alerts": 921509,
-   "elapsed_s": 80.91010069,
-   "achieved_eps": 18539.0,
-   "max_rss_kb": 193980,
+   "elapsed_s": 81.342065545,
+   "achieved_eps": 18441.0,
+   "max_rss_kb": 201664,
    "e2e_us": {
-    "max": 380282,
-    "mean": 274206,
-    "p50": 269965,
-    "p90": 320623,
-    "p99": 352510,
-    "p999": 366806,
+    "max": 381001,
+    "mean": 275700,
+    "p50": 271210,
+    "p90": 323693,
+    "p99": 358569,
+    "p999": 374017,
     "samples": 1500000
    },
    "detect_us": {
-    "max": 3187,
+    "max": 3077,
     "mean": 48,
     "p50": 71,
     "p90": 80,
@@ -1251,9 +1291,9 @@
      "calls_raw": 1500000,
      "threats": 921509,
      "errors": 0,
-     "fuel_total": 590262260074,
-     "latency_max": "3.169262ms",
-     "memory_bytes": 3735552
+     "fuel_total": 590502698806,
+     "latency_max": "3.066251ms",
+     "memory_bytes": 5898240
     },
     "suspicious_shell": {
      "calls": 1500000,
@@ -1261,11 +1301,1286 @@
      "threats": 0,
      "errors": 0,
      "fuel_total": 486000000,
-     "latency_max": "234.775\u00b5s",
+     "latency_max": "473.07\u00b5s",
      "memory_bytes": 1179648
     }
    },
-   "wall_s": 81.5,
+   "wall_s": 81.9,
+   "rep": 0
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 50000,
+   "max_events": 1500000,
+   "model": "rf",
+   "events": 1500000,
+   "alerts": 921509,
+   "elapsed_s": 70.195075082,
+   "achieved_eps": 21369.0,
+   "max_rss_kb": 199388,
+   "e2e_us": {
+    "max": 322876,
+    "mean": 237757,
+    "p50": 234633,
+    "p90": 281020,
+    "p99": 305901,
+    "p999": 315648,
+    "samples": 1500000
+   },
+   "detect_us": {
+    "max": 2126,
+    "mean": 41,
+    "p50": 57,
+    "p90": 68,
+    "p99": 83,
+    "p999": 115,
+    "samples": 1500000
+   },
+   "rules": {
+    "suspicious_shell": {
+     "calls": 1500000,
+     "calls_raw": 1500000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 486000000,
+     "latency_max": "372.928\u00b5s",
+     "memory_bytes": 1179648
+    },
+    "ml_detector": {
+     "calls": 1500834,
+     "calls_raw": 1500000,
+     "threats": 921509,
+     "errors": 0,
+     "fuel_total": 431468236494,
+     "latency_max": "2.109701ms",
+     "memory_bytes": 8126464
+    }
+   },
+   "wall_s": 70.7,
+   "rep": 0
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 1000,
+   "max_events": 30000,
+   "model": "mlp",
+   "events": 30000,
+   "alerts": 17952,
+   "elapsed_s": 31.221746367,
+   "achieved_eps": 961.0,
+   "max_rss_kb": 95252,
+   "e2e_us": {
+    "max": 609,
+    "mean": 93,
+    "p50": 117,
+    "p90": 144,
+    "p99": 173,
+    "p999": 292,
+    "samples": 30000
+   },
+   "detect_us": {
+    "max": 442,
+    "mean": 82,
+    "p50": 105,
+    "p90": 126,
+    "p99": 147,
+    "p999": 205,
+    "samples": 30000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 30834,
+     "calls_raw": 0,
+     "threats": 17952,
+     "errors": 0,
+     "fuel_total": 12780676075,
+     "latency_max": "2.0497ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 30000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 695945718,
+     "latency_max": "194.844\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.6,
+   "rep": 1
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 1000,
+   "max_events": 30000,
+   "model": "rf",
+   "events": 30000,
+   "alerts": 17952,
+   "elapsed_s": 31.041347062,
+   "achieved_eps": 966.0,
+   "max_rss_kb": 100580,
+   "e2e_us": {
+    "max": 575,
+    "mean": 84,
+    "p50": 101,
+    "p90": 129,
+    "p99": 167,
+    "p999": 328,
+    "samples": 30000
+   },
+   "detect_us": {
+    "max": 374,
+    "mean": 73,
+    "p50": 89,
+    "p90": 113,
+    "p99": 140,
+    "p999": 252,
+    "samples": 30000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 30834,
+     "calls_raw": 0,
+     "threats": 17952,
+     "errors": 0,
+     "fuel_total": 9681838818,
+     "latency_max": "2.01639ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 30000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 695946567,
+     "latency_max": "134.512\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.4,
+   "rep": 1
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 1000,
+   "max_events": 30000,
+   "model": "mlp",
+   "events": 30000,
+   "alerts": 17952,
+   "elapsed_s": 31.314581502,
+   "achieved_eps": 958.0,
+   "max_rss_kb": 96552,
+   "e2e_us": {
+    "max": 483,
+    "mean": 72,
+    "p50": 100,
+    "p90": 118,
+    "p99": 140,
+    "p999": 235,
+    "samples": 30000
+   },
+   "detect_us": {
+    "max": 275,
+    "mean": 62,
+    "p50": 88,
+    "p90": 102,
+    "p99": 119,
+    "p999": 146,
+    "samples": 30000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 30834,
+     "calls_raw": 30000,
+     "threats": 17952,
+     "errors": 0,
+     "fuel_total": 11731249837,
+     "latency_max": "1.904558ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 30000,
+     "calls_raw": 30000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 9720000,
+     "latency_max": "150.573\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.7,
+   "rep": 1
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 1000,
+   "max_events": 30000,
+   "model": "rf",
+   "events": 30000,
+   "alerts": 17952,
+   "elapsed_s": 31.101039811,
+   "achieved_eps": 965.0,
+   "max_rss_kb": 101788,
+   "e2e_us": {
+    "max": 490,
+    "mean": 66,
+    "p50": 85,
+    "p90": 110,
+    "p99": 138,
+    "p999": 289,
+    "samples": 30000
+   },
+   "detect_us": {
+    "max": 374,
+    "mean": 55,
+    "p50": 73,
+    "p90": 94,
+    "p99": 112,
+    "p999": 222,
+    "samples": 30000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 30834,
+     "calls_raw": 30000,
+     "threats": 17952,
+     "errors": 0,
+     "fuel_total": 8649882331,
+     "latency_max": "1.97962ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 30000,
+     "calls_raw": 30000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 9720000,
+     "latency_max": "95.682\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.5,
+   "rep": 1
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 10000,
+   "max_events": 300000,
+   "model": "mlp",
+   "events": 300000,
+   "alerts": 184046,
+   "elapsed_s": 30.927247167,
+   "achieved_eps": 9700.0,
+   "max_rss_kb": 103612,
+   "e2e_us": {
+    "max": 4609,
+    "mean": 446,
+    "p50": 371,
+    "p90": 873,
+    "p99": 1642,
+    "p999": 3167,
+    "samples": 300000
+   },
+   "detect_us": {
+    "max": 1859,
+    "mean": 63,
+    "p50": 80,
+    "p90": 104,
+    "p99": 127,
+    "p999": 183,
+    "samples": 300000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 300834,
+     "calls_raw": 0,
+     "threats": 184046,
+     "errors": 0,
+     "fuel_total": 125586598209,
+     "latency_max": "2.175713ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 300000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 6965518489,
+     "latency_max": "185.214\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.3,
+   "rep": 1
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 10000,
+   "max_events": 300000,
+   "model": "rf",
+   "events": 300000,
+   "alerts": 184046,
+   "elapsed_s": 30.984283805,
+   "achieved_eps": 9682.0,
+   "max_rss_kb": 106728,
+   "e2e_us": {
+    "max": 3624,
+    "mean": 389,
+    "p50": 330,
+    "p90": 765,
+    "p99": 1306,
+    "p999": 2010,
+    "samples": 300000
+   },
+   "detect_us": {
+    "max": 2227,
+    "mean": 56,
+    "p50": 69,
+    "p90": 92,
+    "p99": 117,
+    "p999": 191,
+    "samples": 300000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 300834,
+     "calls_raw": 0,
+     "threats": 184046,
+     "errors": 0,
+     "fuel_total": 92931023283,
+     "latency_max": "2.204783ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 300000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 6965532001,
+     "latency_max": "271.465\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.4,
+   "rep": 1
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 10000,
+   "max_events": 300000,
+   "model": "mlp",
+   "events": 300000,
+   "alerts": 184046,
+   "elapsed_s": 30.950406605,
+   "achieved_eps": 9693.0,
+   "max_rss_kb": 103484,
+   "e2e_us": {
+    "max": 3871,
+    "mean": 351,
+    "p50": 300,
+    "p90": 737,
+    "p99": 1139,
+    "p999": 1638,
+    "samples": 300000
+   },
+   "detect_us": {
+    "max": 2868,
+    "mean": 52,
+    "p50": 70,
+    "p90": 92,
+    "p99": 109,
+    "p999": 144,
+    "samples": 300000
+   },
+   "rules": {
+    "suspicious_shell": {
+     "calls": 300000,
+     "calls_raw": 300000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 97200000,
+     "latency_max": "199.694\u00b5s",
+     "memory_bytes": 1179648
+    },
+    "ml_detector": {
+     "calls": 300834,
+     "calls_raw": 300000,
+     "threats": 184046,
+     "errors": 0,
+     "fuel_total": 115211628557,
+     "latency_max": "2.856807ms",
+     "memory_bytes": 5898240
+    }
+   },
+   "wall_s": 31.4,
+   "rep": 1
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 10000,
+   "max_events": 300000,
+   "model": "rf",
+   "events": 300000,
+   "alerts": 184046,
+   "elapsed_s": 30.995094027,
+   "achieved_eps": 9679.0,
+   "max_rss_kb": 109844,
+   "e2e_us": {
+    "max": 3794,
+    "mean": 303,
+    "p50": 252,
+    "p90": 633,
+    "p99": 991,
+    "p999": 1492,
+    "samples": 300000
+   },
+   "detect_us": {
+    "max": 3098,
+    "mean": 44,
+    "p50": 58,
+    "p90": 78,
+    "p99": 95,
+    "p999": 140,
+    "samples": 300000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 300834,
+     "calls_raw": 300000,
+     "threats": 184046,
+     "errors": 0,
+     "fuel_total": 82633073231,
+     "latency_max": "3.085301ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 300000,
+     "calls_raw": 300000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 97200000,
+     "latency_max": "214.075\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.4,
+   "rep": 1
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 50000,
+   "max_events": 1500000,
+   "model": "mlp",
+   "events": 1500000,
+   "alerts": 921509,
+   "elapsed_s": 99.01140444,
+   "achieved_eps": 15150.0,
+   "max_rss_kb": 193284,
+   "e2e_us": {
+    "max": 442012,
+    "mean": 335779,
+    "p50": 331059,
+    "p90": 384755,
+    "p99": 417563,
+    "p999": 433628,
+    "samples": 1500000
+   },
+   "detect_us": {
+    "max": 2228,
+    "mean": 59,
+    "p50": 82,
+    "p90": 91,
+    "p99": 111,
+    "p999": 148,
+    "samples": 1500000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 1500834,
+     "calls_raw": 0,
+     "threats": 921509,
+     "errors": 0,
+     "fuel_total": 642054574124,
+     "latency_max": "2.189063ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 1500000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 34694885074,
+     "latency_max": "1.228104ms",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 99.6,
+   "rep": 1
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 50000,
+   "max_events": 1500000,
+   "model": "rf",
+   "events": 1500000,
+   "alerts": 921509,
+   "elapsed_s": 88.119222925,
+   "achieved_eps": 17022.0,
+   "max_rss_kb": 192164,
+   "e2e_us": {
+    "max": 393976,
+    "mean": 298782,
+    "p50": 294153,
+    "p90": 344079,
+    "p99": 372732,
+    "p999": 385821,
+    "samples": 1500000
+   },
+   "detect_us": {
+    "max": 3250,
+    "mean": 52,
+    "p50": 69,
+    "p90": 80,
+    "p99": 99,
+    "p999": 139,
+    "samples": 1500000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 1500834,
+     "calls_raw": 0,
+     "threats": 921509,
+     "errors": 0,
+     "fuel_total": 482193275604,
+     "latency_max": "3.210333ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 1500000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 34694809179,
+     "latency_max": "1.01297ms",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 88.7,
+   "rep": 1
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 50000,
+   "max_events": 1500000,
+   "model": "mlp",
+   "events": 1500000,
+   "alerts": 921509,
+   "elapsed_s": 81.497569958,
+   "achieved_eps": 18405.0,
+   "max_rss_kb": 205940,
+   "e2e_us": {
+    "max": 385635,
+    "mean": 276239,
+    "p50": 271203,
+    "p90": 325380,
+    "p99": 357432,
+    "p999": 375705,
+    "samples": 1500000
+   },
+   "detect_us": {
+    "max": 3124,
+    "mean": 48,
+    "p50": 71,
+    "p90": 80,
+    "p99": 96,
+    "p999": 128,
+    "samples": 1500000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 1500834,
+     "calls_raw": 1500000,
+     "threats": 921509,
+     "errors": 0,
+     "fuel_total": 590502813691,
+     "latency_max": "3.099421ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 1500000,
+     "calls_raw": 1500000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 486000000,
+     "latency_max": "658.453\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 82.1,
+   "rep": 1
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 50000,
+   "max_events": 1500000,
+   "model": "rf",
+   "events": 1500000,
+   "alerts": 921509,
+   "elapsed_s": 69.736619032,
+   "achieved_eps": 21510.0,
+   "max_rss_kb": 199028,
+   "e2e_us": {
+    "max": 331851,
+    "mean": 236216,
+    "p50": 232043,
+    "p90": 279936,
+    "p99": 309902,
+    "p999": 324609,
+    "samples": 1500000
+   },
+   "detect_us": {
+    "max": 1388,
+    "mean": 40,
+    "p50": 56,
+    "p90": 68,
+    "p99": 82,
+    "p999": 112,
+    "samples": 1500000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 1500834,
+     "calls_raw": 1500000,
+     "threats": 921509,
+     "errors": 0,
+     "fuel_total": 431468433999,
+     "latency_max": "2.186334ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 1500000,
+     "calls_raw": 1500000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 486000000,
+     "latency_max": "528.851\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 70.3,
+   "rep": 1
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 1000,
+   "max_events": 30000,
+   "model": "mlp",
+   "events": 30000,
+   "alerts": 17952,
+   "elapsed_s": 31.075728906,
+   "achieved_eps": 965.0,
+   "max_rss_kb": 95056,
+   "e2e_us": {
+    "max": 583,
+    "mean": 96,
+    "p50": 120,
+    "p90": 148,
+    "p99": 192,
+    "p999": 309,
+    "samples": 30000
+   },
+   "detect_us": {
+    "max": 401,
+    "mean": 83,
+    "p50": 107,
+    "p90": 128,
+    "p99": 153,
+    "p999": 217,
+    "samples": 30000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 30834,
+     "calls_raw": 0,
+     "threats": 17952,
+     "errors": 0,
+     "fuel_total": 12780866149,
+     "latency_max": "1.887327ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 30000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 695942398,
+     "latency_max": "220.274\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.4,
+   "rep": 2
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 1000,
+   "max_events": 30000,
+   "model": "rf",
+   "events": 30000,
+   "alerts": 17952,
+   "elapsed_s": 31.043483498,
+   "achieved_eps": 966.0,
+   "max_rss_kb": 101412,
+   "e2e_us": {
+    "max": 1114,
+    "mean": 86,
+    "p50": 104,
+    "p90": 133,
+    "p99": 185,
+    "p999": 345,
+    "samples": 30000
+   },
+   "detect_us": {
+    "max": 1102,
+    "mean": 75,
+    "p50": 91,
+    "p90": 116,
+    "p99": 148,
+    "p999": 280,
+    "samples": 30000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 30834,
+     "calls_raw": 0,
+     "threats": 17952,
+     "errors": 0,
+     "fuel_total": 9681448945,
+     "latency_max": "2.02986ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 30000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 695949884,
+     "latency_max": "133.592\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.5,
+   "rep": 2
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 1000,
+   "max_events": 30000,
+   "model": "mlp",
+   "events": 30000,
+   "alerts": 17952,
+   "elapsed_s": 31.170451957,
+   "achieved_eps": 962.0,
+   "max_rss_kb": 96212,
+   "e2e_us": {
+    "max": 527,
+    "mean": 74,
+    "p50": 102,
+    "p90": 121,
+    "p99": 145,
+    "p999": 250,
+    "samples": 30000
+   },
+   "detect_us": {
+    "max": 318,
+    "mean": 63,
+    "p50": 89,
+    "p90": 104,
+    "p99": 121,
+    "p999": 157,
+    "samples": 30000
+   },
+   "rules": {
+    "suspicious_shell": {
+     "calls": 30000,
+     "calls_raw": 30000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 9720000,
+     "latency_max": "113.732\u00b5s",
+     "memory_bytes": 1179648
+    },
+    "ml_detector": {
+     "calls": 30834,
+     "calls_raw": 30000,
+     "threats": 17952,
+     "errors": 0,
+     "fuel_total": 11733106479,
+     "latency_max": "1.895397ms",
+     "memory_bytes": 5898240
+    }
+   },
+   "wall_s": 31.6,
+   "rep": 2
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 1000,
+   "max_events": 30000,
+   "model": "rf",
+   "events": 30000,
+   "alerts": 17952,
+   "elapsed_s": 31.161036421,
+   "achieved_eps": 963.0,
+   "max_rss_kb": 97712,
+   "e2e_us": {
+    "max": 663,
+    "mean": 67,
+    "p50": 86,
+    "p90": 112,
+    "p99": 137,
+    "p999": 266,
+    "samples": 30000
+   },
+   "detect_us": {
+    "max": 627,
+    "mean": 56,
+    "p50": 73,
+    "p90": 95,
+    "p99": 113,
+    "p999": 190,
+    "samples": 30000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 30834,
+     "calls_raw": 30000,
+     "threats": 17952,
+     "errors": 0,
+     "fuel_total": 8649837747,
+     "latency_max": "2.03354ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 30000,
+     "calls_raw": 30000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 9720000,
+     "latency_max": "142.633\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.5,
+   "rep": 2
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 10000,
+   "max_events": 300000,
+   "model": "mlp",
+   "events": 300000,
+   "alerts": 184046,
+   "elapsed_s": 30.906034101,
+   "achieved_eps": 9707.0,
+   "max_rss_kb": 102264,
+   "e2e_us": {
+    "max": 10757,
+    "mean": 528,
+    "p50": 394,
+    "p90": 956,
+    "p99": 2793,
+    "p999": 9555,
+    "samples": 300000
+   },
+   "detect_us": {
+    "max": 484,
+    "mean": 65,
+    "p50": 83,
+    "p90": 106,
+    "p99": 134,
+    "p999": 204,
+    "samples": 300000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 300834,
+     "calls_raw": 0,
+     "threats": 184046,
+     "errors": 0,
+     "fuel_total": 125586969001,
+     "latency_max": "2.348516ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 300000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 6965534997,
+     "latency_max": "202.734\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.3,
+   "rep": 2
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 10000,
+   "max_events": 300000,
+   "model": "rf",
+   "events": 300000,
+   "alerts": 184046,
+   "elapsed_s": 30.986154874,
+   "achieved_eps": 9682.0,
+   "max_rss_kb": 107332,
+   "e2e_us": {
+    "max": 6167,
+    "mean": 413,
+    "p50": 341,
+    "p90": 798,
+    "p99": 1521,
+    "p999": 3229,
+    "samples": 300000
+   },
+   "detect_us": {
+    "max": 1672,
+    "mean": 58,
+    "p50": 70,
+    "p90": 95,
+    "p99": 119,
+    "p999": 187,
+    "samples": 300000
+   },
+   "rules": {
+    "suspicious_shell": {
+     "calls": 300000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 6965575078,
+     "latency_max": "1.222974ms",
+     "memory_bytes": 1179648
+    },
+    "ml_detector": {
+     "calls": 300834,
+     "calls_raw": 0,
+     "threats": 184046,
+     "errors": 0,
+     "fuel_total": 92930921041,
+     "latency_max": "1.946299ms",
+     "memory_bytes": 8126464
+    }
+   },
+   "wall_s": 31.4,
+   "rep": 2
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 10000,
+   "max_events": 300000,
+   "model": "mlp",
+   "events": 300000,
+   "alerts": 184046,
+   "elapsed_s": 31.004458066,
+   "achieved_eps": 9676.0,
+   "max_rss_kb": 106668,
+   "e2e_us": {
+    "max": 3928,
+    "mean": 360,
+    "p50": 303,
+    "p90": 750,
+    "p99": 1284,
+    "p999": 2155,
+    "samples": 300000
+   },
+   "detect_us": {
+    "max": 2123,
+    "mean": 52,
+    "p50": 71,
+    "p90": 92,
+    "p99": 111,
+    "p999": 145,
+    "samples": 300000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 300834,
+     "calls_raw": 300000,
+     "threats": 184046,
+     "errors": 0,
+     "fuel_total": 115210925995,
+     "latency_max": "2.107192ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 300000,
+     "calls_raw": 300000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 97200000,
+     "latency_max": "163.953\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.4,
+   "rep": 2
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 10000,
+   "max_events": 300000,
+   "model": "rf",
+   "events": 300000,
+   "alerts": 184046,
+   "elapsed_s": 31.027554343,
+   "achieved_eps": 9669.0,
+   "max_rss_kb": 108184,
+   "e2e_us": {
+    "max": 3513,
+    "mean": 305,
+    "p50": 254,
+    "p90": 636,
+    "p99": 998,
+    "p999": 1466,
+    "samples": 300000
+   },
+   "detect_us": {
+    "max": 3086,
+    "mean": 44,
+    "p50": 58,
+    "p90": 79,
+    "p99": 99,
+    "p999": 159,
+    "samples": 300000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 300834,
+     "calls_raw": 300000,
+     "threats": 184046,
+     "errors": 0,
+     "fuel_total": 82634675296,
+     "latency_max": "3.074601ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 300000,
+     "calls_raw": 300000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 97200000,
+     "latency_max": "636.142\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 31.4,
+   "rep": 2
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 50000,
+   "max_events": 1500000,
+   "model": "mlp",
+   "events": 1500000,
+   "alerts": 921509,
+   "elapsed_s": 99.909090145,
+   "achieved_eps": 15014.0,
+   "max_rss_kb": 193160,
+   "e2e_us": {
+    "max": 457496,
+    "mean": 338832,
+    "p50": 334520,
+    "p90": 388344,
+    "p99": 422808,
+    "p999": 439211,
+    "samples": 1500000
+   },
+   "detect_us": {
+    "max": 5317,
+    "mean": 60,
+    "p50": 83,
+    "p90": 92,
+    "p99": 115,
+    "p999": 150,
+    "samples": 1500000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 1500834,
+     "calls_raw": 0,
+     "threats": 921509,
+     "errors": 0,
+     "fuel_total": 642062754519,
+     "latency_max": "5.296784ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 1500000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 34694915505,
+     "latency_max": "335.146\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 100.5,
+   "rep": 2
+  },
+  {
+   "encoding": "json",
+   "offered_eps": 50000,
+   "max_events": 1500000,
+   "model": "rf",
+   "events": 1500000,
+   "alerts": 921509,
+   "elapsed_s": 88.179064636,
+   "achieved_eps": 17011.0,
+   "max_rss_kb": 193636,
+   "e2e_us": {
+    "max": 388184,
+    "mean": 299000,
+    "p50": 295837,
+    "p90": 341220,
+    "p99": 366950,
+    "p999": 380215,
+    "samples": 1500000
+   },
+   "detect_us": {
+    "max": 3126,
+    "mean": 52,
+    "p50": 69,
+    "p90": 80,
+    "p99": 100,
+    "p999": 140,
+    "samples": 1500000
+   },
+   "rules": {
+    "suspicious_shell": {
+     "calls": 1500000,
+     "calls_raw": 0,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 34694787529,
+     "latency_max": "1.028331ms",
+     "memory_bytes": 1179648
+    },
+    "ml_detector": {
+     "calls": 1500834,
+     "calls_raw": 0,
+     "threats": 921509,
+     "errors": 0,
+     "fuel_total": 482190804163,
+     "latency_max": "2.124372ms",
+     "memory_bytes": 8126464
+    }
+   },
+   "wall_s": 88.7,
+   "rep": 2
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 50000,
+   "max_events": 1500000,
+   "model": "mlp",
+   "events": 1500000,
+   "alerts": 921509,
+   "elapsed_s": 83.397769192,
+   "achieved_eps": 17986.0,
+   "max_rss_kb": 202520,
+   "e2e_us": {
+    "max": 422986,
+    "mean": 282702,
+    "p50": 278435,
+    "p90": 330878,
+    "p99": 376833,
+    "p999": 402084,
+    "samples": 1500000
+   },
+   "detect_us": {
+    "max": 3091,
+    "mean": 49,
+    "p50": 72,
+    "p90": 81,
+    "p99": 102,
+    "p999": 133,
+    "samples": 1500000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 1500834,
+     "calls_raw": 1500000,
+     "threats": 921509,
+     "errors": 0,
+     "fuel_total": 590504844641,
+     "latency_max": "3.081321ms",
+     "memory_bytes": 5898240
+    },
+    "suspicious_shell": {
+     "calls": 1500000,
+     "calls_raw": 1500000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 486000000,
+     "latency_max": "516.84\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 84.0,
+   "rep": 2
+  },
+  {
+   "encoding": "binary",
+   "offered_eps": 50000,
+   "max_events": 1500000,
+   "model": "rf",
+   "events": 1500000,
+   "alerts": 921509,
+   "elapsed_s": 70.056805592,
+   "achieved_eps": 21411.0,
+   "max_rss_kb": 207364,
+   "e2e_us": {
+    "max": 344875,
+    "mean": 237276,
+    "p50": 234504,
+    "p90": 281132,
+    "p99": 310178,
+    "p999": 329257,
+    "samples": 1500000
+   },
+   "detect_us": {
+    "max": 3103,
+    "mean": 41,
+    "p50": 57,
+    "p90": 69,
+    "p99": 82,
+    "p999": 112,
+    "samples": 1500000
+   },
+   "rules": {
+    "ml_detector": {
+     "calls": 1500834,
+     "calls_raw": 1500000,
+     "threats": 921509,
+     "errors": 0,
+     "fuel_total": 431474207676,
+     "latency_max": "3.092281ms",
+     "memory_bytes": 8126464
+    },
+    "suspicious_shell": {
+     "calls": 1500000,
+     "calls_raw": 1500000,
+     "threats": 0,
+     "errors": 0,
+     "fuel_total": 486000000,
+     "latency_max": "535.431\u00b5s",
+     "memory_bytes": 1179648
+    }
+   },
+   "wall_s": 70.6,
    "rep": 2
   }
  ]

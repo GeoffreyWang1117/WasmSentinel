@@ -1,13 +1,14 @@
 {
  "experiment": "E2 same model, three implementations: consistency and single-call latency",
  "provenance": {
-  "git_commit": "ba7af70ee77e0cec2139fb05d64428c19612565d",
-  "wasm_sha256": "8e4238a2355b6a21af6b91ee1639cc3e68f86ef7d73f884023f923f64ae5179f",
+  "git_commit": "3e804a63d77c93c5c83b9f967c0ee1927fa29e3d",
+  "wasm_sha256": "a389a51aaff3402935d2c6399c2058bbfe1ca628785c0b84e19b6c732636d801",
   "weights_sha256": "1ee0c5d26f35193655abc52559ccfcdc1cf3734baf5ec232ec0ebf67277b3832",
+  "forest_sha256": "efd32e502d1e0310fba1d03681cd53ae4473deed313e05eae840cc1d838d1225",
   "kernel": "7.0.0-34-generic",
   "cpu": "AMD Ryzen 9 5950X 16-Core Processor",
   "numpy": "2.2.6",
-  "timestamp": "2026-10-25T12:43:42Z",
+  "timestamp": "2026-10-25T21:08:53Z",
   "args": {
    "adfa_dir": "/home/coder-gw/Engineering/WasmSentinel/evaluation/datasets/raw/ADFA-LD/ADFA-LD",
    "wasm": "/home/coder-gw/Engineering/WasmSentinel/rules/wasm/ml_detector.wasm",
@@ -26,6 +27,14 @@
   "decisions_agree_at_0.7": {
    "numpy_vs_wasm": 5951,
    "numpy_vs_native": 5951
+  },
+  "rf": {
+   "forest_sha256": "efd32e502d1e0310fba1d03681cd53ae4473deed313e05eae840cc1d838d1225",
+   "traces": 5951,
+   "max_abs_diff_numpy_vs_wasm": 2.960364020587747e-08,
+   "max_abs_diff_numpy_vs_native": 3.333333342681044e-08,
+   "max_abs_diff_native_vs_wasm": 4.9281978636850354e-09,
+   "note": "numpy = forest_export.forest_predict reading the same image; the image was checked against scikit-learn predict_proba when it was trained (rules/ml-detector/train/rf_model.json)."
   }
  },
  "timing": {
@@ -33,26 +42,32 @@
   "repeat": 30,
   "trace_len_median": 343,
   "ns_per_call_median": {
-   "numpy": 164603.0,
-   "native_rust": 25950.5,
-   "wasm_wasmtime_py": 126317.5
+   "numpy": 165651.0,
+   "native_rust": 23800.5,
+   "wasm_wasmtime_py": 127370.5,
+   "native_rust_rf": 19545.0,
+   "wasm_rf_wasmtime_py": 132597.0
   },
   "ns_per_call_p90": {
-   "numpy": 413898.9499999997,
-   "native_rust": 54446.0,
-   "wasm_wasmtime_py": 193160.94999999998
+   "numpy": 399221.0,
+   "native_rust": 50798.99999999999,
+   "wasm_wasmtime_py": 190659.5,
+   "native_rust_rf": 48921.999999999956,
+   "wasm_rf_wasmtime_py": 207266.5
   },
   "calls_per_s_median": {
-   "numpy": 6075.223416341136,
-   "native_rust": 38534.90298838173,
-   "wasm_wasmtime_py": 7916.559463257268
+   "numpy": 6036.7881872128755,
+   "native_rust": 42015.92403520935,
+   "wasm_wasmtime_py": 7851.111521113602,
+   "native_rust_rf": 51163.98055768739,
+   "wasm_rf_wasmtime_py": 7541.648755250873
   },
   "go_engine_ns_per_call": {
-   "BenchmarkInvokeEcho": 2145.0,
-   "BenchmarkRealMLDetectorJSON": 10212.0,
-   "BenchmarkRealMLDetectorRaw": 4602.0
+   "BenchmarkInvokeEcho": 2106.0,
+   "BenchmarkRealMLDetectorJSON": 10188.0,
+   "BenchmarkRealMLDetectorRaw": 4443.0
   },
-  "note": "wasm_wasmtime_py includes the Python-side call and memory copy; go_engine_ns_per_call BenchmarkInvokeEcho is the host engine's own per-call overhead with a trivial guest, RealMLDetector* the full rule on one process event (JSON / raw payload)."
+  "note": "wasm_wasmtime_py / wasm_rf_wasmtime_py include the Python-side call and memory copy; *_rf is the embedded random forest (features + 300-tree traversal), the others the MLP; go_engine_ns_per_call BenchmarkInvokeEcho is the host engine's own per-call overhead with a trivial guest, RealMLDetector* the full rule on one process event (JSON / raw payload)."
  },
- "elapsed_seconds": 18.9
+ "elapsed_seconds": 33.1
 }
