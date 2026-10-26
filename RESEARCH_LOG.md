@@ -2,6 +2,73 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-25 · RF-in-Wasm 完成：森林嵌入模块、E1 加 `wasmsentinel_rf` 臂，E1 / E2 / E3 重跑
+
+用户拍板「做 RF-in-Wasm，给 E1 加 rf_wasm 臂」。实现见 fd8097d（森林 + E1 臂）、d549f3c（host `--rule-config`、严格 `init`、E2/E3 森林臂）、3e804a6（论文宏网格）；结果与论文见本条之后的提交。
+
+**实现**
+
+- `rules/ml-detector` 内嵌一棵 scikit-learn 随机森林（`train/train_rf.py`：全部 5,951 条 ADFA-LD 轨迹，300 棵树、`class_weight="balanced"`，与 E1 的 `rf` 基线同一组超参）。`train/forest_export.py` 把它序列化成 WSRF v1 图：24 字节头、每树根索引、每节点 12 字节（feature i32 / value f32 / right u32），深度优先、左孩子隐含为下一个节点；181,838 个节点、最大深度 43、2,183,280 字节，模块从 334 kB 变为 2.5 MB。`src/forest.rs` 加载时校验整张图（右孩子严格向前且在图内、特征索引 < 64、叶子值是 [0,1] 内的有限数），遍历原地进行，不分配。
+- **阈值向下取整**：导出器把每个 f64 阈值存成不大于它的最大 f32，使模块里 `x <= t32` 与 scikit-learn 里 `f32(x) <= t64` 逐位等价。两条引理（等价性；RNE 再 nextafter 等于向下取整，|t| < 3e38）用 Z3 QF_FP 证明，文件在 `train/verify/`（`/verify` 路由器；第一次把 nextafter 编码成"减 0"被 REFUTED，是编码错误不是命题错误，改为在 IEEE 位串上编码后 PROVED）。
+- 一致性三层：导出器 vs `predict_proba` 5,951 条 max diff 2.5e-9（`train/rf_model.json`）；`tests/forest_golden.rs` 28 例 2.8e-8；`verify_wasm_parity.py` 对模块核 sha256 与 28 例。
+- 模块导出 `rf_score`、`load_rf_model`；`model_info` 报 `rf` 段与 `default_model`；`init` 配置 `{"model":"rf"}` 把深路径换成森林，默认仍是 MLP（E4/E5 已经用它测过）。`init` 对坏配置（非 JSON、字段类型错、未知模型名）返回 −1，host 视为加载失败——之前是静默回退默认值，发现后停掉当时在跑的 E1、修好重编、重新起跑。
+- host：`--rule-config name=file` 把文件内容作为 `init` 的参数（`engine.SetRuleConfig`；给了配置但模块没有 `init` 时报 ABI 错）。
+- 实验脚本：E1 加 `wasmsentinel_rf` 臂（同一 (seed, fold) 的 `rf` 基线序列化后 `load_rf_model`，全部测试分数来自 `rf_score`，逐折记 `wasm_vs_sklearn_max_abs_diff`）；E2 对森林做三路一致性与计时；E3 `--models mlp,rf`（森林臂经 `--rule-config ml_detector=<out>/ml_detector_rf.json`）。`paper_numbers.py` 为 E3 生成完整网格（缺格 `??`），E1 表的 Δ 以 `wasmsentinel_rf` 为参照。
+
+**E1 重跑**：`make e1` 10:20–14:07 本地（17:20–21:07Z），13,637 s；commit d549f3c，`ml_detector.wasm` sha256 a389a51a…，`git_dirty=false`。输出 `evaluation/results/2026-11/e1/{e1_results.json, e1_summary.md, e1_pr_curves.{json,png,pdf}}`。
+
+| 模型 | AUPRC | ROC-AUC | recall@5%FPR | recall@1%FPR | F1 @FPR5 工作点 | F1 @训练折 F1 最优 |
+|---|---|---|---|---|---|---|
+| **WasmSentinel RF（Wasm，v1 特征）** | **0.897 ± 0.028** | 0.982 ± 0.004 | 0.908 | 0.700 | 0.636 | 0.724 |
+| WasmSentinel MLP（Wasm，v1 特征） | 0.730 ± 0.056 | 0.946 ± 0.011 | 0.718 | 0.345 | 0.691 | 0.700 |
+| Random Forest（scikit-learn，同一森林） | 0.897 ± 0.028 | 0.982 ± 0.004 | 0.908 | 0.700 | 0.636 | 0.724 |
+| LSTM（原始序列，监督，早停） | 0.825 ± 0.061 | 0.965 ± 0.012 | 0.858 | 0.488 | 0.760 | 0.792 |
+| STIDE 6-gram 新颖率（仅正常） | 0.437 ± 0.043 | 0.787 ± 0.024 | 0.377 | 0.157 | 0.344 | 0.345 |
+| Isolation Forest（仅正常，v1 特征） | 0.218 ± 0.007 | 0.745 ± 0.013 | 0.046 | 0.002 | 0.060 | 0.360 |
+
+- 配对 AUPRC 差（WasmSentinel RF − 基线，15 次 (seed, fold)）：MLP +0.167 [+0.135, +0.199]；LSTM +0.072 [+0.046, +0.098]；STIDE +0.460；IF +0.679；scikit-learn RF 0（15 折分数逐条相同，Wilcoxon p = 1）。p 其余 ≤ 1.2×10⁻⁴。
+- **Wasm vs 参考实现**，15 折最大分数差：MLP vs NumPy 1.13×10⁻⁶，森林 vs scikit-learn 2.94×10⁻⁸。逐折森林平均 149,943 个节点（143,762–161,186）、1.80 MB（1.73–1.94 MB），最大深度 36–58；给模块装一棵森林并给 1,191 条测试轨迹打分每折约 2 s。
+- 按家族（FPR-5 工作点）：模块内 RF Adduser 0.96 / Hydra_FTP 0.99 / Hydra_SSH 0.99 / Java_Meterpreter 0.99 / Meterpreter 0.97 / Web_Shell 0.95；MLP 0.79 / 0.80 / 0.87 / 0.80 / 0.71 / 0.66。MLP 与基线的数字与上一次 E1 完全一致（同一种子、同一代码路径）。
+- 机器状态：与上次相同，用户的 vLLM 常驻；LSTM 仍在 CPU 上训练（占全部时长的绝大部分）。
+
+**E2 重跑**：`make e2` 14:08 本地，33 s；commit 3e804a6，模块 sha256 a389a51a…，权重 1ee0c5d2…，森林 efd32e50…。
+
+- 一致性（5,951 条）：MLP 三路同上次（NumPy vs Wasm 1.91×10⁻⁶，原生 vs Wasm 5.0×10⁻⁹，0.7 阈值 5,951/5,951）；**森林** NumPy 读取器（`forest_predict` 读同一张图）vs Wasm 2.96×10⁻⁸，vs 原生 Rust 3.33×10⁻⁸，原生 vs Wasm 4.93×10⁻⁹。
+- 整条轨迹一次打分（662 条、中位 343 syscall、30 次取中位）：原生 Rust MLP 23.8 µs、**森林 19.5 µs**（p90 50.8 / 48.9）；wasmtime-py 路径 MLP 127.4 / 森林 132.6 µs（含 Python 调用与拷贝）；NumPy MLP 165.7 µs。森林遍历 300 棵、平均深度 26 的树不比 19,201 参数的 MLP 慢，特征计算是两者共同的大头。
+- Go 引擎：空调用 2.1 µs、ml_detector 进程事件 JSON 10.2 µs / 二进制 4.4 µs（上次 4.6）。
+- 机器状态：E1 刚结束，1 分钟负载 12.7（15 分钟 19），vLLM 常驻；这些是单线程中位数，与上次差在 10% 以内。
+
+**E3 重跑**：`make e3` 14:09–14:38 本地（21:09–21:38Z）；commit 3e804a6。1K / 10K / 50K eps × {json, binary} × {mlp, rf} × 3 次、每次 30 s 的事件量；森林臂用 `--rule-config ml_detector=e3/ml_detector_rf.json`（内容 `{"model":"rf"}`）把 ml_detector 的深路径切到嵌入森林，其余完全相同。输出 `e3/{e3_results.json, e3_summary.md, e3_latency_throughput.{png,pdf}, ml_detector_rf.json}`。
+
+| 编码 | 模型 | 提供 eps | 实际 eps | e2e p50 (µs) | p99 | p999 | detect p50 | detect p99 | RSS (MiB) |
+|---|---|---|---|---|---|---|---|---|---|
+| json | mlp | 1,000 | 969 | 118 | 191 | 331 | 105 | 148 | 93 |
+| json | rf | 1,000 | 965 | 103 | 185 | 344 | 90 | 153 | 99 |
+| binary | mlp | 1,000 | 962 | 101 | 146 | 245 | 89 | 122 | 94 |
+| binary | rf | 1,000 | 968 | 86 | 153 | 284 | 73 | 116 | 97 |
+| json | mlp | 10,000 | 9,706 | 382 | 2,189 | 6,280 | 81 | 130 | 101 |
+| json | rf | 10,000 | 9,685 | 335 | 1,434 | 2,664 | 70 | 118 | 105 |
+| binary | mlp | 10,000 | 9,687 | 301 | 1,194 | 1,834 | 70 | 110 | 103 |
+| binary | rf | 10,000 | 9,671 | 254 | 987 | 1,466 | 58 | 97 | 107 |
+| json | mlp | 50,000 | **15,072** | 333,324 | 419,911 | 437,699 | 82 | 115 | 189 |
+| json | rf | 50,000 | **17,044** | 294,724 | 369,420 | 381,873 | 69 | 100 | 190 |
+| binary | mlp | 50,000 | **18,277** | 273,616 | 364,278 | 383,935 | 71 | 97 | 199 |
+| binary | rf | 50,000 | **21,430** | 233,727 | 308,660 | 323,171 | 57 | 82 | 197 |
+
+- **森林臂每一格都比 MLP 臂便宜**：binary@10K detect p50 58 对 70 µs（JSON 70 对 81），e2e p50 254 对 301 µs（JSON 335 对 382）；可持续吞吐 binary 21.4K 对 18.3K eps（+17%），JSON 17.0K 对 15.1K（+13%）。与 E2 的整条轨迹计时同向（森林 19.5 对 MLP 23.8 µs）：300 棵平均深度 26 的树约 8K 次比较，比 19,201 次乘加加 ReLU 的 MLP 便宜，而两者的 v1 特征计算相同、仍是大头。论文 E3 段的结论"E1 里更好的检测器不是更贵的那个"成立。
+- 2.2 MB 的森林图让 RSS 多 3–6 MiB（binary@10K 107 对 103 MiB）。
+- MLP 臂与上次 E3（05:43）在噪声内：饱和 18.3K / 15.1K（上次 18.5K / 15.0K），10K 时 e2e p50 301 / 382 µs（上次 304 / 378）。json@10K 的 p999 6.3 ms 对上次 4.7 ms 是 3 次中一次尾部突发（表里是均值）；论文不引单格 p999。
+- 机器状态：E1 结束 1 分钟后起跑 E2，E3 期间 1 分钟负载从 9 降到 4.5，vLLM 常驻；与上次 E3（负载 4–5）相当。
+
+
+**论文怎么写**（sections 已按此改好，随本条提交）
+
+- 标题主张不变（成本 / 隔离 / 等价），E1 的 headline 从"MLP 0.73，诚实地输给 RF"变成"沙箱里的森林 0.90，与 scikit-learn 逐位相同，高于 LSTM"；MLP 0.73 作为模块最初搭载的模型保留在表里。要点是协议：数字是沙箱内工件的，与它装哪个模型无关。
+- 不写"更强的模型"或"state of the art"；森林是 E1 上一轮已经有的基线，搬进模块后数字不变，这正是要证明的事。
+- Setup 注明：E4/E5 用默认 MLP 测；E1/E2/E3 两个模型都报。
+
+**CLAIMS**：C1.1–C1.3 更新为重跑数字；C3.2、C3.3 改为森林 headline；新增 C3.4（嵌入森林的规模、一致性、Z3 引理）。
+
 ## 2026-10-25 · E5 完成：同一三种检测在 WasmSentinel / Falco / Tetragon 上的检出、延迟与资源
 
 `make e5`（06:22–06:24；commit ba7af70），`evaluation/results/2026-11/e5/{e5_results.json, e5_summary.md}`。三个场景（读 `/etc/shadow`；把 `/bin/true` 拷到 `/tmp` 下执行；TCP 连 127.0.0.1:4444，harness 自己监听）各 20 次；WasmSentinel 用 suspicious_shell（eBPF 采集、JSON 编码），Falco 用三条自定义规则叠默认规则集（`evaluation/configs/falco-e5-rules.yaml`），Tetragon 用 `__x64_sys_openat` 入口 + `tcp_connect` dport 4444 + exec 按 `/tmp` 前缀（`tetragon-e5-policy.yaml`）。告警归到其之前最近的一次动作；延迟 = 动作前墙钟 → 首条告警。

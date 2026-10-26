@@ -30,7 +30,7 @@ E2–E5 测的是默认路径。
 | 格式 | WSRF v1：24 字节头 + 每棵树的根索引 + 每节点 12 字节（feature i32 / value f32 / right u32），深度优先，左孩子隐含为下一个节点；阈值**向下**取整到 f32，使模块的 f32 比较与 scikit-learn 对 f64 阈值的判定逐位一致 | `train/forest_export.py`，`src/forest.rs` |
 | 文件 | `train/rf_model.bin`，sha256 `efd32e50…1225`（`model_info` 的 `rf.sha256`） | `src/forest_meta.rs` |
 | 一致性 | 导出器 vs scikit-learn `predict_proba`：5,951 条最大差 2.5e-9；模块 `rf_score` vs fixture：28 例最大差 2.8e-8；E1 的 `wasmsentinel_rf` 臂逐折记录 `wasm_vs_sklearn_max_abs_diff` | `train/rf_model.json`，`tests/forest_golden.rs`，`train/verify_wasm_parity.py` |
-| 交叉验证精度 | E1 的 `wasmsentinel_rf` 臂：逐折训练同一超参的森林，经 `load_rf_model` 载入、`rf_score` 打分 | `evaluation/results/2026-11/e1/` |
+| 交叉验证精度 | E1 的 `wasmsentinel_rf` 臂（2026-10-25）：逐折训练同一超参的森林，经 `load_rf_model` 载入、`rf_score` 打分；AUPRC 0.897 ± 0.028、recall@5%FPR 0.908、@1%FPR 0.700，与 scikit-learn `predict_proba` 逐折相同（15 折最大差 2.9e-8）；同协议下 MLP 0.730 ± 0.056 | `evaluation/results/2026-11/e1/e1_summary.md` |
 
 加载时校验整张图：每个右孩子索引严格向前且在图内、特征索引小于 64、叶子值是有限的概率，
 所以遍历一定终止且不会越界；校验失败 `load_rf_model` 返回 -1，嵌入的森林不受影响。
