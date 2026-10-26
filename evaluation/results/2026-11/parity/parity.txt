@@ -1,5 +1,6 @@
-wasm model: {'feature_set': 'v1', 'hidden_sizes': [128, 64, 32, 16], 'input_size': 64, 'num_parameters': 19201, 'sha256': '1ee0c5d26f35193655abc52559ccfcdc1cf3734baf5ec232ec0ebf67277b3832', 'source': 'best_model_weights.json', 'threshold': 0.699999988079071}
+wasm model: {'default_model': 'rf', 'feature_set': 'v1', 'hidden_sizes': [128, 64, 32, 16], 'input_size': 64, 'num_parameters': 19201, 'rf': {'max_depth': 43, 'n_nodes': 181838, 'n_trees': 300, 'sha256': 'efd32e502d1e0310fba1d03681cd53ae4473deed313e05eae840cc1d838d1225', 'source': 'rf_model.bin', 'training': 'ADFA-LD, 5951 traces (5205 normal, 746 attack), feature set v1; scikit-learn 1.7.2 RandomForestClassifier(n_estimators=300, class_weight=balanced, random_state=0)'}, 'sha256': '1ee0c5d26f35193655abc52559ccfcdc1cf3734baf5ec232ec0ebf67277b3832', 'source': 'best_model_weights.json', 'threshold': 0.699999988079071}
 inputs: 1400 (1000 synthetic, 400 ADFA-LD traces)
 max |feature diff| = 0.000e+00
 max |score diff|   = 1.967e-06  (worst case #32, len 100, ref 0.371615 wasm 0.371613)
+random forest: max |score diff| = 2.782e-08 over 28 fixture cases (scikit-learn reference)
 PASS: within 1e-05
