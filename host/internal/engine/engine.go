@@ -127,7 +127,7 @@ func (e *Engine) Limits() Limits { return e.cfg }
 // name on every instantiation, including re-instantiation after a trap. It
 // takes effect for rules loaded afterwards; nil or empty restores init(0, 0).
 // The rules in this repository take a JSON object (for ml_detector, e.g.
-// {"model":"rf"} selects the embedded random forest).
+// {"model":"mlp"} selects the embedded MLP instead of the default forest).
 func (e *Engine) SetRuleConfig(name string, config []byte) {
 	e.mu.Lock()
 	defer e.mu.Unlock()

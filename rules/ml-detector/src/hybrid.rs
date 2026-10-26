@@ -2,8 +2,8 @@
 //!
 //! Syscall events go through STIDE (fast path, n-gram membership) and, when
 //! STIDE flags the n-gram, through the deep-path model (feature set v1 over the
-//! process's recent syscall numbers): the embedded MLP by default, or the
-//! embedded random forest when the config says `"model": "rf"`. Process,
+//! process's recent syscall numbers): the embedded random forest by default,
+//! or the embedded MLP when the config says `"model": "mlp"`. Process,
 //! network and file events are scored by small keyword / port / path rules
 //! only: the models were trained on syscall traces and have nothing to say
 //! about them.
@@ -36,8 +36,10 @@ pub struct HybridConfig {
     pub use_stide: bool,
     /// Run the deep-path model (MLP or forest) when STIDE flags an event
     pub use_mlp: bool,
-    /// Deep-path model: "mlp" (embedded MLP, the default) or "rf" (embedded
-    /// random forest). Both are trained on feature set v1.
+    /// Deep-path model: "rf" (embedded random forest, the default) or "mlp"
+    /// (embedded MLP). Both are trained on feature set v1. The forest became
+    /// the default after E1 (AUPRC 0.90 vs 0.73 inside the module) and E3
+    /// (cheaper per event than the MLP); E4/E5 measure this default.
     pub model: String,
     /// STIDE score at or above which the deep path runs
     pub stide_mlp_threshold: f32,
@@ -57,7 +59,7 @@ impl Default for HybridConfig {
             mlp_threshold: None,
             use_stide: true,
             use_mlp: true,
-            model: "mlp".to_string(),
+            model: "rf".to_string(),
             stide_mlp_threshold: 0.5,
             stide_weight: 0.4,
             mlp_weight: 0.6,
@@ -126,9 +128,10 @@ impl HybridDetector {
         Self::with_config(HybridConfig::default())
     }
 
-    /// Build a detector. The MLP always carries the embedded, trained weights;
-    /// the config can only move its threshold. `"model": "rf"` makes the deep
-    /// path the embedded random forest instead; any other value means MLP.
+    /// Build a detector. The deep path is the embedded random forest when the
+    /// config says `"model": "rf"` (the default) and the embedded MLP for any
+    /// other value. The MLP always carries the embedded, trained weights; the
+    /// config can only move its threshold.
     pub fn with_config(config: HybridConfig) -> Self {
         let mut mlp = MlpDetector::with_embedded_weights();
         if let Some(t) = config.mlp_threshold {

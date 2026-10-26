@@ -17,6 +17,7 @@ number comes from a run.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import platform
 import re
@@ -194,6 +195,7 @@ def main() -> int:
               "provenance": {"git_commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True).stdout.strip(),
                              "kernel": platform.release(), "cpu": cpu, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                              "images": {k: sh(["docker", "inspect", "-f", "{{.Id}}", k]).stdout.strip()[:19] for k in ("nginx:1.27-alpine", "redis:7-alpine", "postgres:16-alpine", "falcosecurity/falco:latest", "quay.io/cilium/tetragon:v1.7.1")},
+                             "wasm_sha256": {q.name: hashlib.sha256(q.read_bytes()).hexdigest() for q in sorted((REPO / "rules" / "wasm").glob("*.wasm"))},
                              "args": {k: str(v) for k, v in vars(args).items()}},
               "summary": summary, "runs": runs}
     args.out.mkdir(parents=True, exist_ok=True)

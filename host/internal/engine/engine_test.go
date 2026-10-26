@@ -436,13 +436,13 @@ func TestRealMLDetectorLoadsAndRuns(t *testing.T) {
 	}
 }
 
-// The real module accepts {"model":"rf"} (deep path on the embedded forest)
-// and rejects a config naming an unknown model instead of silently falling
-// back to the defaults.
+// The real module accepts {"model":"mlp"} (deep path on the embedded MLP
+// instead of the default forest) and rejects a config naming an unknown model
+// instead of silently falling back to the defaults.
 func TestRealMLDetectorInitConfig(t *testing.T) {
 	path := realModule(t, "ml_detector.wasm")
 	e := newEngine(t, DefaultLimits())
-	e.SetRuleConfig("ml_detector", []byte(`{"model":"rf"}`))
+	e.SetRuleConfig("ml_detector", []byte(`{"model":"mlp"}`))
 	if err := e.LoadRule("ml_detector", path); err != nil {
 		t.Fatal(err)
 	}

@@ -17,6 +17,7 @@ alert file (event_time).
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import platform
@@ -309,6 +310,7 @@ def main() -> int:
            "provenance": {"git_commit": subprocess.run(["git", "rev-parse", "HEAD"], cwd=REPO, capture_output=True, text=True).stdout.strip(),
                           "kernel": platform.release(), "cpu": cpu, "timestamp": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
                           "falco_image": sh(["docker", "inspect", "-f", "{{.Id}}", "falcosecurity/falco:latest"]).stdout.strip()[:19],
+                          "wasm_sha256": {q.name: hashlib.sha256(q.read_bytes()).hexdigest() for q in sorted((REPO / "rules" / "wasm").glob("*.wasm"))},
                           "tetragon_image": "quay.io/cilium/tetragon:v1.7.1", "args": {k: str(v) for k, v in vars(args).items()}},
            "scenarios": {"shadow": "open /etc/shadow (EACCES)", "tmpexec": "copy /bin/true under /tmp and run it", "connect": "TCP connect to 127.0.0.1:4444"},
            "results": results,

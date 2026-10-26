@@ -34,10 +34,9 @@ REPO = HERE.parents[1]
 
 
 def rule_config_file(args, model):
-    """Init config handed to ml_detector for the given deep-path model; None
-    for the module's default (MLP)."""
-    if model == "mlp":
-        return None
+    """Init config handed to ml_detector for the given deep-path model. Both
+    models are named explicitly so the cell does not depend on the module's
+    default (the MLP until 2026-10-25, the forest since)."""
     args.out.mkdir(parents=True, exist_ok=True)
     p = args.out / f"ml_detector_{model}.json"
     p.write_text(json.dumps({"model": model}) + "\n")
@@ -80,7 +79,7 @@ def main() -> int:
     ap.add_argument("--train-dir", type=Path, default=REPO / "evaluation/datasets/raw/ADFA-LD/ADFA-LD/Training_Data_Master")
     ap.add_argument("--rates", default="1000,10000,50000")
     ap.add_argument("--encodings", default="json,binary")
-    ap.add_argument("--models", default="mlp,rf", help="ml_detector deep-path models to run: mlp (module default) and/or rf (init config {\"model\":\"rf\"})")
+    ap.add_argument("--models", default="mlp,rf", help="ml_detector deep-path models to run, each selected by an init config {\"model\": ...} through --rule-config: mlp and/or rf")
     ap.add_argument("--seconds", type=float, default=30.0, help="target duration per run (events = rate x seconds)")
     ap.add_argument("--reps", type=int, default=3)
     ap.add_argument("--timeout", type=int, default=600)
@@ -143,7 +142,7 @@ def main() -> int:
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "e3_results.json").write_text(json.dumps(result, indent=1))
     md = ["# E3 end-to-end latency and throughput", "", f"commit {result['provenance']['git_commit'][:12]}, {result['provenance']['timestamp']}, reps {args.reps}, {args.seconds:.0f} s per run; "
-          "model = ml_detector deep path (mlp: module default; rf: init config {\"model\":\"rf\"} via --rule-config)", "",
+          "model = ml_detector deep path, selected per run by an init config {\"model\": ...} via --rule-config", "",
           "| encoding | model | offered eps | achieved eps | e2e p50 (us) | e2e p99 | e2e p999 | detect p50 | detect p99 | RSS (MiB) |", "|---|---|---|---|---|---|---|---|---|---|"]
     for eps in rates:
         for enc in encodings:

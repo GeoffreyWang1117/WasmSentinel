@@ -88,7 +88,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&ruleTrainDir, "rule-train-dir", "", "启动时用这个目录里的正常 syscall 轨迹 (ADFA-LD 格式) 训练导出 train_sequence 的规则 (如 ml_detector 的 STIDE 正常库)")
 	rootCmd.PersistentFlags().StringVar(&ebpfHooks, "ebpf-hooks", "all", "eBPF 钩子列表, 逗号分隔: exec,exit,open,connect,accept,syscall 或 all")
 	rootCmd.PersistentFlags().StringVar(&eventEncoding, "event-encoding", "json", "交给规则的事件编码: json 或 binary (binary 仅对 eBPF 事件且规则导出 detect_raw 时生效, 否则回退 json)")
-	rootCmd.PersistentFlags().StringSliceVar(&ruleConfigs, "rule-config", nil, "规则初始化配置, 形如 name=file (可重复或逗号分隔): 加载规则时把文件内容交给它的 init 导出, 模块拒绝 (返回非 0) 则启动失败; 例如 ml_detector=rf.json 且文件内容 {\"model\":\"rf\"} 选择嵌入的随机森林")
+	rootCmd.PersistentFlags().StringSliceVar(&ruleConfigs, "rule-config", nil, "规则初始化配置, 形如 name=file (可重复或逗号分隔): 加载规则时把文件内容交给它的 init 导出, 模块拒绝 (返回非 0) 则启动失败; 例如 ml_detector=mlp.json 且文件内容 {\"model\":\"mlp\"} 让 ml_detector 的深路径用嵌入的 MLP 而不是默认的随机森林")
 
 	// 绑定标志到 viper
 	viper.BindPFlag("rules", rootCmd.PersistentFlags().Lookup("rules"))

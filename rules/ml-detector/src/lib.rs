@@ -2,9 +2,9 @@
 //!
 //! Syscall events go through STIDE (n-gram fast path) and, when STIDE flags
 //! them, through a model on feature set v1 over the process's recent syscall
-//! numbers. Two models ship in the module: a small MLP (the default deep path,
-//! `weights.rs`) and a random forest (`forest.rs`, `train/rf_model.bin`);
-//! `init` picks one with `{"model": "mlp" | "rf"}`. Both can be replaced at
+//! numbers. Two models ship in the module: a random forest (`forest.rs`,
+//! `train/rf_model.bin`; the default deep path) and a small MLP (`weights.rs`);
+//! `init` picks one with `{"model": "rf" | "mlp"}`. Both can be replaced at
 //! run time (`load_mlp_weights`, `load_rf_model`), which is how the E1
 //! evaluation scores every test trace with per-fold models through the same
 //! compiled module that is deployed.
@@ -551,7 +551,7 @@ mod tests {
         // valid config, then configs that must be rejected rather than
         // silently replaced by the defaults.
         assert_eq!(init(std::ptr::null(), 0), 0);
-        let ok = br#"{"model": "rf", "syscall_window": 50}"#;
+        let ok = br#"{"model": "mlp", "syscall_window": 50}"#;
         assert_eq!(init(ok.as_ptr(), ok.len()), 0);
         let unknown_model = br#"{"model": "forest"}"#;
         assert_eq!(init(unknown_model.as_ptr(), unknown_model.len()), -1);
@@ -567,7 +567,10 @@ mod tests {
         assert_eq!(d.model_name(), "rf");
         assert_eq!(d.get_stats().model, "rf");
         let d = HybridDetector::from_config(&serde_json::json!({})).unwrap();
+        assert_eq!(d.model_name(), "rf", "the forest is the default deep path");
+        let d = HybridDetector::from_config(&serde_json::json!({"model": "mlp"})).unwrap();
         assert_eq!(d.model_name(), "mlp");
+        assert_eq!(d.get_stats().model, "mlp");
         assert!(HybridDetector::from_config(&serde_json::json!({"model": "forest"})).is_err());
         assert!(HybridDetector::from_config(&serde_json::json!({"model": 3})).is_err());
     }
