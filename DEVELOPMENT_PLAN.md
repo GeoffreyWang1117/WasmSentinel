@@ -182,7 +182,7 @@
 |---|---|
 | W1 | 新建 `paper-asiaccs/`（✅ 10-25 骨架 + Evaluation/Related Work 初稿；参考文献逐条核 DOI——10-25 已清掉 5 条编造或无据的条目），以 `paper/`（acmart）为模板底稿，`\documentclass[sigconf,anonymous,review]{acmart}`；12 页正文预算：Intro 1.5、Background+Threat 1.5、Design 3、Impl 0.75、Eval 4、Related+Discussion 1、Conclusion 0.25 |
 | W2 | 按 §2.1 重写贡献与摘要；威胁模型保留 A_ext / A_loc / A_rule 三级，去掉 "formal guarantee" 措辞；TOCTOU 段落只有在 P1.3 实现并有测试时才保留 （✅ 10-31 贡献段按三条主张重写，以默认森林为准，E3 同时给 MLP / 森林两个饱和点，Cost 项写入 CPU 163% 与 pgbench 下丢 45%；摘要只改「application cost」一处措辞，整体留到 W6 门禁前再过；威胁模型 10-25 的新稿已无 "formal guarantee" 与 TOCTOU 段，三级攻击者改为 Trusted / Untrusted / 必须保证 / 范围外四段，不再改；见 `RESEARCH_LOG.md` 2026-10-31） |
-| W3 | Evaluation 按 E1 至 E6 重排；删除所有 `simulated` 来源的表格、误报成因百分比、文献数字充当测量的行；Limitations 写明：ADFA-LD 年代、单数据集、模拟 CVE、未做 mimicry/对抗实验（10-31 用户拍板追加：E3 正文与图改以森林行为主叙事、MLP 降为对照行；随后引言、摘要、结论、讨论里的 E3 头条数字只引森林的宏，`\eThreeAchievedBinFiftyKRf` 等） |
+| W3 | Evaluation 按 E1 至 E6 重排；删除所有 `simulated` 来源的表格、误报成因百分比、文献数字充当测量的行；Limitations 写明：ADFA-LD 年代、单数据集、模拟 CVE、未做 mimicry/对抗实验（10-31 用户拍板追加：E3 正文与图改以森林行为主叙事、MLP 降为对照行；随后引言、摘要、结论、讨论里的 E3 头条数字只引森林的宏，`\eThreeAchievedBinFiftyKRf` 等）（✅ 10-31 完成：E3 森林为主叙事、表格森林行在前、图改画森林臂，引言 / 摘要 / 结论 / 讨论只引森林宏；Limitations 补「未做 mimicry / 对抗评估、E5 为手写触发而非攻击语料、pgbench 下守护进程饱和丢事件」；全文 grep 无 simulated / literature / 误报成因百分比 / CVE 主张；小节顺序保留按问题排列 E2→E3→E4→E5→E6→E1（Questions 段给出 Q1–Q4 到实验的映射），未改成数字序；见 `RESEARCH_LOG.md` 2026-10-31） |
 | W4 | Open Science 附录：anonymous.4open.science 仓（代码、结果 JSON、`make reproduce`、预构建 wasm）；投稿前验证链接可匿名访问 |
 | W5 | Related work 补 prior-art（见 §2.1 末段），用 `/scout` 与 `/ref-check` |
 | W6 | 门禁顺序：`/paper-audit`（悬空引用）→ `/claim-verify`（数字 ↔ JSON）→ `/self-review` → `/nonexpert-review` → `/final-reviewer` → `/submission-preflight AsiaCCS`；每次通过记入 `RESEARCH_LOG.md` |

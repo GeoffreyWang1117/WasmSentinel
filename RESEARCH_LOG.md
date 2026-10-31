@@ -2,6 +2,26 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-31 · W3：E3 改为森林为主叙事；Limitations 补齐；W3 清单核对
+
+用户拍板「开始 W3」，并在此前决定「W3 时把 E3 改成森林为主叙事，引言只留森林」。
+
+**E3 森林为主**
+
+- `evaluation/scripts/paper_numbers.py`：E3 表格每个 (编码, 速率) 格里森林行排在 MLP 行之前；新增宏 `\eThreeBinGainPctRf` = 26（二进制 21,430 对 JSON 17,044）。原 `\eThreeBinGainPct` = 21 只算了 MLP 格（`endswith("@50000")` 排除了 `@rf` 格），保留给 MLP 对照句。
+- `evaluation/scripts/plot_e3.py`：新增 `--model {rf,mlp}`，默认 `rf`；重画 `evaluation/results/2026-11/e3/e3_latency_throughput.{png,pdf}` 并复制到 `paper-asiaccs/figures/`。此前的图只画 MLP 臂。
+- `paper-asiaccs/sections/evaluation.tex` E3：设置段写明「ml_detector runs its default deep path, the forest; the rows marked MLP repeat every cell with the MLP」；结果段与 detect 列段全部换成森林宏（10K 下 p50 254 / 335 µs，p99 987 / 1,434 µs；饱和 21,430 / 17,044 eps，+26%；detect p50 58 µs；RSS 107 → 197 MiB）；原「The rows marked RF」段改为「The MLP rows」对照段（70 对 58 µs，18,277 对 21,430 eps，RSS 103 对 107 MiB），结尾「The better detector of E1 is also the cheaper one to run」。表格与图的 caption 随之改。Setup 段改为「E1, E2 and E3 report both and lead with the forest」。
+- 引言 Cost 项只留森林：10K 下 p50 254 µs、饱和 21,430 eps；摘要、结论的 `\eThreeAchievedBinFiftyK` 换成 `Rf`；讨论第一段的每事件开销范围改为森林的 58–90 µs，「What the binary encoding buys」改引 26%。全文四个文件里不再有非 `Rf` 的 E3 宏（E3 小节的 MLP 对照句除外）。
+
+**Limitations**（`discussion.tex`）新增三点：未做 mimicry / 对抗输入评估；E5 的三个动作是手写触发而非攻击语料；pgbench 下守护进程饱和并丢事件（引 §6.3），该格的开销是饱和监控器的开销，讨论里的两个杠杆能否恢复余量未测。原有五点（ADFA-LD 单数据集与年代 / ABI 混用、隔离是 11 次尝试而非证明、共享机器、Falco / Tetragon 默认配置、wasmtime v17）保留。
+
+**W3 清单其余项**
+
+- 「按 E1 至 E6 重排」：保留按问题的顺序 E2→E3→E4→E5→E6→E1，Questions 段已有 Q1–Q4 到实验的映射，E1 放最后是「ML 是负载不是命门」的定位使然；没有改成数字序。若审稿人介意，改法是重命名实验编号而不是移动小节。
+- 「删除 simulated / 文献数字 / 误报成因百分比」：`grep -i "simulat|literature|CVE|38\\%|42\\%"` 在 `paper-asiaccs/` 无命中；这些从未进入 asiaccs 稿。「模拟 CVE」：本稿不作任何 CVE 检出主张，无可删；Limitations 改为点明 E5 触发是手写的。
+
+**编译**：11 页、0 个 `??`、lint 干净、1 个 2.1 pt 的页级 overfull vbox（与 10-25 起的那个同类，可忽略）。CLAIMS.md C1.3 改为森林在前、MLP 为对照。
+
 ## 2026-10-31 · W2 开始：贡献段重写；带符号数字的排版修复
 
 用户拍板「开始 W2，打磨贡献段」。范围是 `paper-asiaccs/sections/introduction.tex` 的系统段、三条主张与收尾段；摘要与 E4 / E1 正文只改了同一处措辞缺陷。
