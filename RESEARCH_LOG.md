@@ -2,6 +2,15 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-31 · 引言写明 pgbench 下采集器丢 45%
+
+用户拍板「引言里加一句丢 45% 的事实」。此前只有 §6.3（E4）和讨论段写了管道饱和，引言与摘要只说 postgres 下 CPU 更高「原因已查明」。
+
+- `paper-asiaccs/sections/introduction.tex` 贡献项 Cost (E2--E5) 末尾新增一句：pgbench 下守护进程在该极限运行，处理 `\eFourWsEpsPg{}`（12,401）events/s，采集器丢掉 `\eFourWsDroppedPctPg{}`（45.1）% 内核送达的事件，交叉引用 §6.3。两个宏来自 `evaluation/results/2026-11/e4/e4_results.json`（`runs[].monitor`，commit 6fbf555），与 E4 正文同源。
+- 摘要未改：摘要里 CPU 一句维持「原因已查明」，丢事件的细节第一次出现在引言贡献项里。
+- 编译：11 页、0 个 `??`、lint 干净，§6.3 引用解析正确；最后一页的 overfull vbox 由 1.9 pt 变为 1.3 pt。
+- CLAIMS.md C1.4 已含该计数，不需改。
+
 ## 2026-10-26 · 默认深路径切到随机森林；E4 / E5 用新默认重跑
 
 用户拍板「默认切到森林，重跑 E4、E5」。依据是 10-25 的 E1（模块内森林 AUPRC 0.897 对 MLP 0.730）与 E3（森林臂每事件更便宜：binary@10K detect p50 58 对 70 µs，饱和吞吐 +17%）。
