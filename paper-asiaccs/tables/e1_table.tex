@@ -5,10 +5,10 @@
 Model & AUPRC & AUROC & R@5\% & R@1\% & F1@5\% & $\Delta$AUPRC [95\% CI] \\
 \midrule
 \sys RF (Wasm, v1 features) & 0.897 $\pm$ 0.028 & 0.982 & 0.908 & 0.700 & 0.636 & --- \\
-\sys MLP (Wasm, v1 features) & 0.730 $\pm$ 0.056 & 0.946 & 0.718 & 0.345 & 0.691 & +0.167 [+0.135, +0.199] \\
+\sys MLP (Wasm, v1 features) & 0.730 $\pm$ 0.056 & 0.946 & 0.718 & 0.345 & 0.691 & \num[retain-explicit-plus]{+0.167} [\num[retain-explicit-plus]{+0.135}, \num[retain-explicit-plus]{+0.199}] \\
 Random Forest (scikit-learn), supervised, v1 features & 0.897 $\pm$ 0.028 & 0.982 & 0.908 & 0.700 & 0.636 & 0 (identical scores) \\
-LSTM on raw sequence, supervised & 0.825 $\pm$ 0.061 & 0.965 & 0.858 & 0.488 & 0.760 & +0.072 [+0.046, +0.098] \\
-STIDE 6-gram, normal only & 0.437 $\pm$ 0.043 & 0.787 & 0.377 & 0.157 & 0.344 & +0.460 [+0.430, +0.490] \\
-Isolation Forest, normal only, v1 features & 0.218 $\pm$ 0.007 & 0.745 & 0.046 & 0.002 & 0.060 & +0.679 [+0.662, +0.696] \\
+LSTM on raw sequence, supervised & 0.825 $\pm$ 0.061 & 0.965 & 0.858 & 0.488 & 0.760 & \num[retain-explicit-plus]{+0.072} [\num[retain-explicit-plus]{+0.046}, \num[retain-explicit-plus]{+0.098}] \\
+STIDE 6-gram, normal only & 0.437 $\pm$ 0.043 & 0.787 & 0.377 & 0.157 & 0.344 & \num[retain-explicit-plus]{+0.460} [\num[retain-explicit-plus]{+0.430}, \num[retain-explicit-plus]{+0.490}] \\
+Isolation Forest, normal only, v1 features & 0.218 $\pm$ 0.007 & 0.745 & 0.046 & 0.002 & 0.060 & \num[retain-explicit-plus]{+0.679} [\num[retain-explicit-plus]{+0.662}, \num[retain-explicit-plus]{+0.696}] \\
 \bottomrule
 \end{tabular}

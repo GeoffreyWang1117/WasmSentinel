@@ -5,18 +5,18 @@
 Workload & Monitor & Throughput & $\Delta$ [95\% CI] & CPU \% & RSS MiB \\
 \midrule
 nginx & none & 170,989 req/s & --- & --- & --- \\
- & \sys & 163,376 req/s & -4.4 [-6.4, -2.5] & 16.8 & 153 \\
- & Falco & 155,239 req/s & -9.2 [-12.9, -5.6] & 80.8 & 367 \\
- & Tetragon & 140,880 req/s & -17.5 [-23.4, -11.6] & 277.6 & 201 \\
+ & \sys & 163,376 req/s & \num[retain-explicit-plus]{-4.4} [\num[retain-explicit-plus]{-6.4}, \num[retain-explicit-plus]{-2.5}] & 16.8 & 153 \\
+ & Falco & 155,239 req/s & \num[retain-explicit-plus]{-9.2} [\num[retain-explicit-plus]{-12.9}, \num[retain-explicit-plus]{-5.6}] & 80.8 & 367 \\
+ & Tetragon & 140,880 req/s & \num[retain-explicit-plus]{-17.5} [\num[retain-explicit-plus]{-23.4}, \num[retain-explicit-plus]{-11.6}] & 277.6 & 201 \\
 \addlinespace
 redis & none & 948,485 ops/s & --- & --- & --- \\
- & \sys & 914,511 ops/s & -3.6 [-7.2, +0.0] & 9.7 & 142 \\
- & Falco & 900,656 ops/s & -5.0 [-8.1, -1.9] & 8.0 & 371 \\
- & Tetragon & 936,621 ops/s & -1.2 [-3.2, +0.8] & 7.6 & 95 \\
+ & \sys & 914,511 ops/s & \num[retain-explicit-plus]{-3.6} [\num[retain-explicit-plus]{-7.2}, \num[retain-explicit-plus]{+0.0}] & 9.7 & 142 \\
+ & Falco & 900,656 ops/s & \num[retain-explicit-plus]{-5.0} [\num[retain-explicit-plus]{-8.1}, \num[retain-explicit-plus]{-1.9}] & 8.0 & 371 \\
+ & Tetragon & 936,621 ops/s & \num[retain-explicit-plus]{-1.2} [\num[retain-explicit-plus]{-3.2}, \num[retain-explicit-plus]{+0.8}] & 7.6 & 95 \\
 \addlinespace
 PostgreSQL & none & 25,217 tps & --- & --- & --- \\
- & \sys & 22,857 tps & -9.2 [-12.5, -6.0] & 163.0 & 180 \\
- & Falco & 22,964 tps & -8.6 [-17.2, -0.0] & 81.5 & 366 \\
- & Tetragon & 25,129 tps & -0.1 [-7.8, +7.6] & 19.1 & 119 \\
+ & \sys & 22,857 tps & \num[retain-explicit-plus]{-9.2} [\num[retain-explicit-plus]{-12.5}, \num[retain-explicit-plus]{-6.0}] & 163.0 & 180 \\
+ & Falco & 22,964 tps & \num[retain-explicit-plus]{-8.6} [\num[retain-explicit-plus]{-17.2}, \num[retain-explicit-plus]{-0.0}] & 81.5 & 366 \\
+ & Tetragon & 25,129 tps & \num[retain-explicit-plus]{-0.1} [\num[retain-explicit-plus]{-7.8}, \num[retain-explicit-plus]{+7.6}] & 19.1 & 119 \\
 \bottomrule
 \end{tabular}

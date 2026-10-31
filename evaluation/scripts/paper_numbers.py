@@ -21,6 +21,13 @@ def load(path):
         return None
 
 
+def signed(text):
+    """Wrap an explicitly signed number so LaTeX sets a real minus (U+2212) instead of a hyphen,
+    and keeps an explicit plus. The bare number stays inside the braces, so a grep for the value
+    in numbers.tex or a table still finds it."""
+    return r"\num[retain-explicit-plus]{" + text + "}"
+
+
 class Macros:
     def __init__(self):
         self.lines = []
@@ -30,6 +37,8 @@ class Macros:
             body = r"\textbf{??}"
         else:
             body = fmt.format(value)
+            if fmt.startswith("{:+"):
+                body = signed(body)  # typeset the sign properly; the raw number stays inside the braces
         # macro names may only contain letters
         assert name.isalpha(), name
         self.lines.append(f"\\newcommand{{\\{name}}}{{{body}}}")
@@ -81,7 +90,7 @@ def write_tables(tables_dir, e1, e2, iso, e3=None, e4=None, e5=None):
             elif pz["auprc_diff_mean"] == 0 and tuple(pz["ci95"]) == (0, 0):
                 delta = "0 (identical scores)"  # the forest in Wasm vs the scikit-learn forest it was exported from
             else:
-                delta = "{:+.3f} [{:+.3f}, {:+.3f}]".format(pz["auprc_diff_mean"], *pz["ci95"])
+                delta = "{} [{}, {}]".format(*(signed("{:+.3f}".format(v)) for v in (pz["auprc_diff_mean"], *pz["ci95"])))
             rows.append("{} & {:.3f} $\\pm$ {:.3f} & {:.3f} & {:.3f} & {:.3f} & {:.3f} & {} \\\\".format(
                 label, s["auprc"]["mean"], s["auprc"]["std"], s["roc_auc"]["mean"], s["recall_at_fpr5"]["mean"],
                 s["recall_at_fpr1"]["mean"], s["op_fpr5_f1"]["mean"], delta))
@@ -173,7 +182,7 @@ def write_tables(tables_dir, e1, e2, iso, e3=None, e4=None, e5=None):
             first = False
             name, unit = WL.get(wl, (wl, ""))
             for arm, c in arms.items():
-                delta = "---" if arm == "none" else "{:+.1f} [{:+.1f}, {:+.1f}]".format(c["throughput_delta_pct_mean"], *c["throughput_delta_pct_ci95"])
+                delta = "---" if arm == "none" else "{} [{}, {}]".format(*(signed("{:+.1f}".format(v)) for v in (c["throughput_delta_pct_mean"], *c["throughput_delta_pct_ci95"])))
                 cpu = "---" if arm == "none" else "{:.1f}".format(c["monitor_cpu_pct_mean"])
                 rss = "---" if arm == "none" else "{:.0f}".format(c["monitor_rss_mib_max"])
                 rows.append("{} & {} & {:,.0f} {} & {} & {} & {} \\\\".format(name if arm == "none" else "", ARM.get(arm, arm), c["throughput_mean"], unit, delta, cpu, rss))
