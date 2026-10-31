@@ -2,6 +2,28 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-31 · W2 开始：贡献段重写；带符号数字的排版修复
+
+用户拍板「开始 W2，打磨贡献段」。范围是 `paper-asiaccs/sections/introduction.tex` 的系统段、三条主张与收尾段；摘要与 E4 / E1 正文只改了同一处措辞缺陷。
+
+**贡献段（introduction.tex）**
+
+- 系统段：深路径改为「a random forest by default or a small MLP, both embedded at build time」，与 10-26 的默认一致。
+- 引入句改为「The paper makes three claims, each tied to the experiments that support it」。
+- Cost (E2–E5)：开头一句立论「The boundary is cheap, the rule behind it is not, and the measurements separate the two」；E2 两个每次调用数不变；E3 改为「keeps up with 10,000 events/s at 301 µs median, saturates at 18,277 events/s with the MLP deep path and 21,430 with the forest」（两个宏 `\eThreeAchievedBinFiftyK` / `\eThreeAchievedBinFiftyKRf`，森林是默认，但 E3 正文与图仍以 MLP 行为主叙事，所以两个都给而不是只给森林）；E4 改为「changes the application's throughput by −4.4, −3.6 and −9.2%, against Falco's …」；E5 一句不变；新增「The exception is CPU under pgbench: 163.0% of a core against Falco's 81.5%」接 10-31 上午加的 12,401 eps / 丢 45.1% 一句；成因句改为「on the rule side of the boundary, not in the sandbox」，收尾「Both are levers we name and price but deliberately do not pull」。
+- Isolation (E6)：只把「with the neighbouring rule unaffected and the next call succeeding」改为冒号后的两个完整分句，并点明「the next call on the offending rule」。
+- Equivalence (E1–E2)：标题加「and an accuracy number that belongs to the artifact」；先说模块复现训练时的实现（NumPy / scikit-learn）到 1.9e-6 / 2.9e-8，再说因此每个测试分数都在沙箱里产生，再给 0.897 / 0.825 / 0.730；最后一句保留「协议才是重点」。
+- 收尾段：合并为一句「We do not claim … earliest / state of the art / copy-free」，贡献句加「against two production monitors」和「a protocol under which the accuracy attached to a sandboxed detector is the sandboxed detector's own」。
+
+**带符号数字的排版**（`evaluation/scripts/paper_numbers.py`）
+
+- 此前 `-4.4` 在正文和表格里排成连字符。新增 `signed()`：凡格式串以 `{:+` 开头的宏，以及 E1 / E4 表格的 Δ 列，都包成 `\num[retain-explicit-plus]{-4.4}`；PDF 里渲染为真正的负号 U+2212，正号保留。原始数字仍完整地在花括号里，`grep -4.4 tables/numbers.tex` 照样能找到。改动面：numbers.tex 57 个宏、e1_table 4 处、e4_table 9 处。
+- 同一处措辞缺陷「\sys costs the application −4.4% of throughput」（负的 cost）在摘要、引言、E4 正文统一改为「changes (the application's) throughput by −4.4%」；E1 的「+0.167 below the forest」改为「the forest's paired advantage over it is +0.167」。
+
+**编译**：11 页、0 个 `??`、0 overfull、lint 干净；引言在第 2 页结束，§2 Background 从第 2 页中段开始，在 1.5 页预算内。CLAIMS.md 没有新数字，不改。
+
+**W2 剩余**：摘要整体再过一遍（留到 W6 门禁前，等 W3 的 Evaluation 定稿后统一措辞）；威胁模型项已在 10-25 的新稿里满足（无 "formal guarantee"、无 TOCTOU 段、三级攻击者改为 Trusted / Untrusted / 必须保证 / 范围外），不再改。W3 时决定 E3 正文是否改以森林行为主叙事。
+
 ## 2026-10-31 · 引言写明 pgbench 下采集器丢 45%
 
 用户拍板「引言里加一句丢 45% 的事实」。此前只有 §6.3（E4）和讨论段写了管道饱和，引言与摘要只说 postgres 下 CPU 更高「原因已查明」。
