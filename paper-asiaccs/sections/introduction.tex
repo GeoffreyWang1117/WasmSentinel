@@ -33,65 +33,70 @@ hands each one to every rule through a five-function ABI; a rule is a Wasm
 module that returns a severity. Two rules ship with it: a pattern rule of
 the kind one writes in Falco's filter language, and a syscall-sequence
 detector that combines a STIDE $n$-gram database~\cite{stide} with a
-model over a window of syscall numbers, a small MLP or a random forest,
-both embedded at build time. The design choices
-that affect the measurement are few: one long-lived instance per rule,
-limits attached to the instance's store, a trapped rule dropped and
+model over a window of syscall numbers, a random forest by default or a
+small MLP, both embedded at build time. The design choices that affect
+the measurement are few: one long-lived instance per rule, limits
+attached to the instance's store, a trapped rule dropped and
 re-instantiated, and a choice between a JSON encoding of the event and the
 kernel record passed verbatim.
 
-The evaluation makes three claims, each with the experiment that supports
+The paper makes three claims, each tied to the experiments that support
 it.
 
 \begin{enumerate}
-\item \textbf{Cost (E2--E5).} A sandboxed rule call costs
+\item \textbf{Cost (E2--E5).} The boundary is cheap, the rule behind it is
+  not, and the measurements separate the two. A sandboxed call costs
   \eTwoEngineOverheadUs{}~\si{\micro\second} empty and
   \eTwoMlRawUs{}~\si{\micro\second} for the real detector on a process
-  event; end to end, the pipeline sustains \eThreeAchievedBinFiftyK{}
-  syscall events per second with the binary encoding
-  (\eThreeAchievedJsonFiftyK{} with JSON) at a median latency of
-  \eThreePFiftyBinTenK{}~\si{\micro\second} at \num{10000}~events/s. Under
-  nginx, redis and PostgreSQL, \sys costs the application
-  \eFourDeltaNginxWs{}, \eFourDeltaRedisWs{} and \eFourDeltaPgWs{}\% of
-  throughput, in the range of Falco's \eFourDeltaNginxFalco{},
-  \eFourDeltaRedisFalco{} and \eFourDeltaPgFalco{}\%, with a smaller
-  resident footprint and, under PostgreSQL, a larger CPU one; the three
-  systems detect the same three actions in every trial with alert
-  latencies within a millisecond of each other. The CPU gap has a named
-  cause---every event reaches every rule, and the ML rule recomputes its
-  features per event---and is a lever on the rule side, not a sandbox
-  tax. Under \texttt{pgbench} the daemon ran at that limit: it
-  processed \eFourWsEpsPg{} events/s and its collector dropped
-  \eFourWsDroppedPctPg{}\% of the events the kernel delivered
-  (\S\ref{sec:eval:e4}).
+  event. End to end, with the binary encoding, the pipeline keeps up with
+  \num{10000} syscall events/s at a median latency of
+  \eThreePFiftyBinTenK{}~\si{\micro\second} and saturates at
+  \eThreeAchievedBinFiftyK{} events/s with the MLP deep path and
+  \eThreeAchievedBinFiftyKRf{} with the forest. Under nginx, redis and
+  PostgreSQL, \sys changes the application's throughput by
+  \eFourDeltaNginxWs{}, \eFourDeltaRedisWs{} and \eFourDeltaPgWs{}\%,
+  against Falco's \eFourDeltaNginxFalco{}, \eFourDeltaRedisFalco{} and
+  \eFourDeltaPgFalco{}\%, with a smaller resident footprint, and the three
+  systems raise the same three alerts in every one of \eFiveTrials{}
+  trials, within a millisecond of each other. The exception is CPU under
+  \texttt{pgbench}: \sys reaches \eFourCpuPgWs{}\% of a core against
+  Falco's \eFourCpuPgFalco{}\%, and at that point the daemon is at its
+  limit, processing \eFourWsEpsPg{} events/s while its collector drops
+  \eFourWsDroppedPctPg{}\% of what the kernel delivers
+  (\S\ref{sec:eval:e4}). The cause is on the rule side of the boundary,
+  not in the sandbox: every event reaches every rule, and the ML rule
+  recomputes its features per event. Both are levers we name and price
+  but deliberately do not pull (\S\ref{sec:discussion}).
 \item \textbf{Isolation (E6).} \isoModules{} modules written to read
   files, open sockets, leak the environment, flood output, exhaust
   memory, spin forever, overflow the stack or exit the process were all
-  contained under the default limits in \isoContained{} of \isoTotal{}
-  attempts, with the neighbouring rule unaffected and the next call
-  succeeding. We report the one capability a rule does have (the clock)
-  and the one case the runtime classifies less precisely than we would
-  like.
-\item \textbf{Equivalence (E1--E2).} The module the daemon loads produces,
-  to within \eTwoMaxDiffNumpyWasm{} for its MLP and
-  \eOneWasmSklearnMaxDiff{} for its random forest, the same scores as the
-  reference implementations that were trained, on all \eTwoTraces{}
-  ADFA-LD traces. Because of that, the accuracy we report is the module's
-  own: every test score in a \eOneFolds-fold, \eOneSeeds-seed evaluation
-  is produced inside the sandbox. With the forest that accuracy is an
-  AUPRC of \eOneAuprcRfWasm{}, above an LSTM (\eOneAuprcLstm{}), STIDE and
-  an Isolation Forest; with the MLP the module first shipped with it is
-  \eOneAuprcMlp{}. The forest went into the module after the MLP's number
-  was known, through the same protocol, and the point of E1 is that
-  protocol: the number is the sandboxed artifact's, whichever model it
-  carries.
+  contained under the default limits, in \isoContained{} of \isoTotal{}
+  attempts: the neighbouring rule was unaffected and the next call on the
+  offending rule succeeded. The same table shows the one capability a
+  rule does have (the clock) and the one case the runtime classifies
+  less precisely than we would like.
+\item \textbf{Equivalence (E1--E2), and an accuracy number that belongs
+  to the artifact.} The module the daemon loads reproduces the
+  implementations its models were trained with, NumPy for the MLP and
+  scikit-learn for the forest, to within \eTwoMaxDiffNumpyWasm{} and
+  \eOneWasmSklearnMaxDiff{} on all \eTwoTraces{} ADFA-LD traces. Every
+  test score in the \eOneFolds{}-fold, \eOneSeeds{}-seed evaluation is
+  therefore produced inside the sandbox, and the accuracy we report is
+  the module's own: an AUPRC of \eOneAuprcRfWasm{} with the forest, above
+  an LSTM (\eOneAuprcLstm{}), STIDE and an Isolation Forest, and
+  \eOneAuprcMlp{} with the MLP the module first shipped with. The forest
+  went into the module after the MLP's number was known, through the same
+  protocol, which is the point: the number is the sandboxed artifact's,
+  whichever model it carries.
 \end{enumerate}
 
 We do not claim that \sys is the earliest system to combine eBPF and
-WebAssembly, nor that its detector is state of the art, nor that its
-event path is copy-free. The nearest prior work combines the two
-technologies in other directions (\S\ref{sec:related}); the detector is
-deliberately ordinary; and the binary encoding removes a parse, not a
-copy. What the paper contributes is the measurement, taken on the deployed
-artifact, with every number regenerated from the result files we release
-(\S\ref{sec:openscience}).
+WebAssembly, that its detector is state of the art, or that its event
+path is copy-free: the nearest prior work combines the two technologies
+in other directions (\S\ref{sec:related}), the detector is deliberately
+ordinary, and the binary encoding removes a parse, not a copy. What the
+paper contributes is the measurement, taken on the deployed artifact
+against two production monitors, with every number regenerated from the
+result files we release (\S\ref{sec:openscience}), and a protocol under
+which the accuracy attached to a sandboxed detector is the sandboxed
+detector's own.

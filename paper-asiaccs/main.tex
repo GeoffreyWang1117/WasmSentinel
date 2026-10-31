@@ -48,7 +48,7 @@ budget and a per-call deadline. We measure the boundary rather than
 assume it. A rule call costs \eTwoEngineOverheadUs{}~\si{\micro\second}
 empty and \eTwoMlRawUs{}~\si{\micro\second} for a real syscall detector;
 the pipeline sustains \eThreeAchievedBinFiftyK{} events per second; and
-under nginx, redis and PostgreSQL the application cost
+under nginx, redis and PostgreSQL the change in application throughput
 (\eFourDeltaNginxWs{}, \eFourDeltaRedisWs{}, \eFourDeltaPgWs{}\%) is in
 the range of Falco's, with a smaller memory footprint and, for
 syscall-heavy workloads, a larger CPU one whose cause we identify. Ten

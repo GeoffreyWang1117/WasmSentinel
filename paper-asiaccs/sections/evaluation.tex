@@ -155,12 +155,12 @@ interval, the monitor's own CPU and peak resident memory sampled every
 maintainers ship them; we did not tune either, and the Tetragon numbers in
 particular reflect our policy, which exports every matching event.
 
-Table~\ref{tab:e4} is the result. Under nginx, \sys costs
-\eFourDeltaNginxWs{}\% of throughput where Falco costs
-\eFourDeltaNginxFalco{}\% and Tetragon \eFourDeltaNginxTetragon{}\%; under
-redis all three are within a few percent of the baseline; under PostgreSQL
-\sys and Falco cost about the same, \eFourDeltaPgWs{}\% and
-\eFourDeltaPgFalco{}\%, while Tetragon's interval includes zero. The
+Table~\ref{tab:e4} is the result. Under nginx the throughput change is
+\eFourDeltaNginxWs{}\% with \sys, \eFourDeltaNginxFalco{}\% with Falco
+and \eFourDeltaNginxTetragon{}\% with Tetragon; under redis all three are
+within a few percent of the baseline; under PostgreSQL the change is about
+the same for \sys and Falco, \eFourDeltaPgWs{} and \eFourDeltaPgFalco{}\%,
+while Tetragon's interval includes zero. The
 monitor's own footprint separates the systems more than throughput does.
 \sys's resident memory stays between \eFourRssRedisWs{} and
 \eFourRssPgWs{}~MiB against Falco's roughly \eFourRssPgFalco{}~MiB, but its
@@ -296,9 +296,9 @@ above the LSTM by \eOneDiffVsRfLstm{} (95\% CI [\eOneDiffVsRfCiLoLstm{},
 \eOneDiffVsRfCiHiLstm{}]) and far above both unsupervised baselines
 (\eOneDiffVsRfStide{} over STIDE, \eOneDiffVsRfIForest{} over Isolation
 Forest). The MLP, on the same features and in the same module, reaches
-\eOneAuprcMlp{} $\pm$ \eOneAuprcStdMlp{}, \eOneDiffVsRfMlp{} below the
-forest ([\eOneDiffVsRfCiLoMlp{}, \eOneDiffVsRfCiHiMlp{}]); at a
-\SI{1}{\percent} FPR the gap widens (recall \eOneRecallFprOneMlp{} vs.\
+\eOneAuprcMlp{} $\pm$ \eOneAuprcStdMlp{}; the forest's paired advantage
+over it is \eOneDiffVsRfMlp{} ([\eOneDiffVsRfCiLoMlp{},
+\eOneDiffVsRfCiHiMlp{}]); at a \SI{1}{\percent} FPR the gap widens (recall \eOneRecallFprOneMlp{} vs.\
 \eOneRecallFprOneRfWasm{}). Per-family recall (Table~\ref{tab:e1-family})
 puts the forest's weakest family at \texttt{Web\_Shell}
 (\eOneFamWebShellRfWasm{}), where the MLP reaches \eOneFamWebShellMlp{}. We
