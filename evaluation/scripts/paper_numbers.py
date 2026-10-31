@@ -146,14 +146,15 @@ def write_tables(tables_dir, e1, e2, iso, e3=None, e4=None, e5=None):
         rows.append(r"\multicolumn{6}{c}{\textbf{?? isolation results missing}} \\")
     rows += [r"\bottomrule", r"\end{tabular}"]
     (tables_dir / "isolation_table.tex").write_text(GEN + "\n".join(rows) + "\n")
-    # E3 table (Model = ml_detector's deep path: the MLP default or the forest)
+    # E3 table (Model = ml_detector's deep path: RF is the embedded forest, the
+    # default since 2026-10-26, listed first; MLP is the alternative)
     rows = [r"\begin{tabular}{@{}llrrrrrrr@{}}", r"\toprule",
             r"Encoding & Model & Offered & Achieved & p50 & p99 & p99.9 & Detect p50 & RSS \\",
             r" & & ev/s & ev/s & \si{\micro\second} & \si{\micro\second} & \si{\micro\second} & \si{\micro\second} & MiB \\", r"\midrule"]
     if e3:
         def e3_key(cell):
             enc, eps, model = (cell.split("@") + ["mlp"])[:3]
-            return int(eps), enc != "json", model != "mlp"
+            return int(eps), enc != "json", model == "mlp"  # forest rows before MLP rows
         order = sorted(e3["summary"].items(), key=lambda kv: e3_key(kv[0]))
         last = None
         for cell, v in order:
@@ -330,8 +331,8 @@ def main():
         commits["e3"] = e3["provenance"]["git_commit"][:12]
         # One macro set per (encoding, rate, model) of the full grid, so a cell
         # the results lack still defines its macros (as "??"). ...Rf suffix:
-        # ml_detector's deep path on the embedded forest ({"model":"rf"}); no
-        # suffix: the MLP default.
+        # ml_detector's deep path on the embedded forest ({"model":"rf"}, the
+        # default since 2026-10-26); no suffix: the MLP ({"model":"mlp"}).
         for enc in ("json", "binary"):
             for eps in (1000, 10000, 50000):
                 for model in ("mlp", "rf"):
@@ -344,9 +345,12 @@ def main():
                     m.add(f"eThreeRssMiB{suf}", v and v["max_rss_kb"]["mean"] / 1024, "{:.0f}")
                     m.add(f"eThreeDetectPFifty{suf}", v and v["detect_us"]["p50"]["mean"], "{:,.0f}")
                     m.add(f"eThreeDetectPNinetyNine{suf}", v and v["detect_us"]["p99"]["mean"], "{:,.0f}")
-        sat = {enc: v for enc, v in ((c.split("@")[0], v) for c, v in e3["summary"].items() if c.endswith("@50000"))}
-        if "json" in sat and "binary" in sat:
-            m.add("eThreeBinGainPct", 100 * (sat["binary"]["achieved_eps"]["mean"] / sat["json"]["achieved_eps"]["mean"] - 1), "{:.0f}")
+        # Binary-over-JSON gain in sustained throughput at the saturating offered rate,
+        # once per deep path ("@50000" cells are the MLP, "@50000@rf" the forest).
+        for suf, tail in (("", "@50000"), ("Rf", "@50000@rf")):
+            sat = {c.split("@")[0]: v for c, v in e3["summary"].items() if c.endswith(tail)}
+            if "json" in sat and "binary" in sat:
+                m.add(f"eThreeBinGainPct{suf}", 100 * (sat["binary"]["achieved_eps"]["mean"] / sat["json"]["achieved_eps"]["mean"] - 1), "{:.0f}")
     else:
         m.add("eThreeAchievedBinTenK", None)
 

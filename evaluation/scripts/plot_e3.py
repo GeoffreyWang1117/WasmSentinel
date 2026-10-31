@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Plot E3: end-to-end latency percentiles and achieved throughput per offered
-rate, JSON vs binary, from e3_results.json.
+rate, JSON vs binary, from e3_results.json, for one deep path of ml_detector
+(--model rf, the module's default since 2026-10-26, or mlp).
 
   python3 evaluation/scripts/plot_e3.py --results evaluation/results/2026-11/e3
 """
@@ -21,14 +22,15 @@ STYLE = {"json": dict(color="0.45", ls="--", marker="s"), "binary": dict(color="
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--results", type=Path, default=REPO / "evaluation/results/2026-11/e3")
+    ap.add_argument("--model", choices=("rf", "mlp"), default="rf",
+                    help="ml_detector deep path to plot: rf (the default forest) or mlp; the other is in the table only")
     args = ap.parse_args()
     d = json.loads((args.results / "e3_results.json").read_text())
     cells = {}
     for key, v in d["summary"].items():
-        parts = key.split("@")
-        if len(parts) > 2:
-            continue  # ml_detector on the forest ("enc@eps@rf"): in the table, not the figure
-        enc, eps = parts
+        enc, eps, model = (key.split("@") + ["mlp"])[:3]  # "enc@eps" is the MLP, "enc@eps@rf" the forest
+        if model != args.model:
+            continue
         cells.setdefault(enc, {})[int(eps)] = v
     rates = sorted({eps for c in cells.values() for eps in c})
 
