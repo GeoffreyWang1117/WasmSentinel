@@ -2,6 +2,22 @@
 
 按日期倒序。每条写清：做了什么、证据在哪、下一步。任务编号对应 `DEVELOPMENT_PLAN.md` §3。
 
+## 2026-10-31 · W2 收尾：摘要整体过一遍
+
+用户拍板「摘要整体过一遍，收掉 W2」。只动 `paper-asiaccs/main.tex` 的 abstract 环境；标题、CCS、关键词未动。
+
+- 「We measure that boundary rather than assume it」一句加上「on the deployed artifact and against two production monitors, Falco and Tetragon」；旧稿只提 Falco。
+- 4.4 µs 的描述从「for a real syscall detector」改为「for the shipped detector on a binary-encoded process event」。旧说法把 process 事件上的一次调用（深路径不跑）说成了 syscall 检测器的开销，与 E2 正文不符。
+- 吞吐句改为「end to end, the pipeline sustains 21,430 syscall events per second」，用森林（默认）的宏，与 W3 之后的正文一致。
+- E4 句后新增 E5 一句「all three systems detect the same three actions in every trial」；旧稿摘要没有 E5。
+- CPU 句改为「The exception is CPU under PostgreSQL, where the daemon runs at its limit; we trace that cost to the rule, not the sandbox」。定性提饱和，不给 45% 这个数（数在引言贡献项与 §6.3）。这是我的判断：审稿人在摘要就该知道有这件事。
+- 隔离句不变（去掉了冗余的「under the default limits」）。
+- 等价句改为主动语态：「The deployed module reproduces the models it was trained from to 1.9e-6 (an MLP) and 2.9e-8 (a random forest), so the accuracy we report on ADFA-LD is computed inside the sandbox」，补 LSTM 0.825，「at no higher per-event cost」改为「at a lower per-event cost」（E3：森林 58 对 MLP 70 µs）。
+- 结尾改为「Every number in the paper is regenerated from the result files we release」。
+- 约 270 词。编译 11 页、0 个 `??`、0 overfull、lint 干净。
+
+W2 至此全部收掉：贡献段（10-31 上午）、摘要（本条）、威胁模型三项（10-25 新稿已满足，见 W2 行）。
+
 ## 2026-10-31 · W3：E3 改为森林为主叙事；Limitations 补齐；W3 清单核对
 
 用户拍板「开始 W3」，并在此前决定「W3 时把 E3 改成森林为主叙事，引言只留森林」。
