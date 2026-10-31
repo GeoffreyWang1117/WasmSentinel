@@ -43,23 +43,29 @@ eBPF monitors deployed today, run as trusted code inside a privileged
 agent. We ask what it costs, and what it buys, to run them as untrusted
 WebAssembly modules instead. \sys collects process, file and network
 events with a fixed set of eBPF programs and hands each event to every
-rule inside its own Wasm instance under a memory cap, an instruction
-budget and a per-call deadline. We measure the boundary rather than
-assume it. A rule call costs \eTwoEngineOverheadUs{}~\si{\micro\second}
-empty and \eTwoMlRawUs{}~\si{\micro\second} for a real syscall detector;
-the pipeline sustains \eThreeAchievedBinFiftyKRf{} events per second; and
-under nginx, redis and PostgreSQL the change in application throughput
+rule inside its own Wasm instance, under a memory cap, an instruction
+budget and a per-call deadline. We measure that boundary rather than
+assume it, on the deployed artifact and against two production monitors,
+Falco and Tetragon. A sandboxed rule call costs
+\eTwoEngineOverheadUs{}~\si{\micro\second} empty and
+\eTwoMlRawUs{}~\si{\micro\second} for the shipped detector on a
+binary-encoded process event; end to end, the pipeline sustains
+\eThreeAchievedBinFiftyKRf{} syscall events per second; under nginx, redis
+and PostgreSQL the change in application throughput
 (\eFourDeltaNginxWs{}, \eFourDeltaRedisWs{}, \eFourDeltaPgWs{}\%) is in
-the range of Falco's, with a smaller memory footprint and, for
-syscall-heavy workloads, a larger CPU one whose cause we identify. Ten
-adversarial modules that try to read files, open sockets, exhaust memory
-or spin forever are contained in all \isoTotal{} attempts. Because the
-deployed module reproduces its trained models to \eTwoMaxDiffNumpyWasm{}
-(an MLP) and \eOneWasmSklearnMaxDiff{} (a random forest), we can report
-its accuracy on ADFA-LD with every score computed inside the sandbox: an
-AUPRC of \eOneAuprcRfWasm{} for the forest, above an LSTM and the MLP the
-module first shipped with (\eOneAuprcMlp{}), at no higher per-event cost.
-All numbers in the paper are generated from released result files.
+the range of Falco's, with a smaller memory footprint, and all three
+systems detect the same three actions in every trial. The exception is
+CPU under PostgreSQL, where the daemon runs at its limit; we trace that
+cost to the rule, not the sandbox. Ten adversarial modules that try to
+read files, open sockets, exhaust memory or spin forever are contained in
+all \isoTotal{} attempts. The deployed module
+reproduces the models it was trained from to \eTwoMaxDiffNumpyWasm{} (an
+MLP) and \eOneWasmSklearnMaxDiff{} (a random forest), so the accuracy we
+report on ADFA-LD is computed inside the sandbox: an AUPRC of
+\eOneAuprcRfWasm{} with the forest, above an LSTM (\eOneAuprcLstm{}) and
+the MLP the module first shipped with (\eOneAuprcMlp{}), at a lower
+per-event cost. Every number in the paper is regenerated from the result
+files we release.
 \end{abstract}
 
 \begin{CCSXML}
