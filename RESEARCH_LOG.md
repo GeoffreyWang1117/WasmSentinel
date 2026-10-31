@@ -22,7 +22,7 @@
 
 **编译**：11 页、0 个 `??`、0 overfull、lint 干净；引言在第 2 页结束，§2 Background 从第 2 页中段开始，在 1.5 页预算内。CLAIMS.md 没有新数字，不改。
 
-**W2 剩余**：摘要整体再过一遍（留到 W6 门禁前，等 W3 的 Evaluation 定稿后统一措辞）；威胁模型项已在 10-25 的新稿里满足（无 "formal guarantee"、无 TOCTOU 段、三级攻击者改为 Trusted / Untrusted / 必须保证 / 范围外），不再改。W3 时决定 E3 正文是否改以森林行为主叙事。
+**W2 剩余**：摘要整体再过一遍（留到 W6 门禁前，等 W3 的 Evaluation 定稿后统一措辞）；威胁模型项已在 10-25 的新稿里满足（无 "formal guarantee"、无 TOCTOU 段、三级攻击者改为 Trusted / Untrusted / 必须保证 / 范围外），不再改。用户已拍板（10-31 下午）：W3 时把 E3 改成森林为主叙事（正文、图、表的行序），引言只留森林的 E3 数字；摘要、结论、讨论里的同一宏随之切换。本条写入 `DEVELOPMENT_PLAN.md` W3 行。
 
 ## 2026-10-31 · 引言写明 pgbench 下采集器丢 45%
 
