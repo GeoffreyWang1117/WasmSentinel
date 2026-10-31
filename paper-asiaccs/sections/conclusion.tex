@@ -5,7 +5,7 @@ run as trusted code. \sys runs them in WebAssembly instead and this paper
 measures what that costs and what it buys. The boundary itself is cheap:
 \eTwoEngineOverheadUs{}~\si{\micro\second} per call empty,
 \eTwoMlRawUs{}~\si{\micro\second} for a real rule on a binary-encoded event,
-a sustained \eThreeAchievedBinFiftyK{} syscall events per second through
+a sustained \eThreeAchievedBinFiftyKRf{} syscall events per second through
 the whole pipeline, and an application cost under nginx, redis and
 PostgreSQL in the same range as Falco's. It holds: ten adversarial modules
 in eleven attempts were contained by memory, fuel and deadline limits with

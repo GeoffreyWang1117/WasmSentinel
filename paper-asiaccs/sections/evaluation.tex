@@ -28,7 +28,8 @@ script that produced it. Timing experiments were run while a user-level LLM
 inference server idled on the same machine (about 2.5 of 32 threads busy);
 we report medians and percentiles over repeated runs rather than best cases.
 \texttt{ml\_detector} carries two deep-path models (\S\ref{sec:design:rules});
-E1, E2 and E3 report both, E4 and E5 ran its default, the forest.
+E1, E2 and E3 report both and lead with the forest; E4 and E5 ran the
+module's default, which is the forest.
 
 \subsection{Same model, three implementations (E2)}
 \label{sec:eval:e2}
@@ -78,46 +79,50 @@ any, is written. We drive the pipeline with the replay collector, which
 turns ADFA-LD attack traces into syscall events of the same shape the eBPF
 collector produces, paced at an offered rate; both rules are loaded, the
 STIDE database is trained at start-up from the ADFA training traces, and
-alerts are counted but not printed. Each cell is three runs of 30 seconds'
-worth of events. Latency is measured from the event's creation timestamp to
-the completion of its last output handler.
+alerts are counted but not printed. \texttt{ml\_detector} runs its default
+deep path, the forest; the rows marked MLP repeat every cell with the MLP
+selected through the init configuration (\texttt{--rule-config}). Each cell
+is three runs of 30 seconds' worth of events. Latency is measured from the
+event's creation timestamp to the completion of its last output handler.
 
 Table~\ref{tab:e3} and Figure~\ref{fig:e3} show the result. At
 \num{1000} and \num{10000} events/s both encodings keep up (the
 achieved rate is the pacer's granularity, not loss: the queue blocks rather
 than drops). At \num{10000} events/s the median end-to-end latency is
-\eThreePFiftyBinTenK{}~\si{\micro\second} with the binary record and
-\eThreePFiftyJsonTenK{}~\si{\micro\second} with JSON, with a 99th percentile
-of \eThreePNinetyNineBinTenK{} and \eThreePNinetyNineJsonTenK{}~\si{\micro\second}.
+\eThreePFiftyBinTenKRf{}~\si{\micro\second} with the binary record and
+\eThreePFiftyJsonTenKRf{}~\si{\micro\second} with JSON, with a 99th percentile
+of \eThreePNinetyNineBinTenKRf{} and \eThreePNinetyNineJsonTenKRf{}~\si{\micro\second}.
 At an offered \num{50000} events/s the pipeline saturates: it sustains
-\eThreeAchievedBinFiftyK{} events/s with the binary record and
-\eThreeAchievedJsonFiftyK{} with JSON, a \eThreeBinGainPct{}\% difference,
+\eThreeAchievedBinFiftyKRf{} events/s with the binary record and
+\eThreeAchievedJsonFiftyKRf{} with JSON, a \eThreeBinGainPctRf{}\% difference,
 and the latencies in that row are queue depth rather than processing time.
 
 The detection column explains where the time goes. Per event, the two rules
-together take \eThreeDetectPFiftyBinTenK{}~\si{\micro\second} at the median,
+together take \eThreeDetectPFiftyBinTenKRf{}~\si{\micro\second} at the median,
 an order of magnitude more than the \eTwoMlRawUs{}~\si{\micro\second} E2
 measured for a process event. The difference is not the sandbox but the
 rule: for every syscall event \texttt{ml\_detector} recomputes the v1
 feature vector over its 100-event window and runs the model, and the feature
 pass dominates. Incremental feature maintenance would remove most of it;
 we return to this in \S\ref{sec:discussion}. Resident memory stays near
-\eThreeRssMiBBinTenK{}~MiB until saturation, where the queue grows it to
-\eThreeRssMiBBinFiftyK{}~MiB.
+\eThreeRssMiBBinTenKRf{}~MiB until saturation, where the queue grows it to
+\eThreeRssMiBBinFiftyKRf{}~MiB.
 
-The rows marked RF run the same pipeline with \texttt{ml\_detector}'s deep
-path on the embedded forest rather than the MLP, selected through its init
-configuration (\texttt{--rule-config}). The forest costs \eThreeDetectPFiftyBinTenKRf{}~\si{\micro\second}
-per event at the median against the MLP's \eThreeDetectPFiftyBinTenK{}, and
-the pipeline saturates at \eThreeAchievedBinFiftyKRf{} events/s against
-\eThreeAchievedBinFiftyK{}; the \SI{2}{MiB} image shows in resident memory
-as \eThreeRssMiBBinTenKRf{} against \eThreeRssMiBBinTenK{}~MiB. The better
-detector of \S\ref{sec:eval:e1} is not the more expensive one to run.
+The MLP rows run the same pipeline with \texttt{ml\_detector}'s deep path
+on the MLP instead of the forest. The MLP costs
+\eThreeDetectPFiftyBinTenK{}~\si{\micro\second} per event at the median
+against the forest's \eThreeDetectPFiftyBinTenKRf{}, and the pipeline
+saturates at \eThreeAchievedBinFiftyK{} events/s against
+\eThreeAchievedBinFiftyKRf{}; the forest's \SI{2}{MiB} image shows in
+resident memory as \eThreeRssMiBBinTenKRf{} against
+\eThreeRssMiBBinTenK{}~MiB. The better detector of \S\ref{sec:eval:e1} is
+also the cheaper one to run.
 
 \begin{table}[t]
 \caption{E3: end-to-end latency and sustained throughput while replaying
 ADFA-LD syscall events through the full pipeline (mean of 3 runs). Model is
-\texttt{ml\_detector}'s deep path, selected by its init configuration.
+\texttt{ml\_detector}'s deep path: RF is the embedded forest, the default;
+MLP is selected by its init configuration.
 At \num{50000} offered events/s the pipeline is saturated and the latency
 columns measure queueing. Produced by \texttt{e3\_throughput.py} from
 \texttt{e3/e3\_results.json}.}
@@ -130,8 +135,8 @@ columns measure queueing. Produced by \texttt{e3\_throughput.py} from
 \centering
 \includegraphics[width=.85\textwidth]{figures/e3_latency_throughput}
 \caption{E3: end-to-end latency (left, log--log) and achieved throughput
-(right) per offered rate, MLP deep path; the forest rows are in
-Table~\ref{tab:e3}. \texttt{plot\_e3.py} from \texttt{e3/e3\_results.json}.}
+(right) per offered rate, forest deep path (the default); the MLP rows
+are in Table~\ref{tab:e3}. \texttt{plot\_e3.py} from \texttt{e3/e3\_results.json}.}
 \label{fig:e3}
 \end{figure*}
 

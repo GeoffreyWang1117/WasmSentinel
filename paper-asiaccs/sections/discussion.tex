@@ -5,7 +5,7 @@
 Across E3, E4 and E5 the same picture repeats: the sandbox boundary costs
 a few microseconds per call (\eTwoEngineOverheadUs{}~\si{\micro\second}
 empty, \eTwoMlRawUs{}~\si{\micro\second} for a real rule on a process
-event), but \sys spends \eThreeDetectPFiftyBinTenK{}--\eThreeDetectPFiftyJsonOneK{}~\si{\micro\second}
+event), but \sys spends \eThreeDetectPFiftyBinTenKRf{}--\eThreeDetectPFiftyJsonOneKRf{}~\si{\micro\second}
 per syscall event and up to \eFourCpuPgWs{}\% of a core under PostgreSQL,
 where Falco spends \eFourCpuPgFalco{}\% and Tetragon \eFourCpuPgTetragon{}\%.
 Two decisions, neither of them forced by the sandbox, produce that gap.
@@ -24,7 +24,7 @@ cheaper than it is; we report the lever so that the reader can price it.
 \paragraph{What the binary encoding buys.}
 The fixed-layout record cuts a real rule's per-event cost by about half
 (E2) and raises the pipeline's saturation throughput by
-\eThreeBinGainPct{}\% (E3). It does so by removing a parse, not a copy:
+\eThreeBinGainPctRf{}\% (E3). It does so by removing a parse, not a copy:
 the event is still copied into linear memory. We measured a variant of the
 rule that rebuilt a JSON document from the record inside the guest, and
 it gained nothing. Encodings matter only when the rule consumes them
@@ -77,11 +77,16 @@ has to configure each system to the same semantics, as we did.
 Our accuracy evidence is one dataset, ADFA-LD, recorded on a 2013 Ubuntu
 system with i386 syscall numbers that differ from the x86-64 numbers the
 live collector emits; the feature set we inherited mixes ABIs, and we kept
-it because the trained weights depend on it. The isolation experiment is a
-set of eleven attempts, not a proof; a runtime bug or a side channel is out
-of scope. The timing experiments ran on a shared machine with a background
-load we report but could not remove, so absolute throughputs carry noise
-that the paired intervals only partly capture. Falco and Tetragon were run
+it because the trained weights depend on it. We did not evaluate evasion:
+no mimicry sequences or adversarial inputs were tried against either model,
+and the three E5 actions are hand-written triggers, not an attack corpus.
+The isolation experiment is a set of eleven attempts, not a proof; a
+runtime bug or a side channel is out of scope. The timing experiments ran
+on a shared machine with a background load we report but could not remove,
+so absolute throughputs carry noise that the paired intervals only partly
+capture; under \texttt{pgbench} the daemon was saturated and dropping
+events (\S\ref{sec:eval:e4}), so its cost there is a saturated monitor's,
+and whether the levers above restore headroom is untested. Falco and Tetragon were run
 with their default settings and our policies; an expert configuration of
 either would likely lower its cost. Finally, \sys is on wasmtime-go~v17;
 newer runtimes change the constants in E2 but not, we expect, the shape of
