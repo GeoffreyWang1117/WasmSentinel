@@ -60,7 +60,10 @@ it.
   latencies within a millisecond of each other. The CPU gap has a named
   cause---every event reaches every rule, and the ML rule recomputes its
   features per event---and is a lever on the rule side, not a sandbox
-  tax.
+  tax. Under \texttt{pgbench} the daemon ran at that limit: it
+  processed \eFourWsEpsPg{} events/s and its collector dropped
+  \eFourWsDroppedPctPg{}\% of the events the kernel delivered
+  (\S\ref{sec:eval:e4}).
 \item \textbf{Isolation (E6).} \isoModules{} modules written to read
   files, open sockets, leak the environment, flood output, exhaust
   memory, spin forever, overflow the stack or exit the process were all
